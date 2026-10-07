@@ -89,7 +89,7 @@ class MikroTikService {
   async createHotspotUser(data) {
     const username=this._str(data.username).trim(), password=this._str(data.password), profile=this._str(data.profile).trim();
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
-    return this._withConnection("Hotspot user creation", async (connection) => { await connection.write("/ip/hotspot/user/add", this._writeParams({ name: username, password, profile, comment: data.comment })); return { username }; });
+    return this._withConnection("Hotspot user creation", async (connection) => { const params=this._writeParams({ name: username, password, profile, server:data.server, "limit-uptime":data.timeLimit||data["limit-uptime"], "limit-bytes-total":data.dataLimit||data["limit-bytes-total"], comment:data.comment }); await connection.write("/ip/hotspot/user/add", params); return { username }; });
   }
   async kickActiveHotspotUser(username) {
     const name=this._str(username).trim(); if(!name) throw new Error("Hotspot username is required.");
