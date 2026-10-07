@@ -10,21 +10,32 @@ async function profiles(req,res){try{const data=await mikrotikService.getHotspot
 async function serverProfiles(req,res){try{const data=await mikrotikService.getHotspotServerProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
 async function list(req,res){try{
  const filter=normalizeFilter(req.query.filter);
- const [dbRows,mikrotikUsers,sessions]=await Promise.all([db.query("SELECT * FROM hotspot_vouchers ORDER BY created_at DESC LIMIT 5000"),mikrotikService.getHotspotUsers(),filter==="online"?mikrotikService.getActiveHotspotSessions():Promise.resolve([])]);
- const mtMap=new Map(mikrotikUsers.map(u=>[u.username,u]));
- const onlineMap=new Map(sessions.map(s=>[s.username,s]));
- const dbMap=new Map(dbRows.rows.map(v=>[v.username,v]));
+ const needSessions=filter==="online"||filter==="active";
+ const [dbRows,mikrotikUsers,sessions]=await Promise.all([
+   db.query("SELECT * FROM hotspot_vouchers ORDER BY created_at DESC LIMIT 5000"),
+   mikrotikService.getHotspotUsers(),
+   needSessions?mikrotikService.getActiveHotspotSessions():Promise.resolve([])
+ ]);
+ const isExplicitCustomer=function(user){
+   const username=String(user?.username||user?.name||"").trim().toLowerCase();
+   const profile=String(user?.profile||"").trim().toLowerCase();
+   return Boolean(username&&username!=="default-trial"&&profile&&profile!=="default-trial");
+ };
+ const customerMikrotikUsers=mikrotikUsers.filter(isExplicitCustomer);
+ const customerSessions=sessions.filter(isExplicitCustomer);
+ const mtMap=new Map(customerMikrotikUsers.map(u=>[u.username,u]));
+ const onlineMap=new Map(customerSessions.map(s=>[s.username,s]));
+ const dbMap=new Map(dbRows.rows.filter(isExplicitCustomer).map(v=>[v.username,v]));
  const allNames=new Set([...dbMap.keys(),...mtMap.keys()]);
  let vouchers=[...allNames].map(username=>{
-   const v=dbMap.get(username)||{}, mt=mtMap.get(username)||null;
-   const validUntil=v.created_at?voucherValidUntil(v.created_at,v.validity):null;
-   return {id:v.id||null,username,password:v.password||mt?.password||"",profile:v.profile||mt?.profile||"",validity:v.validity||"",price:Number(v.price||0),status:v.status||((mt&&!mt.disabled)?"active":"unused"),comment:v.comment||mt?.comment||"",created_at:v.created_at||null,mikrotik:mt,online:onlineMap.get(username)||null,valid_until:validUntil?validUntil.toISOString():null,active:!!v.created_at&&v.status!=="expired"&&(!validUntil||validUntil.getTime()>Date.now())};
+   const v=dbMap.get(username)||{},mt=mtMap.get(username)||null,validUntil=v.created_at?voucherValidUntil(v.created_at,v.validity):null,online=onlineMap.get(username)||null;
+   const dbValid=Boolean(validUntil&&validUntil.getTime()>Date.now()),mtValid=Boolean(online||mt);
+   return {id:v.id||null,username,password:v.password||mt?.password||"",profile:v.profile||mt?.profile||"",validity:v.validity||mt?.validity||"",price:Number(v.price||mt?.price||0),status:v.status||((mt&&!mt.disabled)?"active":"unused"),comment:v.comment||mt?.comment||"",created_at:v.created_at||null,mikrotik:mt,online,valid_until:validUntil?validUntil.toISOString():null,active:(v.status!=="expired"&&(dbValid||mtValid))};
  });
  if(filter==="active") vouchers=vouchers.filter(v=>v.active);
- if(filter==="online") vouchers=sessions.map(s=>({id:null,username:s.username,password:mtMap.get(s.username)?.password||"",profile:s.profile||mtMap.get(s.username)?.profile||"",validity:mtMap.get(s.username)?.validity||"",price:mtMap.get(s.username)?.price||0,status:"active",comment:"Live MikroTik session",created_at:null,online:s}));
- res.json({success:true,filter,count:vouchers.length,users:vouchers,sessions}); 
-}catch(e){return errorResponse(res,e);}}
-async function active(req,res){req.query.filter="online";return list(req,res);}
+ if(filter==="online") vouchers=customerSessions.map(s=>({id:null,username:s.username,password:mtMap.get(s.username)?.password||"",profile:s.profile||mtMap.get(s.username)?.profile||"",validity:mtMap.get(s.username)?.validity||"",price:Number(mtMap.get(s.username)?.price||0),status:"active",comment:"Live MikroTik session",created_at:null,online:s,active:true}));
+ res.json({success:true,filter,count:vouchers.length,users:vouchers,sessions:customerSessions});
+}catch(e){return errorResponse(res,e);}}async function active(req,res){req.query.filter="online";return list(req,res);}
 async function generate(req,res){try{
  const quantity=Math.min(Math.max(Number(req.body.quantity)||0,1),500);
  const profile=clean(req.body.profile,100),validity=clean(req.body.validity,50),price=Number(req.body.price);
