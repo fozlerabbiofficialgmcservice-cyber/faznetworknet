@@ -1,0 +1,20 @@
+<%
+const dashboardBody = `
+<section class="space-y-7">
+  <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+    <div><p class="text-sm font-medium text-cyan-600">FAZ NETWORK</p><h2 class="text-3xl font-black">Network Overview</h2><p class="text-slate-500">Monitor subscribers, sessions, collections and live router traffic.</p></div>
+    <div id="current-time" class="text-sm text-slate-500"></div>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div class="summary-card"><p class="label">Total PPPoE Users</p><p class="metric">0</p><p class="hint">Configured subscribers</p></div>
+    <div class="summary-card"><p class="label">Active Sessions</p><p class="metric">0</p><p class="hint">Currently online</p></div>
+    <div class="summary-card"><p class="label">Today's Collection</p><p class="metric">৳0.00</p><p class="hint">All payment channels</p></div>
+  </div>
+  <div class="bg-white rounded-2xl border p-6">
+    <h3 class="font-bold text-lg">Live MikroTik Traffic</h3>
+    <p class="text-sm text-slate-500">RX/TX traffic will appear here when router monitoring is connected.</p>
+    <div id="traffic-chart" class="traffic-placeholder mt-5"><div><p class="font-semibold">RX / TX Traffic Chart</p><p class="text-sm text-slate-400">Waiting for router data</p></div></div>
+  </div>
+</section>`;
+%>
+<%- include("layout", { body: dashboardBody, title: title, page: page }) %>

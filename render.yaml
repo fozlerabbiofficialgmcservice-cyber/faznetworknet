@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: faznetworknet
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: ROUTER_HOST
+        sync: false
+      - key: ROUTER_PORT
+        value: "8728"
+      - key: ROUTER_USER
+        sync: false
+      - key: ROUTER_PASS
+        sync: false
+      - key: MACRODROID_WEBHOOK_KEY
+        sync: false

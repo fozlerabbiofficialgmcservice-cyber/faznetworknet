@@ -1,0 +1,1 @@
+(()=>{const c=document.getElementById("current-time");const u=()=>{if(c)c.textContent=new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date())};u();setInterval(u,1000)})();
