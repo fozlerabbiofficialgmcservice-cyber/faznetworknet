@@ -1,2 +1,12 @@
 const express=require("express");const controller=require("../controllers/hotspotController");const router=express.Router();
-router.get("/",controller.page);router.get("/profiles",controller.profiles);router.get("/vouchers",controller.list);router.get("/active",controller.active);router.post("/generate",controller.generate);router.post("/remove",controller.remove);module.exports=router;
+router.get("/",controller.page);
+router.get("/users",controller.list);
+router.get("/profiles",controller.profiles);
+router.get("/server-profiles",controller.serverProfiles);
+router.get("/vouchers",controller.list);
+router.get("/active",controller.active);
+router.post("/vouchers/generate",controller.generate);
+router.post("/generate",controller.generate);
+router.post("/users/remove",controller.remove);
+router.post("/remove",controller.remove);
+module.exports=router;
