@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAZ NETWORK - Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #0a3d2e;
+            --primary-hover: #0d4d3a;
+            --accent-color: #10b981;
+            --sidebar-width: 260px;
+        }
+        body { 
+            background-color: #f8fafc; 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            margin: 0;
+            padding: 0;
+        }
+        
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--primary-color);
+            color: #fff;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        .sidebar-header {
+            padding: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .lang-switcher {
+            padding: 10px 20px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .lang-switcher select {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+        }
+        .lang-switcher select option {
+            background-color: var(--primary-color);
+            color: #fff;
+        }
+
+        .sidebar-menu { 
+            list-style: none; 
+            padding: 0; 
+            margin: 10px 0 30px 0; 
+        }
+        .menu-item a, .menu-item .dropdown-toggle {
+            color: #a7f3d0;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+        }
+        .menu-item a:hover, 
+        .menu-item a.active, 
+        .menu-item .dropdown-toggle:hover {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #fff;
+        }
+        .menu-item i { margin-right: 12px; font-size: 17px; }
+        
+        .dropdown-toggle::after {
+            display: none;
+        }
+        
+        .submenu {
+            background-color: rgba(0, 0, 0, 0.25);
+            list-style: none;
+            padding: 0;
+            display: none;
+        }
+        .submenu.show { display: block; }
+        .submenu a, .submenu button { 
+            padding-left: 48px; 
+            font-size: 13.5px; 
+        }
+        .submenu .submenu a { 
+            padding-left: 65px; 
+            font-size: 13px; 
+            background-color: rgba(0, 0, 0, 0.15);
+        }
+        
+        .main-content {
+            margin-left: var(--sidebar-width);
+            transition: all 0.3s ease;
+            padding: 24px;
+        }
+
+        .card-custom {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            background: #ffffff;
+        }
+        .card-custom-header {
+            background-color: #ffffff;
+            border-bottom: 1px solid #edf2f7;
+            padding: 16px 24px;
+            font-weight: 600;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-theme {
+            background-color: var(--primary-color);
+            color: #ffffff;
+            border: none;
+            padding: 9px 22px;
+            font-weight: 500;
+        }
+        .btn-theme:hover {
+            background-color: var(--primary-hover);
+            color: #ffffff;
+        }
+        .form-label {
+            font-weight: 500;
+            font-size: 13.5px;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+        .form-control, .form-select {
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            padding: 9px 13px;
+            font-size: 14px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar { left: calc(-1 * var(--sidebar-width)); }
+            .sidebar.show { left: 0; }
+            .main-content { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span data-key="brand">FAZ NETWORK</span>
+            <button class="btn btn-link text-white d-md-none" onclick="toggleSidebar()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+
+        <div class="lang-switcher">
+            <i class="bi bi-translate"></i>
+            <select id="langSelect">
+                <option value="en" selected>English (USA)</option>
+                <option value="bn">বাংলা</option>
+            </select>
+        </div>
+
+        <ul class="sidebar-menu">
+            <li class="menu-item">
+                <a href="/admin">
+                    <i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span>
+                </a>
+            </li>
+
+            <li class="menu-item">
+                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
+                    <i class="bi bi-people"></i> <span data-key="customer">Customer</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon bi-chevron-up"></i>
+                </button>
+                <ul class="submenu show">
+                    <li><a href="javascript:void(0)" onclick="showSection('add-customer')"><span data-key="add_customer">Add Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="showSection('all-customer')"><span data-key="all_customer">All Customer (PPPoE)</span></a></li>
+                </ul>
+            </li>
+
+            <li class="menu-item">
+                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
+                    <i class="bi bi-credit-card"></i> <span data-key="payments">Payments</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
+                </button>
+                <ul class="submenu">
+                    <li><a href="javascript:void(0)" onclick="showSection('all-payments')"><span data-key="all_payments">All Payments (SMS)</span></a></li>
+                </ul>
+            </li>
+
+            <li class="menu-item">
+                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
+                    <i class="bi bi-wifi"></i> <span data-key="hotspot">Hotspot</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
+                </button>
+                <ul class="submenu">
+                    <li><a href="/portal" target="_blank"><span>Hotspot Login Portal</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="showSection('hotspot-vouchers')"><span>Hotspot Vouchers</span></a></li>
+                </ul>
+            </li>
+
+            <li class="menu-item">
+                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
+                    <i class="bi bi-gear-wide-connected"></i> <span data-key="core_system">Core System</span>
+                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
+                </button>
+                <ul class="submenu">
+                    <li><a href="javascript:void(0)" onclick="showSection('core-monitor')"><span data-key="monitor">MikroTik Monitor</span></a></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    <div class="main-content" id="mainContent">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white rounded shadow-sm mb-4 p-2">
+            <div class="container-fluid">
+                <button class="btn btn-outline-success d-md-none" onclick="toggleSidebar()">
+                    <i class="bi bi-list"></i>
+                </button>
+                <span class="fs-5 fw-semibold text-secondary d-none d-md-block" id="pageTitle" data-key="customer_management">Customer Management</span>
+                <div class="ms-auto d-flex gap-2">
+                    <button class="btn btn-outline-success" onclick="syncMikrotik(this)">
+                        <i class="bi bi-arrow-repeat"></i> 🔄 Sync MikroTik
+                    </button>
+                </div>
+            </div>
+        </nav>
+        
+        <div id="dynamicPageContent">
+            <!-- Add Customer Card -->
+            <div id="section-add-customer" class="card card-custom mb-4">
+                <div class="card-custom-header">
+                    <i class="bi bi-person-plus-fill text-success fs-5"></i>
+                    <span class="fs-5" data-key="add_new_customer">Add New Customer</span>
+                </div>
+                <div class="card-body p-4">
+                    <form id="addCustomerForm">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="fullName" class="form-label" data-key="label_fullname">Full Name *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
+                                    <input type="text" class="form-control" id="fullName" placeholder="e.g. John Doe" data-placeholder-key="ph_fullname" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="phoneNumber" class="form-label" data-key="label_phone">Phone Number *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span>
+                                    <input type="tel" class="form-control" id="phoneNumber" placeholder="e.g. 01700000000" data-placeholder-key="ph_phone" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="username" class="form-label" data-key="label_username">Username *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-at"></i></span>
+                                    <input type="text" class="form-control" id="username" placeholder="pppoe_user" data-placeholder-key="ph_username" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="password" class="form-label" data-key="label_password">Password *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
+                                    <input type="password" class="form-control" id="password" placeholder="••••••••" data-placeholder-key="ph_password" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="packageSelect" class="form-label" data-key="label_package">Package Selection *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-speedometer"></i></span>
+                                    <select class="form-select" id="packageSelect" required>
+                                        <option value="Profile-10M">Standard - 10 Mbps</option>
+                                        <option value="Profile-20M">Premium - 20 Mbps</option>
+                                        <option value="default">Default</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="billingDuration" class="form-label" data-key="label_billing_duration">Billing Duration *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
+                                    <select class="form-select" id="billingDuration" required>
+                                        <option value="1_month" selected data-key="opt_1_month">1 Month (30 Days)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-12 mt-4 pt-2 border-top d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-light border px-4" data-key="btn_reset">Reset</button>
+                                <button type="submit" class="btn btn-theme px-4" data-key="btn_save_customer">
+                                    <i class="bi bi-check2-circle me-1"></i> Save Customer
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Customer List Table (Persistent, no reload wipe) -->
+            <div id="section-all-customer" class="card card-custom mb-4">
+                <div class="card-custom-header">
+                    <i class="bi bi-people text-success fs-5"></i>
+                    <span>PPPoE Customer Records</span>
+                </div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Username</th>
+                                <th>Profile</th>
+                                <th>Phone</th>
+                                <th>Status</th>
+                                <th>Expiry</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pppoeUserList">
+                            <tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="section-core-monitor" class="card card-custom mb-4">
+            <div class="card-custom-header"><i class="bi bi-speedometer2 text-success fs-5"></i><span data-key="monitor">MikroTik Monitor</span><span id="routerLiveStatus" class="badge bg-secondary ms-auto">Offline</span></div>
+            <div class="card-body p-4"><div class="row g-3 mb-4"><div class="col-md-4"><div class="p-3 bg-light rounded"><small>CPU</small><div id="liveCpu" class="fs-3 fw-bold">—</div></div></div><div class="col-md-4"><div class="p-3 bg-light rounded"><small>RAM</small><div id="liveRam" class="fs-3 fw-bold">—</div></div></div><div class="col-md-4"><div class="p-3 bg-light rounded"><small>Uptime</small><div id="liveUptime" class="fs-6 fw-bold mt-2">—</div></div></div></div><div class="d-flex justify-content-between align-items-center mb-2"><strong>Live Traffic</strong><select id="monitorInterface" class="form-select form-select-sm" style="max-width:240px"></select></div><div style="height:280px"><canvas id="liveTrafficChart"></canvas></div></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const translations = {
+            'en': {
+                'brand': 'FAZ NETWORK',
+                'dashboard': 'Dashboard',
+                'customer': 'Customer',
+                'all_customer': 'All Customer',
+                'add_customer': 'Add Customer',
+                'payments': 'Payments',
+                'all_payments': 'All Payments',
+                'hotspot': 'Hotspot',
+                'core_system': 'Core System',
+                'monitor': 'Monitor',
+                'customer_management': 'Customer Management',
+                'add_new_customer': 'Add New Customer',
+                'label_fullname': 'Full Name *',
+                'label_phone': 'Phone Number *',
+                'label_username': 'Username *',
+                'label_password': 'Password *',
+                'label_package': 'Package Selection *',
+                'label_billing_duration': 'Billing Duration *',
+                'opt_1_month': '1 Month (30 Days)',
+                'btn_reset': 'Reset',
+                'btn_save_customer': 'Save Customer',
+                'ph_fullname': 'e.g. John Doe', 'ph_phone': 'e.g. 01700000000', 'ph_username': 'pppoe_user', 'ph_password': '••••••••'
+            },
+            'bn': {
+                'brand': 'FAZ NETWORK',
+                'dashboard': 'ড্যাশবোর্ড',
+                'customer': 'কাস্টমার',
+                'all_customer': 'অল কাস্টমার',
+                'add_customer': 'অ্যাড কাস্টমার',
+                'payments': 'পেমেন্টস',
+                'all_payments': 'অল পেমেন্টস',
+                'hotspot': 'হটস্পট',
+                'core_system': 'কোর সিস্টেম',
+                'monitor': 'মনিটর',
+                'customer_management': 'কাস্টমার ম্যানেজমেন্ট',
+                'add_new_customer': 'নতুন কাস্টমার যুক্ত করুন',
+                'label_fullname': 'পূর্ণ নাম *',
+                'label_phone': 'ফোন নম্বর *',
+                'label_username': 'ইউজারনেম *',
+                'label_password': 'পাসওয়ার্ড *',
+                'label_package': 'প্যাকেজ নির্বাচন *',
+                'label_billing_duration': 'বিলিং মেয়াদ *',
+                'opt_1_month': '১ মাস (৩০ দিন)',
+                'btn_reset': 'রিসেট',
+                'btn_save_customer': 'সংরক্ষণ করুন',
+                'ph_fullname': 'যেমন: জন ডো', 'ph_phone': 'যেমন: 01700000000', 'ph_username': 'pppoe_user', 'ph_password': '••••••••'
+            }
+        };
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('show');
+        }
+
+        function toggleSubmenu(event, button) {
+            event.stopPropagation();
+            const submenu = button.nextElementSibling;
+            submenu.classList.toggle('show');
+            const arrow = button.querySelector('.arrow-icon');
+            if (arrow) arrow.classList.toggle('bi-chevron-up');
+        }
+
+        function showSection(sectionId) {
+            const addCard = document.getElementById('section-add-customer');
+            const listCard = document.getElementById('section-all-customer');
+            if (sectionId === 'add-customer') {
+                addCard.style.display = 'block';
+                listCard.style.display = 'none';
+            } else {
+                addCard.style.display = 'block';
+                listCard.style.display = 'block';
+            }
+        }
+
+        function updateLanguage(lang) {
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-key]').forEach(el => {
+                const key = el.getAttribute('data-key');
+                if (translations[lang] && translations[lang][key]) el.innerText = translations[lang][key];
+            });
+            document.querySelectorAll('[data-placeholder-key]').forEach(el => { const key=el.getAttribute('data-placeholder-key'); if (translations[lang] && translations[lang][key]) el.placeholder=translations[lang][key]; });
+            localStorage.setItem('faz_preferred_lang', lang);
+        }
+
+        const langSelect = document.getElementById('langSelect');
+        const savedLang = localStorage.getItem('faz_preferred_lang') || 'en';
+        langSelect.value = savedLang;
+        updateLanguage(savedLang);
+        langSelect.addEventListener('change', function() { updateLanguage(this.value); });
+
+        // Load customers persistently via AJAX
+        async function fetchCustomers() {
+            try {
+                const res = await fetch('/api/pppoe/users');
+                const data = await res.json();
+                const tbody = document.getElementById('pppoeUserList');
+                if (data.users && data.users.length > 0) {
+                    tbody.innerHTML = data.users.map(u => `
+                        <tr>
+                            <td><strong>${u.username}</strong></td>
+                            <td><span class="badge bg-info text-dark">${u.profile || u.profile_name || 'N/A'}</span></td>
+                            <td>${u.phone || '-'}</td>
+                            <td><span class="badge ${u.disabled ? 'bg-danger' : 'bg-success'}">${u.disabled ? 'Disabled' : 'Active'}</span></td>
+                            <td>${u.expiry_date ? new Date(u.expiry_date).toLocaleDateString() : 'Active'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger" onclick="kickUser('${u.username}')">Kick</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3">No customers found. Click Sync.</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function kickUser(username) {
+            if (!confirm('Kick user ' + username + '?')) return;
+            await fetch('/api/pppoe/kick-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            fetchCustomers();
+        }
+
+        async function syncMikrotik(btn) {
+            btn.disabled = true;
+            btn.innerText = 'Syncing...';
+            await fetch('/api/pppoe/sync', { method: 'POST' });
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 🔄 Sync MikroTik';
+            btn.disabled = false;
+            fetchCustomers();
+            loadMikrotikStats();
+        }
+
+        document.getElementById('addCustomerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const payload = {
+                username: document.getElementById('username').value.trim(),
+                password: document.getElementById('password').value.trim(),
+                phone: document.getElementById('phoneNumber').value.trim(),
+                profile: document.getElementById('packageSelect').value
+            };
+            const res = await fetch('/api/pppoe/users/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert('Customer created and synced with MikroTik!');
+                document.getElementById('addCustomerForm').reset();
+                fetchCustomers();
+            } else {
+                alert('Error creating customer.');
+            }
+        });
+
+        let liveTrafficChart=null, liveTrafficTimer=null;
+        async function loadMikrotikStats(){try{const [r,i]=await Promise.all([fetch('/api/router/resources').then(x=>x.json()),fetch('/api/router/interfaces').then(x=>x.json())]);document.getElementById('liveCpu').innerText=(r.cpuLoad ?? '—')+'%';document.getElementById('liveRam').innerText=(r.memoryUsagePercent ?? '—')+'%';document.getElementById('liveUptime').innerText=r.uptime||'—';const st=document.getElementById('routerLiveStatus');st.className='badge bg-success ms-auto';st.innerText='Online';const sel=document.getElementById('monitorInterface'),cur=sel.value;if(!sel.options.length)sel.innerHTML=(i.interfaces||[]).map(x=>'<option value="'+x.name+'">'+x.name+'</option>').join('');if(cur)sel.value=cur;if(sel.value)startLiveTraffic(sel.value)}catch(e){const st=document.getElementById('routerLiveStatus');st.className='badge bg-danger ms-auto';st.innerText='Offline'}}
+        async function pollLiveTraffic(name){try{const d=await fetch('/api/router/traffic?interface='+encodeURIComponent(name)).then(x=>x.json());if(!liveTrafficChart)liveTrafficChart=new Chart(document.getElementById('liveTrafficChart'),{type:'line',data:{labels:[],datasets:[{label:'RX Mbps',data:[],tension:.3},{label:'TX Mbps',data:[],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,animation:false}});liveTrafficChart.data.labels.push(new Date().toLocaleTimeString());liveTrafficChart.data.datasets[0].data.push(d.rxMbps||0);liveTrafficChart.data.datasets[1].data.push(d.txMbps||0);if(liveTrafficChart.data.labels.length>30){liveTrafficChart.data.labels.shift();liveTrafficChart.data.datasets.forEach(x=>x.data.shift())}liveTrafficChart.update()}catch(e){}}
+        function startLiveTraffic(name){if(liveTrafficTimer)clearInterval(liveTrafficTimer);pollLiveTraffic(name);liveTrafficTimer=setInterval(()=>pollLiveTraffic(name),2500)}
+        document.getElementById('monitorInterface').addEventListener('change',e=>startLiveTraffic(e.target.value));
+        fetchCustomers();loadMikrotikStats();setInterval(loadMikrotikStats,5000);
+    </script>
+</body>
+</html>
