@@ -6,6 +6,7 @@ router.get("/server-profiles",controller.serverProfiles);
 router.get("/vouchers",controller.list);
 router.get("/active",controller.active);
 router.post("/vouchers/generate",controller.generate);
+router.post("/users/kick",controller.kick);
 router.post("/generate",controller.generate);
 router.post("/users/remove",controller.remove);
 router.post("/remove",controller.remove);
