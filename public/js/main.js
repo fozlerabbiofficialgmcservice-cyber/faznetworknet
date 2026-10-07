@@ -466,3 +466,11 @@
     load().catch(e=>{voucherBody.innerHTML="<tr><td colspan='7' class='empty-cell'>"+esc(e.message)+"</td></tr>";});
   }
 })();
+
+
+(() => {
+  const box=document.getElementById("dashboard-payments"), total=document.getElementById("today-collection-dashboard");
+  if(!box)return;
+  const load=async()=>{try{const d=await fetch("/api/payments/summary",{cache:"no-store"}).then(r=>r.json());if(!d.success)throw new Error(d.error);total.textContent="৳"+Number(d.summary.today_collection||0).toLocaleString(undefined,{minimumFractionDigits:2});box.innerHTML=(d.recent||[]).length?d.recent.map(x=>"<div class='flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-4 py-3'><div><p class='font-bold text-sm'>"+x.channel.toUpperCase()+" · "+x.trx_id+"</p><p class='text-xs text-slate-400'>"+(x.matched_username||x.sender_phone||"Unmatched")+"</p></div><div class='text-right'><p class='font-black'>৳"+Number(x.amount).toFixed(2)+"</p><p class='text-xs font-bold "+(x.status==="processed"?"text-emerald-600":"text-amber-600")+"'>"+x.status+"</p></div></div>").join(""):"<p class='text-sm text-slate-400'>No recent payments.</p>"}catch(e){box.innerHTML="<p class='text-sm text-red-500'>Unable to load payment summary.</p>";}};
+  load();setInterval(load,15000);
+})();
