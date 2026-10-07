@@ -13,7 +13,13 @@ async function list(req,res){try{
  const [dbRows,mikrotikUsers,sessions]=await Promise.all([db.query("SELECT * FROM hotspot_vouchers ORDER BY created_at DESC LIMIT 5000"),mikrotikService.getHotspotUsers(),filter==="online"?mikrotikService.getActiveHotspotSessions():Promise.resolve([])]);
  const mtMap=new Map(mikrotikUsers.map(u=>[u.username,u]));
  const onlineMap=new Map(sessions.map(s=>[s.username,s]));
- let vouchers=dbRows.rows.map(v=>{const validUntil=v.created_at?voucherValidUntil(v.created_at,v.validity):null;return {...v,mikrotik:mtMap.get(v.username)||null,online:onlineMap.get(v.username)||null,valid_until:validUntil?validUntil.toISOString():null,active:v.status!=="expired"&&(!validUntil||validUntil.getTime()>Date.now())};});
+ const dbMap=new Map(dbRows.rows.map(v=>[v.username,v]));
+ const allNames=new Set([...dbMap.keys(),...mtMap.keys()]);
+ let vouchers=[...allNames].map(username=>{
+   const v=dbMap.get(username)||{}, mt=mtMap.get(username)||null;
+   const validUntil=v.created_at?voucherValidUntil(v.created_at,v.validity):null;
+   return {id:v.id||null,username,password:v.password||mt?.password||"",profile:v.profile||mt?.profile||"",validity:v.validity||"",price:Number(v.price||0),status:v.status||((mt&&!mt.disabled)?"active":"unused"),comment:v.comment||mt?.comment||"",created_at:v.created_at||null,mikrotik:mt,online:onlineMap.get(username)||null,valid_until:validUntil?validUntil.toISOString():null,active:!!v.created_at&&v.status!=="expired"&&(!validUntil||validUntil.getTime()>Date.now())};
+ });
  if(filter==="active") vouchers=vouchers.filter(v=>v.active);
  if(filter==="online") vouchers=sessions.map(s=>({id:null,username:s.username,password:mtMap.get(s.username)?.password||"",profile:s.profile||mtMap.get(s.username)?.profile||"",validity:mtMap.get(s.username)?.validity||"",price:mtMap.get(s.username)?.price||0,status:"active",comment:"Live MikroTik session",created_at:null,online:s}));
  res.json({success:true,filter,count:vouchers.length,users:vouchers,sessions}); 
