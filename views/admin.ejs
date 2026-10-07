@@ -202,8 +202,8 @@
             @page { size:A4 portrait; margin:8mm; }
             body.hotspot-printing * { visibility:hidden !important; }
             body.hotspot-printing #hotspotVoucherPrint,
-            body.hotspot-printing #hotspotVoucherPrint * { visibility:visible !important; }
-            body.hotspot-printing #hotspotVoucherPrint { position:absolute; left:0; top:0; width:100%; }
+            body.hotspot-printing #voucherPrintArea * { visibility:visible !important; }
+            body.hotspot-printing #voucherPrintArea { position:absolute; left:0; top:0; width:100%; }
             body.hotspot-printing .voucher-grid { grid-template-columns:repeat(4,1fr) !important; gap:8px !important; }
             body.hotspot-printing .voucher-card { min-height:0; padding:10px; border:1px dashed #444; }
             body.hotspot-printing .voucher-credential { font-size:15px; }
@@ -645,13 +645,13 @@
 
         function renderVoucherCards(vouchers) {
             currentVoucherBatch=vouchers||[];
-            const area=document.getElementById('hotspotVoucherPrint');
+            const area=document.getElementById('voucherPrintArea') || document.getElementById('hotspotVoucherPrint');
             if(area) area.innerHTML='<div class="voucher-grid">'+currentVoucherBatch.map(voucherCardHtml).join('')+'</div>';
         }
 
         async function loadVoucherGeneratorSection() {
             currentHotspotMode='generator'; currentHotspotTitleKey='gen_print_vouchers'; setHotspotTitle('gen_print_vouchers');
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-4"><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-ticket-perforated text-success fs-5"></i><span data-key="gen_print_vouchers">'+escapeHtml(hotspotTitle('gen_print_vouchers'))+'</span></div><div class="card-body"><form id="voucherGeneratorForm"><div class="row g-3"><div class="col-md-2"><label class="form-label" data-key="quantity">Quantity</label><input id="voucherQuantity" type="number" class="form-control" min="1" max="500" value="10" required></div><div class="col-md-2"><label class="form-label" data-key="user_prefix">User Prefix</label><input id="voucherPrefix" class="form-control" value="FAZ-" maxlength="20"></div><div class="col-md-2"><label class="form-label" data-key="character_length">Character Length</label><input id="voucherCharLength" type="number" class="form-control" min="4" max="16" value="6"></div><div class="col-md-3"><label class="form-label" data-key="profile">Profile</label><select id="voucherProfile" class="form-select" required><option value="">Loading profiles...</option></select></div><div class="col-md-1"><label class="form-label" data-key="price">Price</label><input id="voucherPrice" type="number" class="form-control" min="0" step="0.01" value="20"></div><div class="col-md-2"><label class="form-label" data-key="validity">Validity</label><input id="voucherValidity" class="form-control" value="1d" required></div><div class="col-12 d-flex justify-content-end gap-2 mt-3"><button type="submit" class="btn btn-theme"><i class="bi bi-magic me-1"></i> <span data-key="generate_batch_vouchers">Generate Batch Vouchers</span></button><button type="button" class="btn btn-outline-success" onclick="printVoucherCards()">🖨️ <span data-key="print_voucher_cards">Print Voucher Cards</span></button></div></div></form></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-printer text-success fs-5"></i> <span data-key="printable_voucher_cards">Printable Voucher Cards</span> <span id="voucherBatchCount" class="badge bg-success ms-2">0</span></div><div class="card-body" id="hotspotVoucherPrint"><div class="text-center py-5 text-muted">Generate a voucher batch to preview printable cards.</div></div></div></div></div></section>');
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-4"><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-ticket-perforated text-success fs-5"></i><span data-key="gen_print_vouchers">'+escapeHtml(hotspotTitle('gen_print_vouchers'))+'</span></div><div class="card-body"><form id="voucherGeneratorForm"><div class="row g-3"><div class="col-md-2"><label class="form-label" data-key="quantity">Quantity</label><input id="voucherQuantity" type="number" class="form-control" min="1" max="500" value="10" required></div><div class="col-md-2"><label class="form-label" data-key="user_prefix">User Prefix</label><input id="voucherPrefix" class="form-control" value="FAZ-" maxlength="20"></div><div class="col-md-2"><label class="form-label" data-key="character_length">Character Length</label><input id="voucherCharLength" type="number" class="form-control" min="4" max="16" value="6"></div><div class="col-md-3"><label class="form-label" data-key="profile">Profile</label><select id="voucherProfile" class="form-select" required><option value="">Loading profiles...</option></select></div><div class="col-md-1"><label class="form-label" data-key="price">Price</label><input id="voucherPrice" type="number" class="form-control" min="0" step="0.01" value="20"></div><div class="col-md-2"><label class="form-label" data-key="validity">Validity</label><input id="voucherValidity" class="form-control" value="1d" required></div><div class="col-12 d-flex justify-content-end gap-2 mt-3"><button type="submit" class="btn btn-theme"><i class="bi bi-magic me-1"></i> <span data-key="generate_batch_vouchers">Generate Batch Vouchers</span></button><button type="button" class="btn btn-outline-success" onclick="printVoucherCards()">🖨️ <span data-key="print_voucher_cards">Print Voucher Cards</span></button></div></div></form></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-printer text-success fs-5"></i> <span data-key="printable_voucher_cards">Printable Voucher Cards</span> <span id="voucherBatchCount" class="badge bg-success ms-2">0</span></div><div class="card-body" id="voucherPrintArea"><div class="text-center py-5 text-muted">Generate a voucher batch to preview printable cards.</div></div></div></div></div></section>');
             try {
                 const data=await jsonFetch('/api/hotspot/profiles');
                 const select=document.getElementById('voucherProfile');
@@ -661,7 +661,7 @@
             } catch(error) {
                 const select=document.getElementById('voucherProfile'); if(select) select.innerHTML='<option value="">'+escapeHtml(error.message)+'</option>';
             }
-            document.getElementById('voucherGeneratorForm').addEventListener('submit',generateVoucherBatch);
+            document.getElementById('voucherGeneratorForm').addEventListener('submit',window.generateHotspotVouchers);
         }
 
         async function generateVoucherBatch(event) {
@@ -684,6 +684,71 @@
             setTimeout(function(){document.body.classList.remove('hotspot-printing');},1000);
         }
 
+
+        // Explicit global Hotspot handlers for inline sidebar onclick bindings.
+        window.loadHotspotDashboard = async function() {
+            console.log('[HOTSPOT UI]', 'loadHotspotDashboard', 'invoked');
+            return await loadHotspotDashboard();
+        };
+        window.loadHotspotSection = async function(filterType, titleKey) {
+            console.log('[HOTSPOT UI]', 'loadHotspotSection', 'invoked');
+            return await loadHotspotSection(filterType, titleKey);
+        };
+        window.loadHotspotProfiles = async function(titleKey) {
+            console.log('[HOTSPOT UI]', 'loadHotspotProfiles', 'invoked');
+            return await loadHotspotProfiles(titleKey);
+        };
+        window.loadHotspotServerProfiles = async function(titleKey) {
+            console.log('[HOTSPOT UI]', 'loadHotspotServerProfiles', 'invoked');
+            return await loadHotspotServerProfiles(titleKey);
+        };
+        window.loadVoucherGeneratorSection = async function() {
+            console.log('[HOTSPOT UI]', 'loadVoucherGeneratorSection', 'invoked');
+            return await loadVoucherGeneratorSection();
+        };
+        window.generateHotspotVouchers = async function(event) {
+            console.log('[HOTSPOT UI]', 'generateHotspotVouchers', 'invoked');
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+            const btn = document.querySelector('#voucherGeneratorForm button[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '+hotspotTitle('generating')+'...';
+            }
+            try {
+                const payload = {
+                    quantity: Number(document.getElementById('voucherQuantity')?.value || 0),
+                    profile: document.getElementById('voucherProfile')?.value || '',
+                    validity: String(document.getElementById('voucherValidity')?.value || '').trim(),
+                    price: Number(document.getElementById('voucherPrice')?.value || 0),
+                    userPrefix: String(document.getElementById('voucherPrefix')?.value || 'FAZ-').trim(),
+                    charLength: Number(document.getElementById('voucherCharLength')?.value || 6)
+                };
+                const data = await jsonFetch('/api/hotspot/vouchers/generate', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                });
+                currentVoucherBatch = data.vouchers || [];
+                const printArea = document.getElementById('voucherPrintArea');
+                if (printArea) {
+                    printArea.innerHTML = '<div class="voucher-grid">'+currentVoucherBatch.map(voucherCardHtml).join('')+'</div>';
+                }
+                const legacyArea = document.getElementById('hotspotVoucherPrint');
+                if (legacyArea) renderVoucherCards(currentVoucherBatch);
+                const count = document.getElementById('voucherBatchCount');
+                if (count) count.innerText = data.count || currentVoucherBatch.length;
+                return data;
+            } catch (error) {
+                console.error('[HOTSPOT UI] generateHotspotVouchers failed', error);
+                alert(error.message);
+                throw error;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-magic me-1"></i> '+hotspotTitle('generate_batch_vouchers');
+                }
+            }
+        };
         const _existingUpdateLanguage = updateLanguage;
         updateLanguage = function(lang) {
             _existingUpdateLanguage(lang);
