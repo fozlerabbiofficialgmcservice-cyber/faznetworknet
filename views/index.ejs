@@ -2,18 +2,24 @@
 const dashboardBody = `
 <section class="space-y-7">
   <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-    <div><p class="text-sm font-medium text-cyan-600">FAZ NETWORK</p><h2 class="text-3xl font-black">Network Overview</h2><p class="text-slate-500">Monitor subscribers, sessions, collections and live router traffic.</p></div>
+    <div><p class="text-sm font-medium text-cyan-600">FAZ NETWORK</p><h2 class="text-3xl font-black">Network Overview</h2><p class="text-slate-500">Live MikroTik resources and interface traffic monitoring.</p></div>
     <div id="current-time" class="text-sm text-slate-500"></div>
   </div>
+
   <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-    <div class="summary-card"><p class="label">Total PPPoE Users</p><p class="metric">0</p><p class="hint">Configured subscribers</p></div>
-    <div class="summary-card"><p class="label">Active Sessions</p><p class="metric">0</p><p class="hint">Currently online</p></div>
-    <div class="summary-card"><p class="label">Today's Collection</p><p class="metric">৳0.00</p><p class="hint">All payment channels</p></div>
+    <div class="summary-card"><p class="label">CPU Load</p><p id="cpu-value" class="metric">0.0%</p><div class="gauge-track"><div id="cpu-bar" class="gauge-fill" style="width:0%"></div></div></div>
+    <div class="summary-card"><p class="label">RAM Usage</p><p id="memory-value" class="metric">0.0%</p><div class="gauge-track"><div id="memory-bar" class="gauge-fill" style="width:0%"></div></div></div>
+    <div class="summary-card"><p class="label">System Uptime</p><p id="uptime-value" class="metric metric-small">Waiting...</p><p class="hint">RouterOS system uptime</p></div>
   </div>
-  <div class="bg-white rounded-2xl border p-6">
-    <h3 class="font-bold text-lg">Live MikroTik Traffic</h3>
-    <p class="text-sm text-slate-500">RX/TX traffic will appear here when router monitoring is connected.</p>
-    <div id="traffic-chart" class="traffic-placeholder mt-5"><div><p class="font-semibold">RX / TX Traffic Chart</p><p class="text-sm text-slate-400">Waiting for router data</p></div></div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-5 border-b border-slate-200">
+      <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div><h3 class="font-bold text-lg">Live MikroTik Traffic</h3><p class="text-sm text-slate-500">Real-time interface throughput, sampled every 2.5 seconds.</p></div>
+        <div class="w-full sm:w-72"><label for="interface-select" class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Interface</label><select id="interface-select" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-cyan-500"><option value="">Loading interfaces...</option></select></div>
+      </div>
+    </div>
+    <div class="p-6"><div class="h-80"><canvas id="traffic-chart"></canvas></div></div>
   </div>
 </section>`;
 %>
