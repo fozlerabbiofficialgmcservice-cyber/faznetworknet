@@ -19,7 +19,7 @@ function parseSms(body,headers){
  if(!trx||!Number.isFinite(amount)||amount<=0)throw new Error("Could not parse transaction ID or amount from SMS.");
  return{channel,trxId:trx.toUpperCase(),amount,senderPhone,customerRef,rawSms:raw};
 }
-function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});});}
+function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
 async function webhook(req,res){
  const expected=String(process.env.MACRODROID_WEBHOOK_KEY||"");
