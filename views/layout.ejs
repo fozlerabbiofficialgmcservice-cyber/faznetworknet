@@ -15,8 +15,8 @@
 <nav class="flex-1 p-4 space-y-2">
 <a href="/" class="nav-link <%= page === "dashboard" ? "active" : "" %>">Dashboard <span>Overview</span></a>
 <a href="/pppoe" class="nav-link <%= page === "pppoe" ? "active" : "" %>">PPPoE Users & Profiles</a>
-<a href="/hotspot" class="nav-link">Hotspot Vouchers</a>
-<a href="/transactions" class="nav-link">Transactions <span>bKash / Nagad / Rocket</span></a>
+<a href="/hotspot" class="nav-link <%= page === "hotspot" ? "active" : "" %>">Hotspot Vouchers</a>
+<a href="/transactions" class="nav-link <%= page === "transactions" ? "active" : "" %>">Transactions <span>bKash / Nagad / Rocket</span></a>
 <a href="/router" class="nav-link <%= page === "router" ? "active" : "" %>">Router Settings</a>
 </nav>
 <div class="p-5 border-t border-slate-800 text-xs text-slate-500">FAZ NETWORK Web Panel</div>
