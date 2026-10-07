@@ -59,6 +59,49 @@ async function generate(req,res){try{
  }
  res.json({success:true,count:created.length,vouchers:created});
 }catch(e){return errorResponse(res,e);}}
+async function createUser(req,res){
+  try{
+    const username=clean(req.body.username,100);
+    const password=clean(req.body.password,100);
+    const profile=clean(req.body.profile,100);
+    const server=clean(req.body.server||"all",100)||"all";
+    const timeLimit=clean(req.body.timeLimit,50);
+    const dataLimit=clean(req.body.dataLimit,50);
+    const comment=clean(req.body.comment,500);
+    const phone=clean(req.body.phone,40);
+    const price=Number(req.body.price||0);
+    if(!username||!password||!profile)return res.status(400).json({success:false,message:"Username, password, and profile are required."});
+    if(!/^[A-Za-z0-9._@-]{2,100}$/.test(username))return res.status(400).json({success:false,message:"Username contains unsupported characters."});
+    if(!Number.isFinite(price)||price<0)return res.status(400).json({success:false,message:"Price must be a valid non-negative amount."});
+    const existingDb=await db.query("SELECT 1 FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+    if(existingDb.rows.length)return res.status(409).json({success:false,message:"Hotspot username already exists in database."});
+    const mtUsers=await mikrotikService.getHotspotUsers();
+    if(mtUsers.some(u=>String(u.username||"").toLowerCase()===username.toLowerCase()))return res.status(409).json({success:false,message:"Hotspot username already exists in MikroTik."});
+    await mikrotikService.createHotspotUser({username,password,profile,server,"limit-uptime":timeLimit,"limit-bytes-total":dataLimit,comment});
+    try{
+      await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit) VALUES($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10)",
+        [username,password,profile,timeLimit||"custom",price,comment,phone,server,timeLimit||null,dataLimit||null]);
+    }catch(dbError){
+      try{await mikrotikService.removeHotspotUser(username);}catch(_){}
+      throw dbError;
+    }
+    return res.json({success:true,message:"Hotspot user created successfully in MikroTik & DB",user:{username,profile,server,timeLimit,dataLimit,price,phone,comment}});
+  }catch(e){return errorResponse(res,e);}
+}
+async function dashboardMetrics(req,res){
+  try{
+    const [users,sessions,revenue]=await Promise.all([
+      mikrotikService.getHotspotUsers(),
+      mikrotikService.getActiveHotspotSessions(),
+      db.query("SELECT COALESCE(SUM(price),0) AS total FROM hotspot_vouchers WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'")
+    ]);
+    const explicit=users.filter(u=>String(u.username||"").toLowerCase()!=="default-trial"&&String(u.profile||"").trim()&&String(u.profile||"").toLowerCase()!=="default-trial");
+    const live=sessions.filter(s=>String(s.username||"").toLowerCase()!=="default-trial");
+    const recentActiveSessions=live.slice(-5).reverse().map(s=>({username:s.username,ip:s.address,mac:s.macAddress,uptime:s.uptime,rxBytes:s.bytesIn,txBytes:s.bytesOut}));
+    const totalBytes=live.reduce((sum,s)=>sum+Number(s.bytesIn||0)+Number(s.bytesOut||0),0);
+    return res.json({success:true,totalUsers:explicit.length,onlineUsers:live.length,todayRevenue:Number(revenue.rows?.[0]?.total||0),totalActiveBandwidthUsage:totalBytes,recentActiveSessions});
+  }catch(e){return errorResponse(res,e);}
+}
 async function kick(req,res){try{const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});const result=await mikrotikService.kickActiveHotspotUser(username);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 async function remove(req,res){try{
  const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});
@@ -66,4 +109,4 @@ async function remove(req,res){try{
  await db.query("UPDATE hotspot_vouchers SET status='expired' WHERE username=$1",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
-module.exports={page,profiles,serverProfiles,list,active,generate,kick,remove};
+module.exports={page,profiles,serverProfiles,list,active,generate,createUser,dashboardMetrics,kick,remove};
