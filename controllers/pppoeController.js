@@ -74,18 +74,91 @@ async function syncFromRouter() {
 
 async function users(req, res) {
   try {
-    const result = await db.query(`
-      SELECT u.*,
-        EXISTS (SELECT 1 FROM pppoe_active_sessions a WHERE a.username = u.username) AS active
-      FROM pppoe_users u
-      ORDER BY u.username ASC
-    `);
-    res.json({ success: true, users: result.rows });
-  } catch (error) {
-    if (error.code === "42P01") {
-      const result = await db.query("SELECT * FROM pppoe_users ORDER BY username ASC");
-      return res.json({ success: true, users: result.rows });
+    const filter = clean(req.query.filter || "all", 40).toLowerCase();
+    const allowedFilters = new Set([
+      "all", "online", "offline", "active", "left", "expire",
+      "expire_today_yesterday", "expire_7_days", "new", "due"
+    ]);
+    if (!allowedFilters.has(filter)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid customer filter.",
+        allowedFilters: Array.from(allowedFilters)
+      });
     }
+
+    const conditions = [];
+    const params = [];
+
+    if (filter === "active") {
+      conditions.push("u.status = 'active'");
+      conditions.push("(u.expiry_date IS NULL OR u.expiry_date > NOW())");
+      conditions.push("u.disabled = FALSE");
+    } else if (filter === "left") {
+      conditions.push("(LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE)");
+    } else if (filter === "expire") {
+      conditions.push("u.expiry_date IS NOT NULL");
+      conditions.push("u.expiry_date <= NOW()");
+    } else if (filter === "expire_today_yesterday") {
+      conditions.push("u.expiry_date IS NOT NULL");
+      conditions.push("u.expiry_date BETWEEN (NOW() - INTERVAL '1 day') AND (NOW() + INTERVAL '1 day')");
+    } else if (filter === "expire_7_days") {
+      conditions.push("u.expiry_date IS NOT NULL");
+      conditions.push("u.expiry_date BETWEEN NOW() AND (NOW() + INTERVAL '7 days')");
+    } else if (filter === "new") {
+      conditions.push("u.created_at >= NOW() - INTERVAL '7 days'");
+    } else if (filter === "due") {
+      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date <= NOW()) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
+    }
+
+    const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
+
+    const result = await db.query(`
+      SELECT u.*
+      FROM pppoe_users u
+      ${whereClause}
+      ORDER BY u.username ASC
+    `, params);
+
+    let sessions = [];
+    try {
+      sessions = await mikrotikService.getActiveSessions();
+    } catch (routerError) {
+      if (filter === "online" || filter === "offline") throw routerError;
+      console.warn("[PPPoE FILTER] MikroTik live session lookup unavailable:", routerError.message);
+    }
+
+    const sessionMap = new Map();
+    for (const session of sessions) {
+      const username = String(session.username || "").trim().toLowerCase();
+      if (username && !sessionMap.has(username)) sessionMap.set(username, session);
+    }
+
+    let users = result.rows.map(user => {
+      const session = sessionMap.get(String(user.username || "").trim().toLowerCase());
+      const expired = Boolean(user.expiry_date && new Date(user.expiry_date).getTime() <= Date.now());
+      return {
+        ...user,
+        active: Boolean(session),
+        online: Boolean(session),
+        session: session || null,
+        session_ip: session?.address || null,
+        session_uptime: session?.uptime || null,
+        session_caller_id: session?.callerId || null,
+        computed_status: expired ? "expired" : (session ? "online" : "offline")
+      };
+    });
+
+    if (filter === "online") users = users.filter(user => user.online);
+    if (filter === "offline") users = users.filter(user => !user.online);
+
+    return res.json({
+      success: true,
+      count: users.length,
+      filter,
+      users
+    });
+  } catch (error) {
     return errorResponse(res, error);
   }
 }
