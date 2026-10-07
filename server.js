@@ -3,6 +3,8 @@ const path=require("path");
 const express=require("express");
 const cors=require("cors");
 const routerRoutes=require("./routes/routerRoutes");
+const pppoeRoutes=require("./routes/pppoeRoutes");
+const { initializeDatabase }=require("./db/init");
 
 const app=express();
 const PORT=Number(process.env.PORT)||3000;
@@ -19,9 +21,7 @@ app.get("/health",(req,res)=>{
   res.json({status:"ok",app:"FAZ NETWORK Server",timestamp:new Date()});
 });
 
-app.get("/",(req,res)=>{
-  res.render("index",{title:"Dashboard",page:"dashboard"});
-});
+app.get("/",(req,res)=>res.render("index",{title:"Dashboard",page:"dashboard"}));
 
 app.get("/router",(req,res)=>{
   res.render("settings",{
@@ -33,8 +33,14 @@ app.get("/router",(req,res)=>{
 });
 
 app.use("/api/router",routerRoutes);
+app.use("/api/pppoe",pppoeRoutes);
+app.get("/pppoe",(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));
 
 app.use((req,res)=>res.status(404).send("Not Found"));
+
+initializeDatabase().catch((error)=>{
+  console.error("[Database] Startup initialization failed:",error.message);
+});
 
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));
 
