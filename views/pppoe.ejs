@@ -1,0 +1,100 @@
+<%
+const body = `
+<section class="space-y-6">
+  <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+    <div>
+      <p class="text-sm font-bold text-cyan-600">PPPoE ENGINE</p>
+      <h2 class="text-3xl font-black">PPPoE Users & Packages</h2>
+      <p class="text-slate-500 mt-1">Two-way synchronization with your existing MikroTik PPPoE configuration.</p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <button id="pppoe-sync-btn" class="btn-primary">🔄 Sync from MikroTik</button>
+      <button id="add-user-btn" class="btn-secondary">＋ Add New User</button>
+    </div>
+  </div>
+
+  <div id="pppoe-sync-result" class="hidden rounded-xl px-4 py-3 text-sm font-semibold"></div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="summary-card"><p class="label">PPPoE Users</p><p id="pppoe-user-count" class="metric">0</p><p class="hint">Imported from router</p></div>
+    <div class="summary-card"><p class="label">Profiles / Packages</p><p id="pppoe-profile-count" class="metric">0</p><p class="hint">Router bandwidth profiles</p></div>
+    <div class="summary-card"><p class="label">Online Now</p><p id="pppoe-online-count" class="metric">0</p><p class="hint">Live PPPoE sessions</p></div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="border-b border-slate-200 px-4 pt-4">
+      <div class="flex gap-2 overflow-x-auto">
+        <button class="pppoe-tab active" data-tab="users">PPPoE Users</button>
+        <button class="pppoe-tab" data-tab="active">Active Online Sessions</button>
+        <button class="pppoe-tab" data-tab="profiles">Profiles / Packages</button>
+      </div>
+    </div>
+
+    <div id="pppoe-panel-users" class="pppoe-panel p-4">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Username</th><th>Profile / Package</th><th>Status</th><th>Phone</th><th>Comment</th><th class="text-right">Actions</th></tr></thead>
+          <tbody id="pppoe-users-body"><tr><td colspan="6" class="empty-cell">Loading users...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="pppoe-panel-active" class="pppoe-panel hidden p-4">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Username</th><th>IP Address</th><th>Uptime</th><th>MAC / Caller ID</th><th>Session ID</th><th class="text-right">Action</th></tr></thead>
+          <tbody id="pppoe-active-body"><tr><td colspan="6" class="empty-cell">Loading active sessions...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="pppoe-panel-profiles" class="pppoe-panel hidden p-4">
+      <div class="flex justify-end mb-4"><button id="add-profile-btn" class="btn-secondary">＋ Add New Profile</button></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Profile</th><th>Rate Limit</th><th>Local Address</th><th>Remote Address</th><th>Session Timeout</th><th>Comment</th></tr></thead>
+          <tbody id="pppoe-profiles-body"><tr><td colspan="6" class="empty-cell">Loading profiles...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="pppoe-user-modal" class="modal hidden">
+  <div class="modal-card max-w-2xl">
+    <div class="flex items-center justify-between mb-5"><div><h3 id="user-modal-title" class="text-xl font-black">Add New PPPoE User</h3><p class="text-sm text-slate-500">Changes are written to MikroTik first, then synchronized to PostgreSQL.</p></div><button class="modal-close text-2xl text-slate-400" data-modal="pppoe-user-modal">&times;</button></div>
+    <form id="pppoe-user-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <input type="hidden" id="user-editing" value="">
+      <label class="field"><span>Username *</span><input id="user-username" required maxlength="100"></label>
+      <label class="field"><span>Password <small>(required for new user)</small></span><input id="user-password" type="password" maxlength="200"></label>
+      <label class="field"><span>Profile / Package *</span><select id="user-profile" required></select></label>
+      <label class="field"><span>Caller ID / MAC</span><input id="user-caller-id" maxlength="100"></label>
+      <label class="field md:col-span-2"><span>Comment / Phone</span><input id="user-comment" maxlength="500" placeholder="e.g. Phone: 017xxxxxxxx"></label>
+      <label class="flex items-center gap-2 text-sm font-semibold md:col-span-2"><input id="user-disabled" type="checkbox" class="h-4 w-4"> Disabled</label>
+      <div id="user-form-result" class="hidden md:col-span-2 text-sm font-semibold"></div>
+      <div class="md:col-span-2 flex justify-end gap-3"><button type="button" class="btn-secondary modal-close" data-modal="pppoe-user-modal">Cancel</button><button class="btn-primary" type="submit">Save User</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="pppoe-profile-modal" class="modal hidden">
+  <div class="modal-card max-w-2xl">
+    <div class="flex items-center justify-between mb-5"><div><h3 class="text-xl font-black">Add New PPPoE Profile</h3><p class="text-sm text-slate-500">Creates the bandwidth profile directly on MikroTik.</p></div><button class="modal-close text-2xl text-slate-400" data-modal="pppoe-profile-modal">&times;</button></div>
+    <form id="pppoe-profile-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <label class="field"><span>Name *</span><input id="profile-name" required maxlength="100"></label>
+      <label class="field"><span>Rate Limit</span><input id="profile-rate-limit" placeholder="e.g. 10M/10M"></label>
+      <label class="field"><span>Local Address</span><input id="profile-local-address"></label>
+      <label class="field"><span>Remote Address / Pool</span><input id="profile-remote-address"></label>
+      <label class="field"><span>Session Timeout</span><input id="profile-session-timeout"></label>
+      <label class="field"><span>Idle Timeout</span><input id="profile-idle-timeout"></label>
+      <label class="field md:col-span-2"><span>Comment</span><input id="profile-comment" maxlength="500"></label>
+      <label class="flex items-center gap-2 text-sm font-semibold"><input id="profile-only-one" type="checkbox" class="h-4 w-4"> Only One</label>
+      <label class="flex items-center gap-2 text-sm font-semibold"><input id="profile-change-mss" type="checkbox" class="h-4 w-4"> Change TCP MSS</label>
+      <div id="profile-form-result" class="hidden md:col-span-2 text-sm font-semibold"></div>
+      <div class="md:col-span-2 flex justify-end gap-3"><button type="button" class="btn-secondary modal-close" data-modal="pppoe-profile-modal">Cancel</button><button class="btn-primary" type="submit">Create Profile</button></div>
+    </form>
+  </div>
+</div>
+`;
+%>
+<%- include("layout", { body, title, page }) %>
