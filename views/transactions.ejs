@@ -1,0 +1,10 @@
+<%
+const body=`
+<section class="space-y-6">
+<div class="flex items-end justify-between gap-4"><div><p class="text-sm font-bold text-cyan-600">PAYMENTS</p><h2 class="text-3xl font-black">Transactions</h2><p class="text-slate-500">bKash, Nagad and Rocket payment webhook activity.</p></div><button id="payments-refresh" class="btn-secondary">↻ Refresh</button></div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="summary-card"><p class="label">Today's Collection</p><p id="today-collection" class="metric">৳0.00</p></div><div class="summary-card"><p class="label">Processed Today</p><p id="processed-count" class="metric">0</p></div><div class="summary-card"><p class="label">Unmatched</p><p id="unmatched-count" class="metric">0</p></div></div>
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"><div class="p-4 table-wrap"><table class="data-table"><thead><tr><th>Channel</th><th>Trx ID</th><th>Sender</th><th>Amount</th><th>Status</th><th>User</th><th>Time</th><th>Action</th></tr></thead><tbody id="transactions-body"><tr><td colspan="8" class="empty-cell">Loading...</td></tr></tbody></table></div></div>
+</section>
+<div id="match-modal" class="modal hidden"><div class="modal-card max-w-md"><div class="flex justify-between mb-5"><h3 class="text-xl font-black">Manual Match</h3><button class="modal-close text-2xl" data-modal="match-modal">&times;</button></div><p id="match-info" class="text-sm text-slate-500 mb-4"></p><label class="field"><span>PPPoE Username</span><select id="match-user"></select></label><div id="match-result" class="hidden mt-3 text-sm font-semibold"></div><div class="flex justify-end gap-3 mt-5"><button class="btn-secondary modal-close" data-modal="match-modal">Cancel</button><button id="match-submit" class="btn-primary">Match & Activate</button></div></div></div>
+`;
+%><%- include("layout",{body,title,page}) %>
