@@ -50,8 +50,58 @@ async function webhook(req,res){
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount});
  }catch(error){return errorResponse(res,error,400);}
 }
-async function list(req,res){try{const params=[];let where="";if(req.query.channel&&["bkash","nagad","rocket"].includes(String(req.query.channel))){params.push(String(req.query.channel));where="WHERE channel=$1";}const r=await db.query("SELECT * FROM transactions "+where+" ORDER BY created_at DESC LIMIT 500",params);res.json({success:true,transactions:r.rows});}catch(e){return errorResponse(res,e,503);}}
-async function manualMatch(req,res){try{const id=Number(req.body.id),username=String(req.body.username||"").trim();if(!Number.isInteger(id)||!username)return res.status(400).json({success:false,error:"Transaction ID and username are required."});const t=await db.query("SELECT * FROM transactions WHERE id=$1",[id]);if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});await db.query("UPDATE pppoe_users SET status='active',disabled=false,expiry_date=GREATEST(COALESCE(expiry_date,NOW()),NOW())+INTERVAL '30 days',updated_at=NOW() WHERE username=$1",[username]);await mikrotikService.toggleSecret(username,false);await mikrotikService.kickActiveUser(username);await db.query("UPDATE transactions SET status='processed',matched_username=$1 WHERE id=$2",[username,id]);res.json({success:true,message:"Payment matched and user activated."});}catch(e){return errorResponse(res,e,503);}}
+async function list(req,res){
+ try{
+  const gateway=String(req.query.gateway||req.query.channel||"all").trim().toLowerCase();
+  const allowed=["all","bkash","nagad","rocket","pending","requests"];
+  if(!allowed.includes(gateway)) return res.status(400).json({success:false,error:"Invalid payment gateway filter."});
+  const page=Math.max(1,Number.parseInt(req.query.page||"1",10)||1);
+  const limit=Math.min(200,Math.max(1,Number.parseInt(req.query.limit||"50",10)||50));
+  const offset=(page-1)*limit;
+  const params=[];
+  let where="";
+  if(["bkash","nagad","rocket"].includes(gateway)){params.push(gateway);where="WHERE channel=$1";}
+  else if(gateway==="pending"){where="WHERE status='unmatched' OR (status='processed' AND used=false)";}
+  else if(gateway==="requests"){where="WHERE status='unmatched' AND used=false";}
+
+  const countQuery=await db.query("SELECT COUNT(*)::int AS count FROM transactions "+where,params);
+  const total=Number(countQuery.rows[0]?.count||0);
+  params.push(limit,offset);
+  const r=await db.query("SELECT * FROM transactions "+where+" ORDER BY created_at DESC, id DESC LIMIT $"+(params.length-1)+" OFFSET $"+params.length,params);
+
+  const summaryParams=where ? params.slice(0,-2) : [];
+  const summary=await db.query(
+    "SELECT COALESCE(SUM(amount),0)::numeric AS total_received, COUNT(*)::int AS total_transactions, COUNT(*) FILTER (WHERE status='unmatched')::int AS unmatched_count FROM transactions "+where,
+    summaryParams
+  );
+  return res.json({
+    success:true,gateway,page,limit,total,total_pages:Math.max(1,Math.ceil(total/limit)),
+    transactions:r.rows,summary:summary.rows[0]
+  });
+ }catch(e){return errorResponse(res,e,503);}
+}
+async function manualMatch(req,res){
+ try{
+  const trxId=String(req.body.trxId||req.body.trxid||req.body.txnId||"").trim().toUpperCase();
+  const username=String(req.body.username||"").trim();
+  if(!trxId||!username)return res.status(400).json({success:false,error:"trxId and username are required."});
+
+  const t=await db.query("SELECT * FROM transactions WHERE UPPER(trx_id)=UPPER($1) LIMIT 1",[trxId]);
+  if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});
+  const tx=t.rows[0];
+  if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be manually matched."});
+
+  const user=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+  if(!user.rows.length)return res.status(404).json({success:false,error:"PPPoE customer not found."});
+
+  await db.query("UPDATE pppoe_users SET status='active',disabled=false,expiry_date=CASE WHEN expiry_date>NOW() THEN expiry_date+INTERVAL '30 days' ELSE NOW()+INTERVAL '30 days' END,updated_at=NOW() WHERE LOWER(username)=LOWER($1)",[username]);
+  await mikrotikService.toggleSecret(username,false);
+  await mikrotikService.kickActiveUser(username);
+  await db.query("UPDATE transactions SET status='processed',matched_username=$1,used=true WHERE id=$2",[user.rows[0].username,tx.id]);
+
+  return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,message:"Payment matched, customer renewed for 30 days, and MikroTik user activated."});
+ }catch(e){return errorResponse(res,e,503);}
+}
 async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status='processed') AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:recent.rows});}catch(e){return errorResponse(res,e,503);}}
 
 const verifyBuckets=new Map();
