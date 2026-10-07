@@ -190,7 +190,7 @@
 
         <ul class="sidebar-menu">
             <li class="menu-item">
-                <a href="/admin"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
+                <a href="javascript:void(0)" onclick="switchView('dashboard')"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
             </li>
 
             <li class="menu-item">
@@ -199,8 +199,8 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu show">
-                    <li><a href="javascript:void(0)" onclick="showSection('all-customer')"><span data-key="all_customer">All Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="showSection('add-customer')"><span data-key="add_customer">Add Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('all-customer')"><span data-key="all_customer">All Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('add-customer')"><span data-key="add_customer">Add Customer</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="online_customer">Online Customer</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="offline_customer">Offline Customer</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="active_customer">Active Customer</span></a></li>
@@ -232,11 +232,11 @@
                 </button>
                 <ul class="submenu">
                     <li><a href="javascript:void(0)"><span data-key="pending_invoice">Pending Invoice</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="all_payments">All Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('payments')"><span data-key="all_payments">All Payments</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="payment_request">Payment Request</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="bkash_payments">bKash Payments</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="nagad_payments">Nagad Payments</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="rocket_payments">Rocket Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('payments', 'bkash')"><span data-key="bkash_payments">bKash Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('payments', 'nagad')"><span data-key="nagad_payments">Nagad Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('payments', 'rocket')"><span data-key="rocket_payments">Rocket Payments</span></a></li>
                 </ul>
             </li>
 
@@ -420,106 +420,72 @@
         </nav>
         
         <div id="dynamicPageContent">
-            <!-- Add Customer Card -->
-            <div id="section-add-customer" class="card card-custom mb-4">
-                <div class="card-custom-header">
-                    <i class="bi bi-person-plus-fill text-success fs-5"></i>
-                    <span class="fs-5" data-key="add_new_customer">Add New Customer</span>
+            <!-- VIEW 1: DASHBOARD -->
+            <section id="view-dashboard" class="admin-view">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6 col-xl-3"><div class="card card-custom h-100"><div class="card-body"><div class="d-flex justify-content-between align-items-start"><div><div class="text-muted small">Total PPPoE Customers</div><div id="metricCustomers" class="fs-3 fw-bold mt-1">—</div></div><i class="bi bi-people fs-3 text-success"></i></div></div></div></div>
+                    <div class="col-md-6 col-xl-3"><div class="card card-custom h-100"><div class="card-body"><div class="d-flex justify-content-between align-items-start"><div><div class="text-muted small">Online / Active Sessions</div><div id="metricSessions" class="fs-3 fw-bold mt-1">—</div></div><i class="bi bi-wifi fs-3 text-success"></i></div></div></div></div>
+                    <div class="col-md-6 col-xl-3"><div class="card card-custom h-100"><div class="card-body"><div class="d-flex justify-content-between align-items-start"><div><div class="text-muted small">Today's Collection</div><div id="metricCollection" class="fs-3 fw-bold mt-1">৳0.00</div></div><i class="bi bi-cash-stack fs-3 text-success"></i></div></div></div></div>
+                    <div class="col-md-6 col-xl-3"><div class="card card-custom h-100"><div class="card-body"><div class="d-flex justify-content-between align-items-start"><div class="w-100"><div class="text-muted small">MikroTik CPU & RAM Usage</div><div class="d-flex justify-content-between small mt-2"><span>CPU</span><strong id="metricCpu">—</strong></div><div class="progress" style="height:6px"><div id="cpuBar" class="progress-bar bg-success" style="width:0%"></div></div><div class="d-flex justify-content-between small mt-2"><span>RAM</span><strong id="metricRam">—</strong></div><div class="progress" style="height:6px"><div id="ramBar" class="progress-bar bg-success" style="width:0%"></div></div></div><i class="bi bi-cpu fs-3 text-success ms-2"></i></div></div></div></div>
                 </div>
-                <div class="card-body p-4">
-                    <form id="addCustomerForm">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="fullName" class="form-label" data-key="label_fullname">Full Name *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
-                                    <input type="text" class="form-control" id="fullName" placeholder="e.g. John Doe" data-placeholder-key="ph_fullname" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="phoneNumber" class="form-label" data-key="label_phone">Phone Number *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span>
-                                    <input type="tel" class="form-control" id="phoneNumber" placeholder="e.g. 01700000000" data-placeholder-key="ph_phone" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="username" class="form-label" data-key="label_username">Username *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-at"></i></span>
-                                    <input type="text" class="form-control" id="username" placeholder="pppoe_user" data-placeholder-key="ph_username" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="password" class="form-label" data-key="label_password">Password *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
-                                    <input type="password" class="form-control" id="password" placeholder="••••••••" data-placeholder-key="ph_password" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="packageSelect" class="form-label" data-key="label_package">Package Selection *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-speedometer"></i></span>
-                                    <select class="form-select" id="packageSelect" required>
-                                        <option value="Profile-10M">Standard - 10 Mbps</option>
-                                        <option value="Profile-20M">Premium - 20 Mbps</option>
-                                        <option value="default">Default</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="billingDuration" class="form-label" data-key="label_billing_duration">Billing Duration *</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
-                                    <select class="form-select" id="billingDuration" required>
-                                        <option value="1_month" selected data-key="opt_1_month">1 Month (30 Days)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-12 mt-4 pt-2 border-top d-flex justify-content-end gap-2">
-                                <button type="reset" class="btn btn-light border px-4" data-key="btn_reset">Reset</button>
-                                <button type="submit" class="btn btn-theme px-4" data-key="btn_save_customer">
-                                    <i class="bi bi-check2-circle me-1"></i> Save Customer
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
 
-            <!-- Customer List Table (Persistent, no reload wipe) -->
-            <div id="section-all-customer" class="card card-custom mb-4">
-                <div class="card-custom-header">
-                    <i class="bi bi-people text-success fs-5"></i>
-                    <span>PPPoE Customer Records</span>
+                <div class="card card-custom mb-4">
+                    <div class="card-custom-header"><i class="bi bi-activity text-success fs-5"></i><span>Live Traffic Monitor</span><span id="dashboardRouterStatus" class="badge bg-secondary ms-auto">Checking...</span></div>
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2"><span class="text-muted small">Interface RX/TX bandwidth</span><select id="dashboardInterface" class="form-select form-select-sm" style="max-width:240px"></select></div>
+                        <div style="height:300px"><canvas id="dashboardTrafficChart"></canvas></div>
+                    </div>
                 </div>
-                <div class="card-body p-0 table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Username</th>
-                                <th>Profile</th>
-                                <th>Phone</th>
-                                <th>Status</th>
-                                <th>Expiry</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pppoeUserList">
-                            <tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr>
-                        </tbody>
-                    </table>
+
+                <div class="card card-custom">
+                    <div class="card-custom-header"><i class="bi bi-receipt text-success fs-5"></i><span>Recent Payments</span></div>
+                    <div class="card-body p-0 table-responsive">
+                        <table class="table table-hover mb-0"><thead class="table-light"><tr><th>TrxID</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+                        <tbody id="recentPaymentsBody"><tr><td colspan="5" class="text-center py-3 text-muted">Loading payments...</td></tr></tbody></table>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div id="section-core-monitor" class="card card-custom mb-4">
-            <div class="card-custom-header"><i class="bi bi-speedometer2 text-success fs-5"></i><span data-key="monitor">MikroTik Monitor</span><span id="routerLiveStatus" class="badge bg-secondary ms-auto">Offline</span></div>
-            <div class="card-body p-4"><div class="row g-3 mb-4"><div class="col-md-4"><div class="p-3 bg-light rounded"><small>CPU</small><div id="liveCpu" class="fs-3 fw-bold">—</div></div></div><div class="col-md-4"><div class="p-3 bg-light rounded"><small>RAM</small><div id="liveRam" class="fs-3 fw-bold">—</div></div></div><div class="col-md-4"><div class="p-3 bg-light rounded"><small>Uptime</small><div id="liveUptime" class="fs-6 fw-bold mt-2">—</div></div></div></div><div class="d-flex justify-content-between align-items-center mb-2"><strong>Live Traffic</strong><select id="monitorInterface" class="form-select form-select-sm" style="max-width:240px"></select></div><div style="height:280px"><canvas id="liveTrafficChart"></canvas></div></div>
+            </section>
+
+            <!-- VIEW 2: ADD CUSTOMER -->
+            <section id="view-add-customer" class="admin-view" style="display:none">
+                <div class="card card-custom mb-4">
+                    <div class="card-custom-header"><i class="bi bi-person-plus-fill text-success fs-5"></i><span class="fs-5" data-key="add_new_customer">Add New Customer</span></div>
+                    <div class="card-body p-4">
+                        <form id="addCustomerForm">
+                            <div class="row g-3">
+                                <div class="col-md-6"><label for="fullName" class="form-label" data-key="label_fullname">Full Name *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-person"></i></span><input type="text" class="form-control" id="fullName" placeholder="e.g. John Doe" data-placeholder-key="ph_fullname" required></div></div>
+                                <div class="col-md-6"><label for="phoneNumber" class="form-label" data-key="label_phone">Phone Number *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span><input type="tel" class="form-control" id="phoneNumber" placeholder="e.g. 01700000000" data-placeholder-key="ph_phone" required></div></div>
+                                <div class="col-md-6"><label for="username" class="form-label" data-key="label_username">Username *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-at"></i></span><input type="text" class="form-control" id="username" placeholder="pppoe_user" data-placeholder-key="ph_username" required></div></div>
+                                <div class="col-md-6"><label for="password" class="form-label" data-key="label_password">Password *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-key"></i></span><input type="password" class="form-control" id="password" placeholder="••••••••" data-placeholder-key="ph_password" required></div></div>
+                                <div class="col-md-6"><label for="packageSelect" class="form-label" data-key="label_package">Package Selection *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-speedometer"></i></span><select class="form-select" id="packageSelect" required><option value="Profile-10M">Standard - 10 Mbps</option><option value="Profile-20M">Premium - 20 Mbps</option><option value="default">Default</option></select></div></div>
+                                <div class="col-md-6"><label for="billingDuration" class="form-label" data-key="label_billing_duration">Billing Duration *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span><select class="form-select" id="billingDuration" required><option value="1_month" selected data-key="opt_1_month">1 Month (30 Days)</option></select></div></div>
+                                <div class="col-12 mt-4 pt-2 border-top d-flex justify-content-end gap-2"><button type="reset" class="btn btn-light border px-4" data-key="btn_reset">Reset</button><button type="submit" class="btn btn-theme px-4" data-key="btn_save_customer"><i class="bi bi-check2-circle me-1"></i> Save Customer</button></div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 3: ALL CUSTOMER -->
+            <section id="view-all-customer" class="admin-view" style="display:none">
+                <div class="card card-custom">
+                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerSyncBtn" class="btn btn-outline-success btn-sm ms-auto" onclick="syncMikrotik(this)"><i class="bi bi-arrow-repeat"></i> 🔄 Sync MikroTik</button></div>
+                    <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Username</th><th>Profile</th><th>Phone</th><th>Status</th><th>Expiry Date</th><th>Action</th></tr></thead><tbody id="pppoeUserList"><tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr></tbody></table></div>
+                </div>
+            </section>
+
+            <!-- VIEW 4: PAYMENTS -->
+            <section id="view-payments" class="admin-view" style="display:none">
+                <div class="card card-custom">
+                    <div class="card-custom-header"><i class="bi bi-credit-card text-success fs-5"></i><span>All Payments</span><span id="paymentFilterLabel" class="badge bg-light text-dark ms-2">All Gateways</span></div>
+                    <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>TrxID</th><th>Gateway</th><th>Amount</th><th>Sender Phone</th><th>Status</th><th>Date</th></tr></thead><tbody id="paymentsBody"><tr><td colspan="6" class="text-center py-3 text-muted">Loading payments...</td></tr></tbody></table></div>
+                </div>
+            </section>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script>
         const translations = {
             'en': {
@@ -565,21 +531,39 @@
         function toggleSubmenu(event, button) {
             event.stopPropagation();
             const submenu = button.nextElementSibling;
-            submenu.classList.toggle('show');
+            if (submenu) submenu.classList.toggle('show');
             const arrow = button.querySelector('.arrow-icon');
             if (arrow) arrow.classList.toggle('bi-chevron-up');
         }
 
-        function showSection(sectionId) {
-            const addCard = document.getElementById('section-add-customer');
-            const listCard = document.getElementById('section-all-customer');
-            if (sectionId === 'add-customer') {
-                addCard.style.display = 'block';
-                listCard.style.display = 'none';
-            } else {
-                addCard.style.display = 'block';
-                listCard.style.display = 'block';
+        const viewTitles = {
+            dashboard: 'Dashboard',
+            'add-customer': 'Add New Customer',
+            'all-customer': 'All Customer (PPPoE)',
+            payments: 'All Payments'
+        };
+
+        let currentPaymentChannel = '';
+        let trafficChart = null;
+        let trafficTimer = null;
+        let metricsTimer = null;
+
+        function switchView(viewName, channel = '') {
+            const target = document.getElementById('view-' + viewName) ? viewName : 'dashboard';
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            document.getElementById('view-' + target).style.display = 'block';
+
+            document.getElementById('pageTitle').innerText = viewTitles[target] || 'Dashboard';
+            currentPaymentChannel = channel || '';
+            if (target === 'dashboard') {
+                refreshDashboard();
+                startTrafficPolling();
+            } else if (target === 'all-customer') {
+                fetchCustomers();
+            } else if (target === 'payments') {
+                fetchPayments(currentPaymentChannel);
             }
+            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
         }
 
         function updateLanguage(lang) {
@@ -588,91 +572,224 @@
                 const key = el.getAttribute('data-key');
                 if (translations[lang] && translations[lang][key]) el.innerText = translations[lang][key];
             });
-            document.querySelectorAll('[data-placeholder-key]').forEach(el => { const key=el.getAttribute('data-placeholder-key'); if (translations[lang] && translations[lang][key]) el.placeholder=translations[lang][key]; });
+            document.querySelectorAll('[data-placeholder-key]').forEach(el => {
+                const key = el.getAttribute('data-placeholder-key');
+                if (translations[lang] && translations[lang][key]) el.placeholder = translations[lang][key];
+            });
             localStorage.setItem('faz_preferred_lang', lang);
         }
 
         const langSelect = document.getElementById('langSelect');
         const savedLang = localStorage.getItem('faz_preferred_lang') || 'en';
         langSelect.value = savedLang;
-        updateLanguage(savedLang);
         langSelect.addEventListener('change', function() { updateLanguage(this.value); });
+        updateLanguage(savedLang);
 
-        // Load customers persistently via AJAX
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+        }
+
+        async function jsonFetch(url, options = {}) {
+            const response = await fetch(url, options);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Request failed');
+            return data;
+        }
+
         async function fetchCustomers() {
+            const tbody = document.getElementById('pppoeUserList');
+            if (!tbody) return;
             try {
-                const res = await fetch('/api/pppoe/users');
-                const data = await res.json();
-                const tbody = document.getElementById('pppoeUserList');
-                if (data.users && data.users.length > 0) {
-                    tbody.innerHTML = data.users.map(u => `
-                        <tr>
-                            <td><strong>${u.username}</strong></td>
-                            <td><span class="badge bg-info text-dark">${u.profile || u.profile_name || 'N/A'}</span></td>
-                            <td>${u.phone || '-'}</td>
-                            <td><span class="badge ${u.disabled ? 'bg-danger' : 'bg-success'}">${u.disabled ? 'Disabled' : 'Active'}</span></td>
-                            <td>${u.expiry_date ? new Date(u.expiry_date).toLocaleDateString() : 'Active'}</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-danger" onclick="kickUser('${u.username}')">Kick</button>
-                            </td>
-                        </tr>
-                    `).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3">No customers found. Click Sync.</td></tr>';
-                }
-            } catch (e) {
-                console.error(e);
+                const data = await jsonFetch('/api/pppoe/users');
+                const users = data.users || [];
+                tbody.innerHTML = users.length ? users.map(u => {
+                    const disabled = Boolean(u.disabled);
+                    return '<tr>' +
+                        '<td><strong>' + escapeHtml(u.username) + '</strong></td>' +
+                        '<td><span class="badge bg-info text-dark">' + escapeHtml(u.profile || u.profile_name || 'N/A') + '</span></td>' +
+                        '<td>' + escapeHtml(u.phone || '-') + '</td>' +
+                        '<td><span class="badge ' + (disabled ? 'bg-danger' : 'bg-success') + '">' + (disabled ? 'Disabled' : 'Active') + '</span></td>' +
+                        '<td>' + escapeHtml(u.expiry_date ? new Date(u.expiry_date).toLocaleString() : 'Active') + '</td>' +
+                        '<td><button class="btn btn-sm btn-outline-danger" onclick="kickUser(\'' + escapeHtml(u.username).replace(/'/g, "\\'") + '\')">Kick</button></td>' +
+                    '</tr>';
+                }).join('') : '<tr><td colspan="6" class="text-center py-3">No customers found. Click Sync MikroTik.</td></tr>';
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger">' + escapeHtml(error.message) + '</td></tr>';
             }
         }
 
         async function kickUser(username) {
             if (!confirm('Kick user ' + username + '?')) return;
-            await fetch('/api/pppoe/kick-user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
-            });
-            fetchCustomers();
+            try {
+                await jsonFetch('/api/pppoe/kick-user', {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username})
+                });
+                fetchCustomers();
+            } catch (error) { alert(error.message); }
         }
 
         async function syncMikrotik(btn) {
             btn.disabled = true;
-            btn.innerText = 'Syncing...';
-            await fetch('/api/pppoe/sync', { method: 'POST' });
-            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 🔄 Sync MikroTik';
-            btn.disabled = false;
-            fetchCustomers();
-            loadMikrotikStats();
+            const old = btn.innerHTML;
+            btn.innerHTML = 'Syncing...';
+            try {
+                await jsonFetch('/api/pppoe/sync', {method:'POST'});
+                await fetchCustomers();
+                await refreshDashboard();
+            } catch (error) { alert(error.message); }
+            finally { btn.disabled = false; btn.innerHTML = old; }
         }
 
         document.getElementById('addCustomerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const payload = {
-                username: document.getElementById('username').value.trim(),
-                password: document.getElementById('password').value.trim(),
-                phone: document.getElementById('phoneNumber').value.trim(),
-                profile: document.getElementById('packageSelect').value
-            };
-            const res = await fetch('/api/pppoe/users/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
+            const button = this.querySelector('button[type="submit"]');
+            button.disabled = true;
+            try {
+                const payload = {
+                    username: document.getElementById('username').value.trim(),
+                    password: document.getElementById('password').value.trim(),
+                    phone: document.getElementById('phoneNumber').value.trim(),
+                    profile: document.getElementById('packageSelect').value
+                };
+                await jsonFetch('/api/pppoe/users/create', {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+                });
                 alert('Customer created and synced with MikroTik!');
-                document.getElementById('addCustomerForm').reset();
-                fetchCustomers();
-            } else {
-                alert('Error creating customer.');
-            }
+                this.reset();
+                switchView('all-customer');
+            } catch (error) { alert(error.message); }
+            finally { button.disabled = false; }
         });
 
-        let liveTrafficChart=null, liveTrafficTimer=null;
-        async function loadMikrotikStats(){try{const [r,i]=await Promise.all([fetch('/api/router/resources').then(x=>x.json()),fetch('/api/router/interfaces').then(x=>x.json())]);document.getElementById('liveCpu').innerText=(r.cpuLoad ?? '—')+'%';document.getElementById('liveRam').innerText=(r.memoryUsagePercent ?? '—')+'%';document.getElementById('liveUptime').innerText=r.uptime||'—';const st=document.getElementById('routerLiveStatus');st.className='badge bg-success ms-auto';st.innerText='Online';const sel=document.getElementById('monitorInterface'),cur=sel.value;if(!sel.options.length)sel.innerHTML=(i.interfaces||[]).map(x=>'<option value="'+x.name+'">'+x.name+'</option>').join('');if(cur)sel.value=cur;if(sel.value)startLiveTraffic(sel.value)}catch(e){const st=document.getElementById('routerLiveStatus');st.className='badge bg-danger ms-auto';st.innerText='Offline'}}
-        async function pollLiveTraffic(name){try{const d=await fetch('/api/router/traffic?interface='+encodeURIComponent(name)).then(x=>x.json());if(!liveTrafficChart)liveTrafficChart=new Chart(document.getElementById('liveTrafficChart'),{type:'line',data:{labels:[],datasets:[{label:'RX Mbps',data:[],tension:.3},{label:'TX Mbps',data:[],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,animation:false}});liveTrafficChart.data.labels.push(new Date().toLocaleTimeString());liveTrafficChart.data.datasets[0].data.push(d.rxMbps||0);liveTrafficChart.data.datasets[1].data.push(d.txMbps||0);if(liveTrafficChart.data.labels.length>30){liveTrafficChart.data.labels.shift();liveTrafficChart.data.datasets.forEach(x=>x.data.shift())}liveTrafficChart.update()}catch(e){}}
-        function startLiveTraffic(name){if(liveTrafficTimer)clearInterval(liveTrafficTimer);pollLiveTraffic(name);liveTrafficTimer=setInterval(()=>pollLiveTraffic(name),2500)}
-        document.getElementById('monitorInterface').addEventListener('change',e=>startLiveTraffic(e.target.value));
-        fetchCustomers();loadMikrotikStats();setInterval(loadMikrotikStats,5000);
+        async function fetchPayments(channel = '') {
+            const body = document.getElementById('paymentsBody');
+            if (!body) return;
+            try {
+                const url = channel ? '/api/payments/transactions?channel=' + encodeURIComponent(channel) : '/api/payments/transactions';
+                const data = await jsonFetch(url);
+                const rows = (data.transactions || []).slice(0, 500);
+                document.getElementById('paymentFilterLabel').innerText = channel ? channel.toUpperCase() : 'All Gateways';
+                body.innerHTML = rows.length ? rows.map(t =>
+                    '<tr><td><strong>' + escapeHtml(t.trx_id) + '</strong></td>' +
+                    '<td>' + escapeHtml(t.channel || '-') + '</td>' +
+                    '<td>৳' + Number(t.amount || 0).toFixed(2) + '</td>' +
+                    '<td>' + escapeHtml(t.sender_phone || '-') + '</td>' +
+                    '<td><span class="badge ' + (t.status === 'processed' ? 'bg-success' : 'bg-warning text-dark') + '">' + escapeHtml(t.status || 'unknown') + '</span></td>' +
+                    '<td>' + escapeHtml(t.created_at ? new Date(t.created_at).toLocaleString() : '-') + '</td></tr>'
+                ).join('') : '<tr><td colspan="6" class="text-center py-3 text-muted">No payment records found.</td></tr>';
+            } catch (error) {
+                body.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger">' + escapeHtml(error.message) + '</td></tr>';
+            }
+        }
+
+        async function refreshDashboard() {
+            try {
+                const [users, active, summary] = await Promise.all([
+                    jsonFetch('/api/pppoe/users'),
+                    jsonFetch('/api/pppoe/active'),
+                    jsonFetch('/api/payments/summary')
+                ]);
+                document.getElementById('metricCustomers').innerText = (users.users || []).length;
+                document.getElementById('metricSessions').innerText = (active.sessions || active.active || []).length;
+                document.getElementById('metricCollection').innerText = '৳' + Number(summary.summary?.today_collection || 0).toFixed(2);
+                const recent = summary.recent || [];
+                document.getElementById('recentPaymentsBody').innerHTML = recent.slice(0,5).map(t =>
+                    '<tr><td>' + escapeHtml(t.trx_id) + '</td><td>' + escapeHtml(t.channel) + '</td><td>৳' + Number(t.amount || 0).toFixed(2) + '</td><td><span class="badge ' + (t.status === 'processed' ? 'bg-success' : 'bg-warning text-dark') + '">' + escapeHtml(t.status) + '</span></td><td>' + escapeHtml(new Date(t.created_at).toLocaleString()) + '</td></tr>'
+                ).join('') || '<tr><td colspan="5" class="text-center py-3 text-muted">No recent payments.</td></tr>';
+            } catch (error) {
+                console.error('[Dashboard]', error);
+            }
+            await loadRouterMetrics();
+        }
+
+        async function loadRouterMetrics() {
+            try {
+                const data = await jsonFetch('/api/router/resources');
+                const r = data.resources || {};
+                const cpu = Number(r.cpuLoad || 0);
+                const ram = Number(r.memoryUsagePercent || 0);
+                document.getElementById('metricCpu').innerText = cpu + '%';
+                document.getElementById('metricRam').innerText = ram + '%';
+                document.getElementById('cpuBar').style.width = Math.min(cpu,100) + '%';
+                document.getElementById('ramBar').style.width = Math.min(ram,100) + '%';
+                const status = document.getElementById('dashboardRouterStatus');
+                status.className = 'badge bg-success ms-auto';
+                status.innerText = 'Online';
+            } catch (error) {
+                document.getElementById('metricCpu').innerText = '—';
+                document.getElementById('metricRam').innerText = '—';
+                const status = document.getElementById('dashboardRouterStatus');
+                status.className = 'badge bg-danger ms-auto';
+                status.innerText = 'Offline';
+            }
+        }
+
+        async function loadInterfaces() {
+            try {
+                const data = await jsonFetch('/api/router/interfaces');
+                const interfaces = data.interfaces || [];
+                const select = document.getElementById('dashboardInterface');
+                const current = select.value;
+                if (!select.options.length) select.innerHTML = interfaces.map(i => '<option value="' + escapeHtml(i.name) + '">' + escapeHtml(i.name) + '</option>').join('');
+                if (current) select.value = current;
+                if (select.value) startTrafficPolling();
+            } catch (error) {
+                console.error('[Traffic]', error);
+            }
+        }
+
+        async function pollTraffic() {
+            const select = document.getElementById('dashboardInterface');
+            if (!select || !select.value) return;
+            try {
+                const data = await jsonFetch('/api/router/traffic?interface=' + encodeURIComponent(select.value));
+                const t = data.traffic || data;
+                if (!trafficChart) {
+                    trafficChart = new Chart(document.getElementById('dashboardTrafficChart'), {
+                        type:'line',
+                        data:{labels:[],datasets:[
+                            {label:'RX Mbps',data:[],tension:.3},
+                            {label:'TX Mbps',data:[],tension:.3}
+                        ]},
+                        options:{responsive:true,maintainAspectRatio:false,animation:false}
+                    });
+                }
+                trafficChart.data.labels.push(new Date().toLocaleTimeString());
+                trafficChart.data.datasets[0].data.push(Number(t.rxMbps || 0));
+                trafficChart.data.datasets[1].data.push(Number(t.txMbps || 0));
+                if (trafficChart.data.labels.length > 30) {
+                    trafficChart.data.labels.shift();
+                    trafficChart.data.datasets.forEach(d => d.data.shift());
+                }
+                trafficChart.update('none');
+            } catch (error) { console.error('[Traffic]', error); }
+        }
+
+        function startTrafficPolling() {
+            if (trafficTimer) clearInterval(trafficTimer);
+            loadInterfaces();
+            pollTraffic();
+            trafficTimer = setInterval(pollTraffic, 2500);
+        }
+
+        document.getElementById('dashboardInterface').addEventListener('change', function() {
+            if (trafficChart) {
+                trafficChart.data.labels = [];
+                trafficChart.data.datasets.forEach(d => d.data = []);
+                trafficChart.update('none');
+            }
+            pollTraffic();
+        });
+
+        // Background live metrics: 5-second refresh regardless of current view.
+        metricsTimer = setInterval(() => {
+            loadRouterMetrics();
+            if (document.getElementById('view-dashboard').style.display !== 'none') refreshDashboard();
+        }, 5000);
+
+        // Dashboard is the initial operational view.
+        switchView('dashboard');
+        startTrafficPolling();
     </script>
 </body>
 </html>
