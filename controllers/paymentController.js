@@ -23,7 +23,7 @@ async function webhook(req,res){
   const existing=await db.query("SELECT id,status FROM transactions WHERE trx_id=$1",[payment.trxId]);
   if(existing.rows.length){await db.query("UPDATE transactions SET status='duplicate' WHERE id=$1",[existing.rows[0].id]); return res.status(200).json({success:true,status:"duplicate",trx_id:payment.trxId});}
   let user=null;
-  if(payment.senderPhone) { const found=await db.query("SELECT username FROM pppoe_users WHERE regexp_replace(phone,'[^0-9]','','g')=$1 OR regexp_replace(comment,'[^0-9]','','g') LIKE '%'||$1||'%' LIMIT 1",[payment.senderPhone.replace(/^0/,"880")]); user=found.rows[0]||null; }
+  if(payment.senderPhone) { const found=await db.query("SELECT username FROM pppoe_users WHERE RIGHT(regexp_replace(phone,'[^0-9]','','g'),10)=RIGHT($1,10) OR RIGHT(regexp_replace(comment,'[^0-9]','','g'),10)=RIGHT($1,10) LIMIT 1",[payment.senderPhone]); user=found.rows[0]||null; }
   if(!user && req.body && typeof req.body==="object" && req.body.username){const found=await db.query("SELECT username FROM pppoe_users WHERE username=$1",[String(req.body.username).trim()]);user=found.rows[0]||null;}
   let status="unmatched";
   if(user){
