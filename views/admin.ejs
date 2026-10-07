@@ -376,39 +376,6 @@
                 </ul>
             </li>
         </ul>
-            </li>
-
-            <li class="menu-item">
-                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
-                    <i class="bi bi-credit-card"></i> <span data-key="payments">Payments</span>
-                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
-                </button>
-                <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="showSection('all-payments')"><span data-key="all_payments">All Payments (SMS)</span></a></li>
-                </ul>
-            </li>
-
-            <li class="menu-item">
-                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
-                    <i class="bi bi-wifi"></i> <span data-key="hotspot">Hotspot</span>
-                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
-                </button>
-                <ul class="submenu">
-                    <li><a href="/portal" target="_blank"><span>Hotspot Login Portal</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="showSection('hotspot-vouchers')"><span>Hotspot Vouchers</span></a></li>
-                </ul>
-            </li>
-
-            <li class="menu-item">
-                <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
-                    <i class="bi bi-gear-wide-connected"></i> <span data-key="core_system">Core System</span>
-                    <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
-                </button>
-                <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="showSection('core-monitor')"><span data-key="monitor">MikroTik Monitor</span></a></li>
-                </ul>
-            </li>
-        </ul>
     </div>
 
     <div class="main-content" id="mainContent">
@@ -809,13 +776,14 @@
                 if (!tbody) return;
                 tbody.innerHTML = users.length ? users.map(u => {
                     const disabled = Boolean(u.disabled);
+                    const safeUsername = encodeURIComponent(u.username || '');
                     return '<tr>' +
                         '<td><strong>' + escapeHtml(u.username) + '</strong></td>' +
                         '<td><span class="badge bg-info text-dark">' + escapeHtml(u.profile || 'N/A') + '</span></td>' +
                         '<td>' + escapeHtml(u.phone || '-') + '</td>' +
                         '<td><span class="badge ' + (disabled ? 'bg-danger' : 'bg-success') + '">' + (disabled ? 'Disabled' : 'Active') + '</span></td>' +
                         '<td>' + escapeHtml(u.expiry_date ? new Date(u.expiry_date).toLocaleString() : 'Active') + '</td>' +
-                        '<td><button class="btn btn-sm btn-outline-danger" onclick="kickUser(\\'' + escapeHtml(u.username).replace(/'/g, "\\\\'") + '\\')">Kick</button></td>' +
+                        '<td><button class="btn btn-sm btn-outline-danger" onclick="kickUser(decodeURIComponent(\'' + safeUsername + '\'))">Kick</button></td>' +
                     '</tr>';
                 }).join('') : '<tr><td colspan="6" class="text-center py-3">No customers found. Click Sync MikroTik.</td></tr>';
             } catch (error) {
