@@ -59,6 +59,27 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.service).toLowerCase() === "pppoe").map((item) => ({ id: this._str(item[".id"]), username: this._str(item.name), service: this._str(item.service), address: this._str(item.address), uptime: this._str(item.uptime), callerId: this._str(item["caller-id"]), encoding: this._str(item.encoding), sessionId: this._str(item["session-id"]), radius: this._str(item.radius), raw: item })).filter((item) => item.username);
     });
   }
+  async getHotspotUsers() {
+    return this._withConnection("Hotspot user query", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/user/print");
+      return (Array.isArray(rows) ? rows : []).map((item) => ({
+        id: this._str(item[".id"]), username: this._str(item.name), password: this._str(item.password),
+        profile: this._str(item.profile), disabled: this._bool(item.disabled), server: this._str(item.server),
+        comment: this._str(item.comment), limitUptime: this._str(item["limit-uptime"]), raw: item
+      })).filter((item) => item.username);
+    });
+  }
+  async getHotspotServerProfiles() {
+    return this._withConnection("Hotspot server profile query", async (connection) => {
+      const rows = await connection.write("/ip/hotspot/profile/print");
+      return (Array.isArray(rows) ? rows : []).map((item) => ({
+        id: this._str(item[".id"]), name: this._str(item.name), hotspotAddress: this._str(item["hotspot-address"]),
+        dnsName: this._str(item["dns-name"]), htmlDirectory: this._str(item["html-directory"]),
+        rateLimit: this._str(item["rate-limit"]), loginBy: this._str(item["login-by"]),
+        useRadius: this._bool(item["use-radius"]), raw: item
+      })).filter((item) => item.name);
+    });
+  }
   async getHotspotProfiles() {
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
@@ -83,7 +104,7 @@ class MikroTikService {
   async getActiveHotspotSessions() {
     return this._withConnection("active Hotspot session query", async (connection) => {
       const rows=await connection.write("/ip/hotspot/active/print");
-      return (Array.isArray(rows)?rows:[]).map((item)=>({ id:this._str(item[".id"]), username:this._str(item.user), address:this._str(item.address), macAddress:this._str(item["mac-address"]), uptime:this._str(item.uptime), server:this._str(item.server), profile:this._str(item.profile), raw:item })).filter((item)=>item.username);
+      return (Array.isArray(rows)?rows:[]).map((item)=>({ id:this._str(item[".id"]), username:this._str(item.user), address:this._str(item.address), macAddress:this._str(item["mac-address"]), uptime:this._str(item.uptime), server:this._str(item.server), profile:this._str(item.profile), bytesIn:this._number(item["bytes-in"]), bytesOut:this._number(item["bytes-out"]), raw:item })).filter((item)=>item.username);
     });
   }
 
