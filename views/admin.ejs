@@ -184,6 +184,31 @@
             .sidebar.show { left: 0; }
             .main-content { margin-left: 0; }
         }
+    
+        .hotspot-kpi { border-left: 4px solid var(--accent-color); }
+        .hotspot-live-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
+        .hotspot-live-table td { vertical-align: middle; font-size: 13px; }
+        .hotspot-search { min-width: 260px; }
+        .voucher-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; }
+        .voucher-card { border:1px dashed #64748b; border-radius:8px; padding:14px; background:#fff; min-height:185px; break-inside:avoid; page-break-inside:avoid; }
+        .voucher-brand { color:var(--primary-color); font-weight:800; font-size:15px; letter-spacing:.02em; }
+        .voucher-credential { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:800; font-size:18px; letter-spacing:.04em; }
+        .voucher-instruction { font-size:11px; color:#475569; }
+        .voucher-cut { border-top:1px dashed #cbd5e1; margin:10px 0; }
+        @media (max-width: 1100px) { .voucher-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+        @media (max-width: 800px) { .voucher-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width: 520px) { .voucher-grid { grid-template-columns:1fr; } }
+        @media print {
+            @page { size:A4 portrait; margin:8mm; }
+            body.hotspot-printing * { visibility:hidden !important; }
+            body.hotspot-printing #hotspotVoucherPrint,
+            body.hotspot-printing #hotspotVoucherPrint * { visibility:visible !important; }
+            body.hotspot-printing #hotspotVoucherPrint { position:absolute; left:0; top:0; width:100%; }
+            body.hotspot-printing .voucher-grid { grid-template-columns:repeat(4,1fr) !important; gap:8px !important; }
+            body.hotspot-printing .voucher-card { min-height:0; padding:10px; border:1px dashed #444; }
+            body.hotspot-printing .voucher-credential { font-size:15px; }
+            body.hotspot-printing .voucher-instruction { font-size:9px; }
+        }
     </style>
 </head>
 <body>
@@ -262,12 +287,13 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="/portal" target="_blank"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="hotspot_all_users">All Users</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="hotspot_active_users">Active Users</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="hotspot_online_users">Online Users</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="hotspot_profile">Profile</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="hotspot_server_profile">Server Profile</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadHotspotDashboard()"><span data-key="hotspot_dashboard">Dashboard</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadHotspotSection('all', 'all_user')"><span data-key="hotspot_all_users">All Users</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadHotspotSection('active', 'active_user')"><span data-key="hotspot_active_users">Active Users</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadHotspotSection('online', 'online_user')"><span data-key="hotspot_online_users">Online Users</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadHotspotProfiles('hotspot_profile')"><span data-key="hotspot_profile">Profile</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadHotspotServerProfiles('server_profile')"><span data-key="hotspot_server_profile">Server Profile</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadVoucherGeneratorSection()"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
                 </ul>
             </li>
 
@@ -467,7 +493,205 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
+        let currentHotspotMode = '';
+        let currentHotspotTitleKey = '';
+        let currentHotspotProfiles = [];
+        let currentVoucherBatch = [];
+
+        function hotspotTitle(key) {
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            return translations[lang]?.[key] || translations.en[key] || key;
+        }
+
+        function hideAdminViews() {
+            document.querySelectorAll('.admin-view').forEach(function(view){ view.style.display='none'; });
+        }
+
+        function removeHotspotView() {
+            document.querySelectorAll('.hotspot-dynamic-view').forEach(function(view){ view.remove(); });
+        }
+
+        function appendHotspotView(html) {
+            hideAdminViews();
+            removeHotspotView();
+            document.getElementById('dynamicPageContent').insertAdjacentHTML('beforeend', html);
+            const view = document.querySelector('.hotspot-dynamic-view:last-child');
+            if(view) view.style.display='block';
+            if(window.innerWidth<=768) document.getElementById('sidebar').classList.remove('show');
+        }
+
+        function setHotspotTitle(key) {
+            currentHotspotTitleKey=key;
+            document.getElementById('pageTitle').innerText=hotspotTitle(key);
+        }
+
+        async function loadHotspotDashboard() {
+            currentHotspotMode='dashboard';
+            setHotspotTitle('hotspot_dashboard');
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-3 mb-4">'+
+                '<div class="col-md-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Hotspot Accounts</div><div id="hotspotTotalAccounts" class="fs-3 fw-bold mt-1">—</div></div></div></div>'+
+                '<div class="col-md-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Currently Online Clients</div><div id="hotspotOnlineCount" class="fs-3 fw-bold mt-1">—</div></div></div></div>'+
+                '<div class="col-md-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Vouchers Generated</div><div id="hotspotVoucherCount" class="fs-3 fw-bold mt-1">—</div></div></div></div>'+
+                '<div class="col-md-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Hotspot Revenue</div><div id="hotspotRevenue" class="fs-3 fw-bold mt-1 text-success">৳0.00</div></div></div></div>'+
+                '</div><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-wifi text-success fs-5"></i> Live Hotspot Overview</div><div class="card-body"><div id="hotspotDashboardBody" class="text-muted">Loading live MikroTik Hotspot data...</div></div></div></section>');
+            try {
+                const all=await jsonFetch('/api/hotspot/users?filter=all');
+                const online=await jsonFetch('/api/hotspot/users?filter=online');
+                const users=all.users||[];
+                document.getElementById('hotspotTotalAccounts').innerText=users.length;
+                document.getElementById('hotspotVoucherCount').innerText=users.length;
+                document.getElementById('hotspotOnlineCount').innerText=(online.users||[]).length;
+                const revenue=users.reduce(function(sum,v){return sum+Number(v.price||0);},0);
+                document.getElementById('hotspotRevenue').innerText='৳'+revenue.toFixed(2);
+                document.getElementById('hotspotDashboardBody').innerHTML='<div class="d-flex flex-wrap gap-2"><span class="badge bg-success">MikroTik Connected</span><span class="badge bg-light text-dark border">'+users.length+' accounts</span><span class="badge bg-light text-dark border">'+(online.users||[]).length+' online</span></div>';
+            } catch(error) {
+                const el=document.getElementById('hotspotDashboardBody'); if(el) el.innerHTML='<div class="alert alert-danger mb-0">'+escapeHtml(error.message)+'</div>';
+            }
+        }
+
+        function hotspotStatusBadge(user) {
+            if(user.online) return '<span class="badge bg-success">Online</span>';
+            if(user.active) return '<span class="badge bg-primary">Active</span>';
+            if(user.status==='expired') return '<span class="badge bg-danger">Expired</span>';
+            return '<span class="badge bg-secondary">Unused</span>';
+        }
+
+        function formatBytes(value) {
+            const n=Number(value||0); if(!n) return '0 B';
+            const units=['B','KB','MB','GB','TB']; const i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),units.length-1);
+            return (n/Math.pow(1024,i)).toFixed(i?1:0)+' '+units[i];
+        }
+
+        function renderHotspotTable(data, mode, titleKey) {
+            const lang=localStorage.getItem('faz_preferred_lang')||'en';
+            const users=data.users||[];
+            let rows='';
+            if(mode==='online') {
+                rows=users.map(function(u,i){ const s=u.online||u; return '<tr>'+
+                    '<td>'+(i+1)+'</td><td><strong>'+escapeHtml(s.username||u.username)+'</strong></td><td>'+escapeHtml(u.password||'-')+'</td><td>'+escapeHtml(s.profile||u.profile||'-')+'</td>'+
+                    '<td class="font-monospace">'+escapeHtml(s.address||'-')+'</td><td class="font-monospace">'+escapeHtml(s.macAddress||'-')+'</td><td>'+escapeHtml(s.uptime||'-')+'</td>'+
+                    '<td>'+formatBytes(s.bytesIn)+' / '+formatBytes(s.bytesOut)+'</td><td><span class="badge bg-success">Online</span></td>'+
+                    '<td><button class="btn btn-sm btn-outline-warning" onclick="kickHotspotUser('+JSON.stringify(s.username||u.username)+')"><i class="bi bi-box-arrow-right"></i></button> <button class="btn btn-sm btn-outline-danger" onclick="removeHotspotUser('+JSON.stringify(s.username||u.username)+')"><i class="bi bi-trash"></i></button></td></tr>'; }).join('');
+            } else {
+                rows=users.map(function(u,i){ return '<tr>'+
+                    '<td>'+(i+1)+'</td><td><strong>'+escapeHtml(u.username)+'</strong></td><td class="font-monospace">'+escapeHtml(u.password||u.mikrotik?.password||'-')+'</td>'+
+                    '<td>'+escapeHtml(u.profile||u.mikrotik?.profile||'-')+'</td><td>'+escapeHtml(u.online?.address||'-')+'</td><td>'+escapeHtml(u.online?.macAddress||'-')+'</td>'+
+                    '<td>'+escapeHtml(u.online?.uptime||'-')+'</td><td>'+hotspotStatusBadge(u)+'</td>'+
+                    '<td><button class="btn btn-sm btn-outline-warning" '+(u.online?'':'disabled')+' onclick="kickHotspotUser('+JSON.stringify(u.username)+')"><i class="bi bi-box-arrow-right"></i></button> <button class="btn btn-sm btn-outline-danger" onclick="removeHotspotUser('+JSON.stringify(u.username)+')"><i class="bi bi-trash"></i></button></td></tr>'; }).join('');
+            }
+            if(!rows) rows='<tr><td colspan="10" class="text-center py-5 text-muted">No Hotspot users found.</td></tr>';
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-wifi text-success fs-5 me-2"></i>'+escapeHtml(hotspotTitle(titleKey))+' <span class="badge bg-success">'+users.length+'</span></div><div class="hotspot-search ms-auto mt-2 mt-md-0"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="hotspotSearch" class="form-control" placeholder="Search username, profile, IP or MAC..." oninput="filterHotspotRows(this.value)"></div></div><button class="btn btn-outline-success btn-sm ms-2 mt-2 mt-md-0" onclick="refreshHotspotCurrent()"><i class="bi bi-arrow-clockwise"></i></button></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>#</th><th>Username</th><th>Password</th><th>Profile</th><th>IP</th><th>MAC Address</th><th>Uptime</th><th>Bytes In/Out</th><th>Status</th><th>Actions</th></tr></thead><tbody id="hotspotUserBody">'+rows+'</tbody></table></div></div></section>');
+            updateLanguage(lang);
+        }
+
+        function filterHotspotRows(query) {
+            const q=String(query||'').trim().toLowerCase();
+            document.querySelectorAll('#hotspotUserBody tr').forEach(function(row){row.style.display=row.innerText.toLowerCase().includes(q)?'':'none';});
+        }
+
+        async function loadHotspotSection(filter,titleKey) {
+            currentHotspotMode=filter;
+            currentHotspotTitleKey=titleKey;
+            setHotspotTitle(titleKey);
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');
+            try { const data=await jsonFetch('/api/hotspot/users?filter='+encodeURIComponent(filter)); renderHotspotTable(data,filter,titleKey); }
+            catch(error){ appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message)+'</div></section>'); }
+        }
+
+        async function refreshHotspotCurrent() {
+            if(!currentHotspotMode || currentHotspotMode==='dashboard' || currentHotspotMode==='generator' || currentHotspotMode==='profiles' || currentHotspotMode==='server-profiles') return;
+            await loadHotspotSection(currentHotspotMode,currentHotspotTitleKey);
+        }
+
+        async function kickHotspotUser(username) {
+            try { await jsonFetch('/api/hotspot/users/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username})}); await refreshHotspotCurrent(); }
+            catch(error){ alert(error.message); }
+        }
+
+        async function removeHotspotUser(username) {
+            if(!confirm('Remove Hotspot user "'+username+'"?')) return;
+            try { await jsonFetch('/api/hotspot/users/remove',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username})}); await refreshHotspotCurrent(); }
+            catch(error){ alert(error.message); }
+        }
+
+        async function loadHotspotProfiles(titleKey) {
+            currentHotspotMode='profiles'; currentHotspotTitleKey=titleKey; setHotspotTitle(titleKey);
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');
+            try {
+                const data=await jsonFetch('/api/hotspot/profiles');
+                currentHotspotProfiles=data.profiles||[];
+                let rows=currentHotspotProfiles.map(function(p,i){return '<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(p.name)+'</strong></td><td>'+escapeHtml(p.rateLimit||'-')+'</td><td>'+escapeHtml(p.sharedUsers||'-')+'</td><td>'+escapeHtml(p.idleTimeout||'-')+'</td><td>'+escapeHtml(p.keepaliveTimeout||'-')+'</td></tr>';}).join('');
+                if(!rows) rows='<tr><td colspan="6" class="text-center py-5 text-muted">No Hotspot user profiles found.</td></tr>';
+                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-speedometer2 text-success fs-5"></i> Hotspot User Profiles <span class="badge bg-success ms-2">'+currentHotspotProfiles.length+'</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>#</th><th>Name</th><th>Rate Limit</th><th>Shared Users</th><th>Idle Timeout</th><th>Keepalive</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></section>');
+                updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
+            } catch(error){ appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message)+'</div></section>'); }
+        }
+
+        async function loadHotspotServerProfiles(titleKey) {
+            currentHotspotMode='server-profiles'; currentHotspotTitleKey=titleKey; setHotspotTitle(titleKey);
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');
+            try {
+                const data=await jsonFetch('/api/hotspot/server-profiles');
+                const rows=(data.profiles||[]).map(function(p,i){return '<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(p.name)+'</strong></td><td>'+escapeHtml(p.hotspotAddress||'-')+'</td><td>'+escapeHtml(p.dnsName||'-')+'</td><td>'+escapeHtml(p.htmlDirectory||'-')+'</td><td>'+escapeHtml(p.rateLimit||'-')+'</td><td>'+escapeHtml(p.loginBy||'-')+'</td><td>'+escapeHtml(p.useRadius?'Yes':'No')+'</td></tr>';}).join('');
+                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hdd-network text-success fs-5"></i> Hotspot Server Profiles <span class="badge bg-success ms-2">'+(data.profiles||[]).length+'</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>#</th><th>Name</th><th>Hotspot Address</th><th>DNS Name</th><th>HTML Directory</th><th>Rate Limit</th><th>Login By</th><th>RADIUS</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="8" class="text-center py-5 text-muted">No server profiles found.</td></tr>') +'</tbody></table></div></div></section>');
+                updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
+            } catch(error){ appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message)+'</div></section>'); }
+        }
+
+        function voucherCardHtml(v) {
+            return '<div class="voucher-card"><div class="voucher-brand">FAZ NETWORK Wi-Fi Hotspot</div><div class="voucher-cut"></div><div class="small text-muted">Username</div><div class="voucher-credential">'+escapeHtml(v.username)+'</div><div class="small text-muted mt-1">Password / PIN</div><div class="voucher-credential">'+escapeHtml(v.password)+'</div><div class="d-flex justify-content-between mt-2 small"><span>Profile: <strong>'+escapeHtml(v.profile||'-')+'</strong></span><span>Validity: <strong>'+escapeHtml(v.validity||'-')+'</strong></span></div><div class="fw-bold mt-1">Price: ৳ '+Number(v.price||0).toFixed(2)+'</div><div class="voucher-cut"></div><div class="voucher-instruction">Connect to Wi-Fi → Open Portal → Enter PIN</div></div>';
+        }
+
+        function renderVoucherCards(vouchers) {
+            currentVoucherBatch=vouchers||[];
+            const area=document.getElementById('hotspotVoucherPrint');
+            if(area) area.innerHTML='<div class="voucher-grid">'+currentVoucherBatch.map(voucherCardHtml).join('')+'</div>';
+        }
+
+        async function loadVoucherGeneratorSection() {
+            currentHotspotMode='generator'; currentHotspotTitleKey='gen_print_vouchers'; setHotspotTitle('gen_print_vouchers');
+            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-4"><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-ticket-perforated text-success fs-5"></i><span data-key="gen_print_vouchers">'+escapeHtml(hotspotTitle('gen_print_vouchers'))+'</span></div><div class="card-body"><form id="voucherGeneratorForm"><div class="row g-3"><div class="col-md-2"><label class="form-label">Quantity</label><input id="voucherQuantity" type="number" class="form-control" min="1" max="500" value="10" required></div><div class="col-md-2"><label class="form-label">User Prefix</label><input id="voucherPrefix" class="form-control" value="FAZ-" maxlength="20"></div><div class="col-md-2"><label class="form-label">Character Length</label><input id="voucherCharLength" type="number" class="form-control" min="4" max="16" value="6"></div><div class="col-md-3"><label class="form-label">Profile</label><select id="voucherProfile" class="form-select" required><option value="">Loading profiles...</option></select></div><div class="col-md-1"><label class="form-label">Price</label><input id="voucherPrice" type="number" class="form-control" min="0" step="0.01" value="20"></div><div class="col-md-2"><label class="form-label">Validity</label><input id="voucherValidity" class="form-control" value="1d" required></div><div class="col-12 d-flex justify-content-end gap-2 mt-3"><button type="submit" class="btn btn-theme"><i class="bi bi-magic me-1"></i> Generate Batch Vouchers</button><button type="button" class="btn btn-outline-success" onclick="printVoucherCards()">🖨️ Print Voucher Cards</button></div></div></form></div></div></div><div class="col-12"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-printer text-success fs-5"></i> Printable Voucher Cards <span id="voucherBatchCount" class="badge bg-success ms-2">0</span></div><div class="card-body" id="hotspotVoucherPrint"><div class="text-center py-5 text-muted">Generate a voucher batch to preview printable cards.</div></div></div></div></div></section>');
+            try {
+                const data=await jsonFetch('/api/hotspot/profiles');
+                const select=document.getElementById('voucherProfile');
+                const profiles=data.profiles||[];
+                select.innerHTML=profiles.map(function(p){return '<option value="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+(p.rateLimit?' — '+escapeHtml(p.rateLimit):'')+'</option>';}).join('');
+                if(!profiles.length) select.innerHTML='<option value="">No MikroTik profiles found</option>';
+            } catch(error) {
+                const select=document.getElementById('voucherProfile'); if(select) select.innerHTML='<option value="">'+escapeHtml(error.message)+'</option>';
+            }
+            document.getElementById('voucherGeneratorForm').addEventListener('submit',generateVoucherBatch);
+        }
+
+        async function generateVoucherBatch(event) {
+            event.preventDefault();
+            const btn=event.submitter;
+            if(btn){btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span> Generating...';}
+            try {
+                const payload={quantity:Number(document.getElementById('voucherQuantity').value),profile:document.getElementById('voucherProfile').value,validity:document.getElementById('voucherValidity').value.trim(),price:Number(document.getElementById('voucherPrice').value),userPrefix:document.getElementById('voucherPrefix').value.trim(),charLength:Number(document.getElementById('voucherCharLength').value)};
+                const data=await jsonFetch('/api/hotspot/vouchers/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                renderVoucherCards(data.vouchers||[]);
+                const count=document.getElementById('voucherBatchCount'); if(count) count.innerText=data.count||0;
+            } catch(error) { alert(error.message); }
+            finally { if(btn){btn.disabled=false;btn.innerHTML='<i class="bi bi-magic me-1"></i> Generate Batch Vouchers';} }
+        }
+
+        function printVoucherCards() {
+            if(!currentVoucherBatch.length){alert('Generate a voucher batch first.');return;}
+            document.body.classList.add('hotspot-printing');
+            setTimeout(function(){window.print();},50);
+            setTimeout(function(){document.body.classList.remove('hotspot-printing');},1000);
+        }
+
+        const _existingUpdateLanguage = updateLanguage;
+        updateLanguage = function(lang) {
+            _existingUpdateLanguage(lang);
+            if(currentHotspotTitleKey && translations[lang]?.[currentHotspotTitleKey]) {
+                document.getElementById('pageTitle').innerText=translations[lang][currentHotspotTitleKey];
+            }
+        };
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script>
         const translations = {
@@ -477,7 +701,7 @@
                 'expire_customer':'Expire Customer','expire_today_yesterday':'Expire Today & Yesterday','expire_7_days':'Expire in 7 Days','new_customer':'New Customer','due_collection':'Due Collection',
                 'report':'Report','monthly_collection_due':'Monthly Collection & Due','monthly_sales':'Monthly Sales','invoice_report':'Invoice Report',
                 'payments':'Payments','pending_invoice':'Pending Invoice','all_payments':'All Payments','payment_request':'Payment Request','bkash_payments':'bKash Payments','nagad_payments':'Nagad Payments','rocket_payments':'Rocket Payments',
-                'hotspot':'Hotspot','hotspot_dashboard':'Dashboard','hotspot_all_users':'All Users','hotspot_active_users':'Active Users','hotspot_online_users':'Online Users','hotspot_profile':'Profile','hotspot_server_profile':'Server Profile',
+                'hotspot':'Hotspot','hotspot_dashboard':'Dashboard','hotspot_all_users':'All Users','hotspot_active_users':'Active Users','hotspot_online_users':'Online Users','hotspot_profile':'Profile','hotspot_server_profile':'Server Profile','gen_print_vouchers':'Generate & Print Vouchers',
                 'core_system':'Core System','pppoe':'PPPoE','devices':'Devices','plan_packages':'Plan & Packages','ip_pools':'IP Pools','olt_management':'OLT Management','monitor':'Monitor','usage':'Usage','online':'Online','network_diagram':'Network Diagram',
                 'general_setting':'General Setting','website_setting':'Website Setting','sms_setting':'SMS Setting','backup_restore':'Backup & Restore',
                 'vpn_server':'VPN Server','vpn':'VPN','vpn_port_forwarding':'VPN Port Forwarding',
@@ -496,7 +720,7 @@
                 'expire_customer':'এক্সপায়ার কাস্টমার','expire_today_yesterday':'আজ ও গতকাল এক্সপায়ার','expire_7_days':'৭ দিনে এক্সপায়ার','new_customer':'নতুন কাস্টমার','due_collection':'বকেয়া কালেকশন',
                 'report':'রিপোর্ট','monthly_collection_due':'মাসিক কালেকশন ও বকেয়া','monthly_sales':'মাসিক বিক্রয়','invoice_report':'ইনভয়েস রিপোর্ট',
                 'payments':'পেমেন্টস','pending_invoice':'পেন্ডিং ইনভয়েস','all_payments':'অল পেমেন্টস','payment_request':'পেমেন্ট রিকোয়েস্ট','bkash_payments':'বিকাশ পেমেন্টস','nagad_payments':'নগদ পেমেন্টস','rocket_payments':'রকেট পেমেন্টস',
-                'hotspot':'হটস্পট','hotspot_dashboard':'ড্যাশবোর্ড','hotspot_all_users':'অল ইউজার','hotspot_active_users':'অ্যাক্টিভ ইউজার','hotspot_online_users':'অনলাইন ইউজার','hotspot_profile':'প্রোফাইল','hotspot_server_profile':'সার্ভার প্রোফাইল',
+                'hotspot':'হটস্পট','hotspot_dashboard':'ড্যাশবোর্ড','hotspot_all_users':'অল ইউজার','hotspot_active_users':'অ্যাক্টিভ ইউজার','hotspot_online_users':'অনলাইন ইউজার','hotspot_profile':'প্রোফাইল','hotspot_server_profile':'সার্ভার প্রোফাইল','gen_print_vouchers':'ভাউচার তৈরি ও প্রিন্ট',
                 'core_system':'কোর সিস্টেম','pppoe':'PPPoE','devices':'ডিভাইস','plan_packages':'প্ল্যান ও প্যাকেজ','ip_pools':'IP পুলস','olt_management':'OLT ম্যানেজমেন্ট','monitor':'মনিটর','usage':'ইউসেজ','online':'অনলাইন','network_diagram':'নেটওয়ার্ক ডায়াগ্রাম',
                 'general_setting':'জেনারেল সেটিং','website_setting':'ওয়েবসাইট সেটিং','sms_setting':'SMS সেটিং','backup_restore':'ব্যাকআপ ও রিস্টোর',
                 'vpn_server':'VPN সার্ভার','vpn':'VPN','vpn_port_forwarding':'VPN পোর্ট ফরওয়ার্ডিং',
