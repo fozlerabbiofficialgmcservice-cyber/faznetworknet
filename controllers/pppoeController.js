@@ -3,9 +3,13 @@ const db = require("../db");
 
 function errorResponse(res, error) {
   console.error("[PPPoE API]", error);
-  return res.status(error.statusCode || 503).json({
+  const message = error?.message || "PPPoE operation failed.";
+  return res.status(error?.statusCode || 503).json({
     success: false,
-    error: error.message || "PPPoE operation failed."
+    users: [],
+    profiles: [],
+    message,
+    error: message
   });
 }
 

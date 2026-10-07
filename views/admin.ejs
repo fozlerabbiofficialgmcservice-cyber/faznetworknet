@@ -884,11 +884,44 @@
             return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
         }
 
+        function showAdminDbWarning(message) {
+            const text = message || 'Database not connected. Please set DATABASE_URL in Render environment.';
+            let toast = document.getElementById('adminDbWarningToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'adminDbWarningToast';
+                toast.className = 'alert alert-warning shadow position-fixed top-0 end-0 m-3';
+                toast.style.zIndex = '99999';
+                toast.style.maxWidth = '420px';
+                document.body.appendChild(toast);
+            }
+            toast.innerHTML = '<i class="bi bi-database-exclamation me-2"></i>' + escapeHtml(text);
+            toast.style.display = 'block';
+            clearTimeout(window.__adminDbWarningTimer);
+            window.__adminDbWarningTimer = setTimeout(() => { toast.style.display = 'none'; }, 6000);
+        }
+
         async function jsonFetch(url, options = {}) {
-            const response = await fetch(url, options);
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.error || 'Request failed');
-            return data;
+            try {
+                const response = await fetch(url, options);
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false) {
+                    const message = data.message || data.error || 'Request failed';
+                    if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message)) {
+                        showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
+                    }
+                    throw new Error(message);
+                }
+                return data;
+            } catch (error) {
+                if (/^\/api\/(hotspot|pppoe)\//.test(url)) {
+                    const message = /database|DATABASE_URL|database configuration|failed to fetch|networkerror/i.test(String(error?.message || ''))
+                        ? 'Database not connected. Please set DATABASE_URL in Render environment.'
+                        : (error?.message || 'Request failed');
+                    showAdminDbWarning(message);
+                }
+                throw error;
+            }
         }
 
         function showAddCustomerForm() {

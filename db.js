@@ -1,11 +1,24 @@
 const { Pool } = require("pg");
 
 let pool;
+let warnedMissingDatabaseUrl = false;
+
+function isConfigured() {
+  return Boolean(String(process.env.DATABASE_URL || "").trim());
+}
+
+function warnMissingDatabaseUrl() {
+  if (!warnedMissingDatabaseUrl) {
+    warnedMissingDatabaseUrl = true;
+    console.warn("[DB WARNING] DATABASE_URL missing. Database operations will return empty sets instead of throwing fatal errors.");
+  }
+}
 
 function getPool() {
   if (pool) return pool;
-  if (!process.env.DATABASE_URL) {
-    throw new Error("Database configuration error: DATABASE_URL is not configured.");
+  if (!isConfigured()) {
+    warnMissingDatabaseUrl();
+    return null;
   }
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -19,11 +32,19 @@ function getPool() {
 }
 
 async function query(text, params = []) {
-  return getPool().query(text, params);
+  const activePool = getPool();
+  if (!activePool) return { rows: [], rowCount: 0, command: "NO_DATABASE" };
+  return activePool.query(text, params);
 }
 
 async function withTransaction(callback) {
-  const client = await getPool().connect();
+  const activePool = getPool();
+  if (!activePool) {
+    return callback({
+      query: async () => ({ rows: [], rowCount: 0, command: "NO_DATABASE" })
+    });
+  }
+  const client = await activePool.connect();
   try {
     await client.query("BEGIN");
     const result = await callback(client);
@@ -37,4 +58,4 @@ async function withTransaction(callback) {
   }
 }
 
-module.exports = { getPool, query, withTransaction };
+module.exports = { getPool, query, withTransaction, isConfigured };
