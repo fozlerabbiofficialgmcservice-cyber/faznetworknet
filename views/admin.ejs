@@ -169,6 +169,15 @@
         .customer-search-wrap { min-width: 260px; }
         .customer-action-group .btn { min-width: 34px; }
         .customer-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+        .payment-ledger-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
+        .payment-ledger-table td { vertical-align: middle; font-size: 13px; }
+        .payment-search-wrap { min-width: 280px; }
+        .payment-gateway-badge { color: #fff; min-width: 70px; }
+        .gateway-bkash { background: #e2136e; }
+        .gateway-nagad { background: #f6921e; }
+        .gateway-rocket { background: #8c3494; }
+        .payment-kpi { border-left: 4px solid var(--accent-color); }
+        .payment-action-group .btn { min-width: 34px; }
         
         @media (max-width: 768px) {
             .sidebar { left: calc(-1 * var(--sidebar-width)); }
@@ -238,12 +247,12 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="pending_invoice">Pending Invoice</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('payments')"><span data-key="all_payments">All Payments</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="payment_request">Payment Request</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('payments', 'bkash')"><span data-key="bkash_payments">bKash Payments</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('payments', 'nagad')"><span data-key="nagad_payments">Nagad Payments</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('payments', 'rocket')"><span data-key="rocket_payments">Rocket Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('pending', 'pending_invoice')"><span data-key="pending_invoice">Pending Invoice</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('all', 'all_payments')"><span data-key="all_payments">All Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('requests', 'payment_request')"><span data-key="payment_request">Payment Request</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('bkash', 'bkash_payments')"><span data-key="bkash_payments">bKash Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('nagad', 'nagad_payments')"><span data-key="nagad_payments">Nagad Payments</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadPaymentsSection('rocket', 'rocket_payments')"><span data-key="rocket_payments">Rocket Payments</span></a></li>
                 </ul>
             </li>
 
@@ -478,7 +487,8 @@
                 'live_tracking':'Live Tracking','google_map':'Google Map','user_reseller':'User & Reseller','sub_staff':'Sub-Staff',
                 'customer_management':'Customer Management','add_new_customer':'Add New Customer','label_fullname':'Full Name *','label_phone':'Phone Number *','label_username':'Username *','label_password':'Password *','label_package':'Package Selection *','label_billing_duration':'Billing Duration *','opt_1_month':'1 Month (30 Days)','btn_reset':'Reset','btn_save_customer':'Save Customer',
                 'ph_fullname':'e.g. John Doe','ph_phone':'e.g. 01700000000','ph_username':'pppoe_user','ph_password':'••••••••',
-                'customer_table':'Customer Records','search_customers':'Search customers...','full_name_phone':'Full Name / Phone','username':'Username','package_profile':'Package / Profile','ip_caller_id':'IP / Caller-ID','status_badge':'Status','expiry_date':'Expiry Date','actions':'Actions','online_status':'Online','offline_status':'Offline','expired_status':'Expired','kick':'Kick','enable':'Enable','disable':'Disable','view':'View','no_customers':'No customers found for this filter.','loading_customers':'Loading customers...','router_live':'Live MikroTik','uptime':'Uptime','view_customer':'Customer Details'
+                'customer_table':'Customer Records','search_customers':'Search customers...','full_name_phone':'Full Name / Phone','username':'Username','package_profile':'Package / Profile','ip_caller_id':'IP / Caller-ID','status_badge':'Status','expiry_date':'Expiry Date','actions':'Actions','online_status':'Online','offline_status':'Offline','expired_status':'Expired','kick':'Kick','enable':'Enable','disable':'Disable','view':'View','no_customers':'No customers found for this filter.','loading_customers':'Loading customers...','router_live':'Live MikroTik','uptime':'Uptime','view_customer':'Customer Details',
+                'payment_ledger':'Financial Payment Ledger','search_payments':'Search TrxID, phone or username...','total_received':'Total Received Amount','total_transactions':'Total Transactions','unmatched_count':'Unmatched Count','trx_txnid':'TrxID / TxnID','gateway':'Gateway','amount':'Amount (৳)','sender_phone':'Sender Phone','matched_customer':'Matched Customer / Username','date_time':'Date & Time','manual_match':'Manual Match','processed':'Processed','unmatched':'Unmatched','duplicate':'Duplicate','no_payments':'No transactions found for this filter.','previous':'Previous','next':'Next','page':'Page','of':'of','enter_username':'Enter PPPoE username','match_payment':'Match Payment','cancel':'Cancel','matching':'Matching...','match_success':'Payment matched and customer renewed for 30 days.'
             },
             'bn': {
                 'brand':'FAZ NETWORK','dashboard':'ড্যাশবোর্ড','customer':'কাস্টমার','all_customer':'অল কাস্টমার','add_customer':'অ্যাড কাস্টমার',
@@ -496,7 +506,8 @@
                 'live_tracking':'লাইভ ট্র্যাকিং','google_map':'গুগল ম্যাপ','user_reseller':'ইউজার ও রিসেলার','sub_staff':'সাব-স্টাফ',
                 'customer_management':'কাস্টমার ম্যানেজমেন্ট','add_new_customer':'নতুন কাস্টমার যুক্ত করুন','label_fullname':'পূর্ণ নাম *','label_phone':'ফোন নম্বর *','label_username':'ইউজারনেম *','label_password':'পাসওয়ার্ড *','label_package':'প্যাকেজ নির্বাচন *','label_billing_duration':'বিলিং মেয়াদ *','opt_1_month':'১ মাস (৩০ দিন)','btn_reset':'রিসেট','btn_save_customer':'সংরক্ষণ করুন',
                 'ph_fullname':'যেমন: জন ডো','ph_phone':'যেমন: ০১৭০০০০০০০০','ph_username':'pppoe_user','ph_password':'••••••••',
-                'customer_table':'কাস্টমার রেকর্ড','search_customers':'কাস্টমার খুঁজুন...','full_name_phone':'পূর্ণ নাম / ফোন','username':'ইউজারনেম','package_profile':'প্যাকেজ / প্রোফাইল','ip_caller_id':'IP / Caller-ID','status_badge':'স্ট্যাটাস','expiry_date':'মেয়াদ শেষ','actions':'অ্যাকশন','online_status':'অনলাইন','offline_status':'অফলাইন','expired_status':'এক্সপায়ার','kick':'কিক','enable':'চালু','disable':'বন্ধ','view':'দেখুন','no_customers':'এই ফিল্টারে কোনো কাস্টমার পাওয়া যায়নি।','loading_customers':'কাস্টমার লোড হচ্ছে...','router_live':'লাইভ MikroTik','uptime':'আপটাইম','view_customer':'কাস্টমার তথ্য'
+                'customer_table':'কাস্টমার রেকর্ড','search_customers':'কাস্টমার খুঁজুন...','full_name_phone':'পূর্ণ নাম / ফোন','username':'ইউজারনেম','package_profile':'প্যাকেজ / প্রোফাইল','ip_caller_id':'IP / Caller-ID','status_badge':'স্ট্যাটাস','expiry_date':'মেয়াদ শেষ','actions':'অ্যাকশন','online_status':'অনলাইন','offline_status':'অফলাইন','expired_status':'এক্সপায়ার','kick':'কিক','enable':'চালু','disable':'বন্ধ','view':'দেখুন','no_customers':'এই ফিল্টারে কোনো কাস্টমার পাওয়া যায়নি।','loading_customers':'কাস্টমার লোড হচ্ছে...','router_live':'লাইভ MikroTik','uptime':'আপটাইম','view_customer':'কাস্টমার তথ্য',
+                'payment_ledger':'ফাইন্যান্সিয়াল পেমেন্ট লেজার','search_payments':'TrxID, ফোন বা ইউজারনেম খুঁজুন...','total_received':'মোট প্রাপ্ত অর্থ','total_transactions':'মোট লেনদেন','unmatched_count':'ম্যাচ না হওয়া','trx_txnid':'TrxID / TxnID','gateway':'গেটওয়ে','amount':'পরিমাণ (৳)','sender_phone':'প্রেরকের ফোন','matched_customer':'ম্যাচড কাস্টমার / ইউজারনেম','date_time':'তারিখ ও সময়','manual_match':'ম্যানুয়াল ম্যাচ','processed':'প্রসেসড','unmatched':'আনম্যাচড','duplicate':'ডুপ্লিকেট','no_payments':'এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।','previous':'আগের','next':'পরের','page':'পৃষ্ঠা','of':'এর','enter_username':'PPPoE ইউজারনেম লিখুন','match_payment':'পেমেন্ট ম্যাচ করুন','cancel':'বাতিল','matching':'ম্যাচ করা হচ্ছে...','match_success':'পেমেন্ট ম্যাচ হয়েছে এবং কাস্টমার ৩০ দিনের জন্য রিনিউ হয়েছে।'
             }
         };
 
@@ -520,6 +531,11 @@
         };
 
         let currentPaymentChannel = '';
+        let currentPaymentGateway = 'all';
+        let currentPaymentTitleKey = '';
+        let currentPaymentPage = 1;
+        let currentPaymentUsers = [];
+        let currentPaymentRows = [];
         let currentCustomerTitleKey = '';
         let currentCustomerFilter = 'all';
         let currentCustomerUsers = [];
@@ -529,6 +545,7 @@
 
         function switchView(viewName, channel = '') {
             currentCustomerTitleKey = '';
+            currentPaymentTitleKey = '';
             const target = document.getElementById('view-' + viewName) ? viewName : 'dashboard';
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
             document.getElementById('view-' + target).style.display = 'block';
@@ -559,6 +576,12 @@
             if (currentCustomerTitleKey && translations[lang]?.[currentCustomerTitleKey]) {
                 document.getElementById('pageTitle').innerText = translations[lang][currentCustomerTitleKey];
             }
+            if (currentPaymentTitleKey && translations[lang]?.[currentPaymentTitleKey]) {
+                document.getElementById('pageTitle').innerText = translations[lang][currentPaymentTitleKey];
+            }
+            if (document.getElementById('paymentSearch')) {
+                document.getElementById('paymentSearch').placeholder = translations[lang]?.search_payments || '';
+            }
             localStorage.setItem('faz_preferred_lang', lang);
         }
 
@@ -581,6 +604,158 @@
 
         function showAddCustomerForm() {
             switchView('add-customer');
+        }
+
+        function paymentTitle(key) {
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            return translations[lang]?.[key] || translations.en[key] || key;
+        }
+
+        function paymentGatewayClass(channel) {
+            return channel === 'bkash' ? 'gateway-bkash' : channel === 'nagad' ? 'gateway-nagad' : channel === 'rocket' ? 'gateway-rocket' : 'bg-secondary';
+        }
+
+        function paymentStatusBadge(status, t) {
+            const cls = status === 'processed' ? 'bg-success' : status === 'duplicate' ? 'bg-danger' : 'bg-warning text-dark';
+            const key = status === 'processed' ? 'processed' : status === 'duplicate' ? 'duplicate' : 'unmatched';
+            return '<span class="badge ' + cls + '">' + escapeHtml(t[key] || status || '-') + '</span>';
+        }
+
+        function filterPaymentRows(query) {
+            const q = String(query || '').trim().toLowerCase();
+            document.querySelectorAll('#paymentLedgerBody tr[data-payment-row]').forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+
+        function renderPaymentLedger(data) {
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            const t = translations[lang] || translations.en;
+            const rows = data.transactions || [];
+            const summary = data.summary || {};
+            currentPaymentRows = rows;
+            const content = document.getElementById('dynamicPageContent');
+            if (!content) return;
+
+            const totalReceived = Number(summary.total_received || 0);
+            const totalTransactions = Number(summary.total_transactions || data.total || 0);
+            const unmatched = Number(summary.unmatched_count || 0);
+
+            content.innerHTML = `
+                <section id="view-payment-ledger" class="admin-view">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4"><div class="card card-custom payment-kpi h-100"><div class="card-body"><div class="text-muted small" data-key="total_received">${escapeHtml(t.total_received)}</div><div class="fs-4 fw-bold text-success mt-1">৳${totalReceived.toFixed(2)}</div></div></div></div>
+                        <div class="col-md-4"><div class="card card-custom payment-kpi h-100"><div class="card-body"><div class="text-muted small" data-key="total_transactions">${escapeHtml(t.total_transactions)}</div><div class="fs-4 fw-bold mt-1">${totalTransactions}</div></div></div></div>
+                        <div class="col-md-4"><div class="card card-custom payment-kpi h-100"><div class="card-body"><div class="text-muted small" data-key="unmatched_count">${escapeHtml(t.unmatched_count)}</div><div class="fs-4 fw-bold text-warning mt-1">${unmatched}</div></div></div></div>
+                    </div>
+                    <div class="card card-custom">
+                        <div class="card-custom-header flex-wrap">
+                            <div class="d-flex align-items-center gap-2"><i class="bi bi-journal-text text-success fs-5"></i><span data-key="payment_ledger">${escapeHtml(t.payment_ledger)}</span><span class="badge bg-success">${data.total || rows.length}</span></div>
+                            <div class="payment-search-wrap ms-auto mt-2 mt-md-0"><div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input id="paymentSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_payments)}" oninput="filterPaymentRows(this.value)"></div></div>
+                            <button class="btn btn-outline-success btn-sm mt-2 mt-md-0" onclick="refreshPaymentsSection()"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 payment-ledger-table">
+                                <thead class="table-light"><tr>
+                                    <th>#</th><th data-key="trx_txnid">${escapeHtml(t.trx_txnid)}</th><th data-key="gateway">${escapeHtml(t.gateway)}</th><th data-key="amount">${escapeHtml(t.amount)}</th><th data-key="sender_phone">${escapeHtml(t.sender_phone)}</th><th data-key="matched_customer">${escapeHtml(t.matched_customer)}</th><th data-key="status_badge">${escapeHtml(t.status_badge)}</th><th data-key="date_time">${escapeHtml(t.date_time)}</th><th data-key="actions">${escapeHtml(t.actions)}</th>
+                                </tr></thead>
+                                <tbody id="paymentLedgerBody">${rows.length ? rows.map((tx,i)=>paymentRowHtml(tx, ((data.page||1)-1)*(data.limit||50)+i+1, t)).join('') : '<tr><td colspan="9" class="text-center py-5 text-muted" data-key="no_payments">' + escapeHtml(t.no_payments) + '</td></tr>'}</tbody>
+                            </table>
+                        </div>
+                        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+                            <button class="btn btn-sm btn-outline-success" onclick="changePaymentsPage(-1)" ${(data.page||1)<=1?'disabled':''}><i class="bi bi-chevron-left"></i> <span data-key="previous">${escapeHtml(t.previous)}</span></button>
+                            <span class="small text-muted"><span data-key="page">${escapeHtml(t.page)}</span> ${data.page||1} <span data-key="of">${escapeHtml(t.of)}</span> ${data.total_pages||1}</span>
+                            <button class="btn btn-sm btn-outline-success" onclick="changePaymentsPage(1)" ${(data.page||1)>=(data.total_pages||1)?'disabled':''}><span data-key="next">${escapeHtml(t.next)}</span> <i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </section>`;
+            updateLanguage(lang);
+        }
+
+        function paymentRowHtml(tx, index, t) {
+            const unmatched = tx.status === 'unmatched';
+            const gateway = String(tx.channel || '').toLowerCase();
+            const gatewayLabel = gateway === 'bkash' ? 'bKash' : gateway === 'nagad' ? 'Nagad' : gateway === 'rocket' ? 'Rocket' : gateway || '-';
+            const action = unmatched ? '<button class="btn btn-sm btn-outline-success" title="' + escapeHtml(t.manual_match) + '" onclick="openManualMatchModal(' + JSON.stringify(tx.trx_id) + ')"><i class="bi bi-person-check"></i></button>' : '<span class="text-muted">—</span>';
+            return '<tr data-payment-row>' +
+                '<td>' + index + '</td>' +
+                '<td><strong>' + escapeHtml(tx.trx_id || '-') + '</strong></td>' +
+                '<td><span class="badge payment-gateway-badge ' + paymentGatewayClass(gateway) + '">' + escapeHtml(gatewayLabel) + '</span></td>' +
+                '<td class="fw-semibold">৳' + Number(tx.amount || 0).toFixed(2) + '</td>' +
+                '<td>' + escapeHtml(tx.sender_phone || '-') + '</td>' +
+                '<td>' + escapeHtml(tx.matched_username || '-') + '</td>' +
+                '<td>' + paymentStatusBadge(tx.status, t) + '</td>' +
+                '<td>' + escapeHtml(tx.created_at ? new Date(tx.created_at).toLocaleString() : '-') + '</td>' +
+                '<td><div class="payment-action-group">' + action + '</div></td>' +
+                '</tr>';
+        }
+
+        async function loadPaymentsSection(gatewayType, titleKey) {
+            currentPaymentGateway = gatewayType;
+            currentPaymentTitleKey = titleKey;
+            currentPaymentPage = 1;
+            currentCustomerTitleKey = '';
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            document.getElementById('pageTitle').innerText = paymentTitle(titleKey);
+            document.getElementById('dynamicPageContent').innerHTML = '<div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hourglass-split text-success me-2"></i>Loading financial ledger...</div><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div>';
+            await fetchPaymentsSection();
+            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
+        }
+
+        async function fetchPaymentsSection() {
+            try {
+                const data = await jsonFetch('/api/payments/transactions?gateway=' + encodeURIComponent(currentPaymentGateway) + '&page=' + currentPaymentPage + '&limit=50');
+                renderPaymentLedger(data);
+            } catch (error) {
+                document.getElementById('dynamicPageContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error.message) + '</div>';
+            }
+        }
+
+        async function refreshPaymentsSection() {
+            await fetchPaymentsSection();
+        }
+
+        async function changePaymentsPage(delta) {
+            currentPaymentPage = Math.max(1, currentPaymentPage + delta);
+            await fetchPaymentsSection();
+        }
+
+        async function openManualMatchModal(trxId) {
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            const t = translations[lang] || translations.en;
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-person-check text-success me-2"></i>${escapeHtml(t.manual_match)}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <div class="mb-3"><label class="form-label" data-key="trx_txnid">${escapeHtml(t.trx_txnid)}</label><input class="form-control" id="manualMatchTrx" value="${escapeHtml(trxId)}" readonly></div>
+                            <div class="mb-3"><label class="form-label" data-key="username">${escapeHtml(t.username)}</label><input class="form-control" id="manualMatchUsername" placeholder="${escapeHtml(t.enter_username)}"></div>
+                        </div>
+                        <div class="modal-footer"><button class="btn btn-light border" data-bs-dismiss="modal" data-key="cancel">${escapeHtml(t.cancel)}</button><button class="btn btn-theme" onclick="submitManualMatch()" data-key="match_payment">${escapeHtml(t.match_payment)}</button></div>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            const instance = new bootstrap.Modal(modal);
+            modal.addEventListener('hidden.bs.modal', () => modal.remove());
+            instance.show();
+            setTimeout(()=>document.getElementById('manualMatchUsername')?.focus(),300);
+        }
+
+        async function submitManualMatch() {
+            const trxId = document.getElementById('manualMatchTrx')?.value.trim();
+            const username = document.getElementById('manualMatchUsername')?.value.trim();
+            if (!trxId || !username) return alert('Transaction ID and username are required.');
+            try {
+                await jsonFetch('/api/payments/manual-match', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({trxId, username})
+                });
+                document.querySelector('.modal.show .btn-close')?.click();
+                await fetchPaymentsSection();
+            } catch (error) { alert(error.message); }
         }
 
         function customerTitle(key) {
@@ -839,10 +1014,10 @@
             const body = document.getElementById('paymentsBody');
             if (!body) return;
             try {
-                const url = channel ? '/api/payments/transactions?channel=' + encodeURIComponent(channel) : '/api/payments/transactions';
-                const data = await jsonFetch(url);
+                const gateway = channel || 'all';
+                const data = await jsonFetch('/api/payments/transactions?gateway=' + encodeURIComponent(gateway));
                 const rows = (data.transactions || []).slice(0, 500);
-                document.getElementById('paymentFilterLabel').innerText = channel ? channel.toUpperCase() : 'All Gateways';
+                document.getElementById('paymentFilterLabel').innerText = gateway.toUpperCase();
                 body.innerHTML = rows.length ? rows.map(t =>
                     '<tr><td><strong>' + escapeHtml(t.trx_id) + '</strong></td>' +
                     '<td>' + escapeHtml(t.channel || '-') + '</td>' +
@@ -959,6 +1134,7 @@
         metricsTimer = setInterval(() => {
             loadRouterMetrics();
             if (document.getElementById('view-dashboard').style.display !== 'none') refreshDashboard();
+            if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) fetchPaymentsSection();
         }, 5000);
 
         // Dashboard is the initial operational view.
