@@ -1,17 +1,15 @@
-const express = require("express");
-const controller = require("../controllers/pppoeController");
-
-const router = express.Router();
-
-router.get("/", controller.page);
-router.post("/sync", controller.sync);
-router.get("/users", controller.users);
-router.get("/profiles", controller.profiles);
-router.get("/active", controller.active);
-router.post("/create-user", controller.createUser);
-router.post("/update-user", controller.updateUser);
-router.post("/toggle-user", controller.toggleUser);
-router.post("/kick-user", controller.kickUser);
-router.post("/create-profile", controller.createProfile);
-
-module.exports = router;
+const express=require("express");
+const controller=require("../controllers/pppoeController");
+const router=express.Router();
+router.get("/",controller.page);
+router.post("/sync",controller.sync);
+router.get("/users",controller.users);
+router.get("/profiles",controller.profiles);
+router.get("/active",controller.active);
+router.post("/create-user",controller.createUser);
+router.post("/users/create",controller.createUser);
+router.post("/update-user",controller.updateUser);
+router.post("/toggle-user",controller.toggleUser);
+router.post("/kick-user",controller.kickUser);
+router.post("/create-profile",controller.createProfile);
+module.exports=router;
