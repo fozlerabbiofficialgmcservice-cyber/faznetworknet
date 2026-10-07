@@ -494,6 +494,10 @@
     </div>
 
     <script>
+        function setPageTitleSafe(title) {
+            const el = document.getElementById('pageTitle') || document.querySelector('.page-title') || document.querySelector('h1, h2, h3');
+            if (el) el.innerText = title;
+        }
         // Hotspot global entry points: define these before any dependent admin code executes.
         window.loadHotspotDashboard = function() {
             console.log('[HOTSPOT UI] loadHotspotDashboard triggered');
@@ -629,7 +633,7 @@
 
         function setHotspotTitle(key) {
             currentHotspotTitleKey=key;
-            document.getElementById('pageTitle').innerText=hotspotTitle(key);
+            setPageTitleSafe(hotspotTitle(key));
         }
 
         async function loadHotspotDashboard() {
@@ -795,7 +799,7 @@
         updateLanguage = function(lang) {
             _existingUpdateLanguage(lang);
             if(currentHotspotTitleKey && translations[lang]?.[currentHotspotTitleKey]) {
-                document.getElementById('pageTitle').innerText=translations[lang][currentHotspotTitleKey];
+                setPageTitleSafe(translations[lang][currentHotspotTitleKey]);
             }
         };
     </script>
@@ -882,7 +886,7 @@
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
             document.getElementById('view-' + target).style.display = 'block';
 
-            document.getElementById('pageTitle').innerText = viewTitles[target] || 'Dashboard';
+            setPageTitleSafe(viewTitles[target] || 'Dashboard');
             currentPaymentChannel = channel || '';
             if (target === 'dashboard') {
                 refreshDashboard();
@@ -906,10 +910,10 @@
                 if (translations[lang] && translations[lang][key]) el.placeholder = translations[lang][key];
             });
             if (currentCustomerTitleKey && translations[lang]?.[currentCustomerTitleKey]) {
-                document.getElementById('pageTitle').innerText = translations[lang][currentCustomerTitleKey];
+                setPageTitleSafe(translations[lang][currentCustomerTitleKey]);
             }
             if (currentPaymentTitleKey && translations[lang]?.[currentPaymentTitleKey]) {
-                document.getElementById('pageTitle').innerText = translations[lang][currentPaymentTitleKey];
+                setPageTitleSafe(translations[lang][currentPaymentTitleKey]);
             }
             if (document.getElementById('paymentSearch')) {
                 document.getElementById('paymentSearch').placeholder = translations[lang]?.search_payments || '';
@@ -1061,7 +1065,7 @@
             currentPaymentPage = 1;
             currentCustomerTitleKey = '';
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
-            document.getElementById('pageTitle').innerText = paymentTitle(titleKey);
+            setPageTitleSafe(paymentTitle(titleKey));
             document.getElementById('dynamicPageContent').innerHTML = '<div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hourglass-split text-success me-2"></i>Loading financial ledger...</div><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div>';
             await fetchPaymentsSection();
             if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
@@ -1230,7 +1234,7 @@
             currentCustomerFilter = filterType;
             currentCustomerTitleKey = titleKey;
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
-            document.getElementById('pageTitle').innerText = customerTitle(titleKey);
+            setPageTitleSafe(customerTitle(titleKey));
             document.getElementById('dynamicPageContent').innerHTML = `
                 <section id="view-customer-filter" class="admin-view">
                     <div class="card card-custom">
