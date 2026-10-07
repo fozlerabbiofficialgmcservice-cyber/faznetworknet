@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   status VARCHAR(20) NOT NULL CHECK (status IN ('processed','unmatched','duplicate')),
   matched_username VARCHAR(100),
   raw_sms TEXT,
+  used BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -63,8 +64,11 @@ CREATE TABLE IF NOT EXISTS hotspot_vouchers (
 
 ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMPTZ;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS used BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_pppoe_users_profile ON pppoe_users(profile);
 CREATE INDEX IF NOT EXISTS idx_pppoe_users_disabled ON pppoe_users(disabled);
 CREATE INDEX IF NOT EXISTS idx_pppoe_users_synced_at ON pppoe_users(synced_at);
 CREATE INDEX IF NOT EXISTS idx_pppoe_profiles_synced_at ON pppoe_profiles(synced_at);
+CREATE INDEX IF NOT EXISTS idx_transactions_channel_created ON transactions(channel, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_used ON transactions(used);
