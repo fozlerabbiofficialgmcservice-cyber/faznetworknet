@@ -91,6 +91,15 @@ class MikroTikService {
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
     return this._withConnection("Hotspot user creation", async (connection) => { await connection.write("/ip/hotspot/user/add", this._writeParams({ name: username, password, profile, comment: data.comment })); return { username }; });
   }
+  async kickActiveHotspotUser(username) {
+    const name=this._str(username).trim(); if(!name) throw new Error("Hotspot username is required.");
+    return this._withConnection("active Hotspot user kick", async (connection) => {
+      const rows=await connection.write("/ip/hotspot/active/print");
+      const matches=(Array.isArray(rows)?rows:[]).filter((item)=>this._str(item.user)===name && item[".id"]);
+      for(const session of matches) await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
+      return {username:name,kicked:matches.length>0,count:matches.length};
+    });
+  }
   async removeHotspotUser(username) {
     const name=this._str(username).trim(); if(!name) throw new Error("Hotspot username is required.");
     return this._withConnection("Hotspot user removal", async (connection) => {
