@@ -1,10 +1,212 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FAZ NETWORK Enterprise Admin</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script><link rel="stylesheet" href="/css/admin.css"></head>
-<body class="bg-slate-100 text-slate-900"><div class="min-h-screen flex">
-<aside class="w-72 bg-slate-950 text-white hidden lg:flex flex-col"><div class="p-6 border-b border-slate-800"><div class="text-2xl font-black">FAZ <span class="text-cyan-400">NETWORK</span></div><div class="text-xs text-slate-500">Enterprise ISP Control Center</div></div><nav id="side" class="flex-1 overflow-y-auto p-4 space-y-1"></nav><div class="p-4 border-t border-slate-800 text-xs text-slate-500">RB4011 • MikroTik Automation</div></aside>
-<div class="flex-1 min-w-0"><header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b p-4 flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest text-slate-400">Control Center</p><h1 id="page-title" class="text-xl font-black">Dashboard</h1></div><div class="flex gap-2"><button id="lang" class="px-3 py-2 rounded-xl border font-bold">বাংলা</button><span id="router-badge" class="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-xs font-bold">Router offline</span></div></header>
-<main class="p-4 lg:p-7"><section id="dashboard-view" class="space-y-6"><div class="grid grid-cols-2 xl:grid-cols-4 gap-4"><div class="card"><span data-i18n="collection">Today Collection</span><b id="collection">৳0</b></div><div class="card"><span>CPU</span><b id="cpu">—</b></div><div class="card"><span>RAM</span><b id="ram">—</b></div><div class="card"><span>PPPoE Online</span><b id="online">—</b></div></div>
-<div class="card"><div class="flex justify-between"><div><h2 class="font-black text-lg">Live Traffic</h2><p class="text-sm text-slate-400">RB4011 interface TX/RX</p></div><select id="iface" class="rounded-xl border px-3 py-2"></select></div><canvas id="traffic" class="mt-4 h-72"></canvas></div>
-<div class="card"><div class="flex justify-between items-center"><h2 class="font-black">Recent Payments</h2><a href="/transactions" class="text-cyan-700 font-bold text-sm">All Payments →</a></div><div id="payments" class="mt-3 space-y-2"></div></div></section>
-<section id="module-view" class="hidden space-y-6"></section></main></div></div>
-<script src="/js/admin.js"></script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FAZ NETWORK — Enterprise Admin</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--primary:#0a3d2e;--hover:#0d4d3a;--accent:#10b981;--link:#a7f3d0;--bg:#f8fafc;--border:#e2e8f0;--muted:#64748b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#0f172a;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.sidebar{width:260px;position:fixed;inset:0 auto 0 0;background:var(--primary);color:#fff;z-index:1040;overflow-y:auto;transition:transform .25s ease}
+.brand{padding:24px 20px 18px;border-bottom:1px solid rgba(167,243,208,.14)}
+.brand-name{font-size:25px;font-weight:900;letter-spacing:.02em}.brand-sub{font-size:11px;color:#86efac;margin-top:4px}
+.lang-wrap{padding:14px 16px;border-bottom:1px solid rgba(167,243,208,.12)}
+.lang-select{background:#0d4d3a;color:#fff;border:1px solid rgba(167,243,208,.25);width:100%;border-radius:9px;padding:9px 10px;font-weight:700}
+.nav-wrap{padding:12px 10px 28px}.nav-section{margin:8px 0}.nav-heading{color:#6ee7b7;text-transform:uppercase;letter-spacing:.1em;font-size:10px;font-weight:900;padding:9px 10px}
+.nav-link,.submenu-link{width:100%;display:flex;align-items:center;gap:10px;border:0;background:transparent;color:var(--link);text-decoration:none;text-align:left;padding:9px 11px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.nav-link:hover,.submenu-link:hover,.nav-link.active{background:var(--hover);color:#fff}.nav-link .chevron{margin-left:auto;transition:transform .2s}.nav-link.open .chevron{transform:rotate(180deg)}
+.submenu{display:none;padding:3px 0 5px 20px}.submenu.show{display:block}.submenu-link{font-size:12px;padding:8px 10px;color:#86efac}
+.main-shell{margin-left:260px;min-height:100vh}.topbar{height:70px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 26px;position:sticky;top:0;z-index:1030}
+.page-kicker{font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.14em}.page-title{font-weight:900;margin:2px 0 0;font-size:21px}.router-status{font-size:12px;font-weight:800;border-radius:999px;padding:8px 12px}.status-off{background:#fee2e2;color:#991b1b}.status-on{background:#d1fae5;color:#065f46}
+.content{padding:26px}.card-clean{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 5px 20px rgba(15,23,42,.045)}.stat-card{padding:20px;height:100%}.stat-icon{width:42px;height:42px;border-radius:11px;background:#d1fae5;color:#047857;display:grid;place-items:center;font-size:19px}.stat-label{font-size:12px;color:var(--muted);font-weight:700;margin-top:14px}.stat-value{font-size:25px;font-weight:900;margin-top:2px}
+.section-card{padding:20px}.section-title{font-size:16px;font-weight:900}.section-subtitle{font-size:12px;color:var(--muted)}.form-control,.form-select{border-color:#cbd5e1;border-radius:10px;padding:10px 12px}.form-control:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 .2rem rgba(16,185,129,.12)}
+.btn-green{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:800;border-radius:10px;padding:10px 16px}.btn-green:hover{background:var(--hover);border-color:var(--hover);color:#fff}
+.table-wrap{overflow:auto}.table{margin:0}.table th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.04em;white-space:nowrap}.table td{font-size:13px;vertical-align:middle}.badge-soft{background:#d1fae5;color:#065f46}.empty{padding:28px;text-align:center;color:#94a3b8}
+.mobile-toggle{display:none;border:0;background:var(--primary);color:#fff;border-radius:8px;width:40px;height:40px}.sidebar-overlay{display:none}
+.module{display:none}.module.active{display:block}
+@media(max-width:991.98px){.sidebar{transform:translateX(-100%)}.sidebar.show{transform:translateX(0)}.main-shell{margin-left:0}.mobile-toggle{display:inline-grid;place-items:center}.sidebar-overlay.show{display:block;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1035}.content{padding:16px}.topbar{padding:0 15px}.desktop-only{display:none!important}}
+</style>
+</head>
+<body>
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+<aside id="sidebar" class="sidebar">
+  <div class="brand"><div class="brand-name">FAZ NETWORK</div><div class="brand-sub">Enterprise ISP Control Center</div></div>
+  <div class="lang-wrap">
+    <select id="languageSwitcher" class="lang-select" onchange="updateLanguage(this.value)" aria-label="Language">
+      <option value="en">English (USA)</option><option value="bn">বাংলা</option>
+    </select>
+  </div>
+  <nav class="nav-wrap">
+    <div class="nav-section"><div class="nav-heading" data-i18n="customerGroup">Customer</div>
+      <button class="nav-link" onclick="toggleSubmenu('customerSub',this)"><i class="bi bi-people"></i><span data-i18n="customerGroup">Customer</span><i class="bi bi-chevron-down chevron"></i></button>
+      <div id="customerSub" class="submenu">
+        <a class="submenu-link" href="#" onclick="loadContentPage('customers');return false" data-i18n="allCustomer">All Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('addCustomer');return false" data-i18n="addCustomer">Add Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('online');return false" data-i18n="onlineCustomer">Online Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('offline');return false" data-i18n="offlineCustomer">Offline Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('active');return false" data-i18n="activeCustomer">Active Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('expired');return false" data-i18n="expireCustomer">Expire Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('expireNear');return false" data-i18n="expireTodayYesterday">Expire Today & Yesterday</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('expire7');return false" data-i18n="expire7Days">Expire in 7 Days</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('newCustomer');return false" data-i18n="newCustomer">New Customer</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('due');return false" data-i18n="dueCollection">Due Collection</a>
+      </div>
+    </div>
+    <div class="nav-section"><button class="nav-link" onclick="toggleSubmenu('reportSub',this)"><i class="bi bi-bar-chart"></i><span data-i18n="reportGroup">Report</span><i class="bi bi-chevron-down chevron"></i></button>
+      <div id="reportSub" class="submenu">
+        <a class="submenu-link" href="#" onclick="loadContentPage('reports');return false" data-i18n="monthlyCollectionDue">Monthly Collection & Due</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('sales');return false" data-i18n="monthlySales">Monthly Sales</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('invoice');return false" data-i18n="invoiceReport">Invoice Report</a>
+      </div>
+    </div>
+    <div class="nav-section"><button class="nav-link" onclick="toggleSubmenu('paymentSub',this)"><i class="bi bi-wallet2"></i><span data-i18n="paymentsGroup">Payments</span><i class="bi bi-chevron-down chevron"></i></button>
+      <div id="paymentSub" class="submenu">
+        <a class="submenu-link" href="#" onclick="loadContentPage('pending');return false" data-i18n="pendingInvoice">Pending Invoice</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('payments');return false" data-i18n="allPayments">All Payments</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('requests');return false" data-i18n="paymentRequest">Payment Request</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('bkash');return false" data-i18n="bkashPayments">bKash Payments</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('nagad');return false" data-i18n="nagadPayments">Nagad Payments</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('rocket');return false" data-i18n="rocketPayments">Rocket Payments</a>
+      </div>
+    </div>
+    <div class="nav-section"><button class="nav-link" onclick="toggleSubmenu('hotspotSub',this)"><i class="bi bi-wifi"></i><span data-i18n="hotspotGroup">Hotspot</span><i class="bi bi-chevron-down chevron"></i></button>
+      <div id="hotspotSub" class="submenu">
+        <a class="submenu-link" href="#" onclick="loadContentPage('hotspot');return false" data-i18n="hotspotDashboard">Dashboard</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('hotspotUsers');return false" data-i18n="allUsers">All Users</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('hotspotActive');return false" data-i18n="activeUsers">Active Users</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('hotspotOnline');return false" data-i18n="onlineUsers">Online Users</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('hotspotProfiles');return false" data-i18n="profiles">Profiles</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('hotspotServer');return false" data-i18n="serverProfiles">Server Profiles</a>
+      </div>
+    </div>
+    <div class="nav-section"><button class="nav-link" onclick="toggleSubmenu('coreSub',this)"><i class="bi bi-hdd-network"></i><span data-i18n="coreSystem">Core System</span><i class="bi bi-chevron-down chevron"></i></button>
+      <div id="coreSub" class="submenu">
+        <a class="submenu-link" href="#" onclick="loadContentPage('pppoe');return false" data-i18n="pppoe">PPPoE</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('devices');return false" data-i18n="devices">Devices</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('plans');return false" data-i18n="plans">Plan & Packages</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('pools');return false" data-i18n="ipPools">IP Pools</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('olt');return false" data-i18n="oltManagement">OLT Management</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('monitor');return false" data-i18n="monitor">Monitor</a>
+        <a class="submenu-link" href="#" onclick="loadContentPage('diagram');return false" data-i18n="networkDiagram">Network Diagram</a>
+      </div>
+    </div>
+    <div class="nav-section"><div class="nav-heading" data-i18n="general">General</div>
+      <a class="nav-link" href="#" onclick="loadContentPage('settings');return false"><i class="bi bi-gear"></i><span data-i18n="generalSetting">General Setting</span></a>
+      <a class="nav-link" href="#" onclick="loadContentPage('vpn');return false"><i class="bi bi-shield-lock"></i><span data-i18n="vpnServer">VPN Server</span></a>
+      <a class="nav-link" href="#" onclick="loadContentPage('support');return false"><i class="bi bi-headset"></i><span data-i18n="accountSupport">Account & Support</span></a>
+      <a class="nav-link" href="#" onclick="loadContentPage('expenses');return false"><i class="bi bi-receipt"></i><span data-i18n="expenses">Expenses</span></a>
+      <a class="nav-link" href="#" onclick="loadContentPage('hr');return false"><i class="bi bi-person-badge"></i><span data-i18n="hr">HR</span></a>
+      <a class="nav-link" href="#" onclick="loadContentPage('tracking');return false"><i class="bi bi-geo-alt"></i><span data-i18n="liveTracking">Live Tracking</span></a>
+      <a class="nav-link" href="#" onclick="loadContentPage('reseller');return false"><i class="bi bi-person-vcard"></i><span data-i18n="userReseller">User & Reseller</span></a>
+    </div>
+  </nav>
+</aside>
+
+<div class="main-shell">
+  <header class="topbar">
+    <div class="d-flex align-items-center gap-3">
+      <button class="mobile-toggle" onclick="toggleSidebar(true)"><i class="bi bi-list"></i></button>
+      <div><div class="page-kicker">FAZ NETWORK</div><h1 id="pageTitle" class="page-title">Dashboard</h1></div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-light border rounded-pill desktop-only" onclick="updateLanguage(document.getElementById('languageSwitcher').value==='en'?'bn':'en')"><i class="bi bi-translate"></i></button>
+      <span id="routerStatus" class="router-status status-off"><i class="bi bi-circle-fill me-1"></i><span data-i18n="routerOffline">Router offline</span></span>
+    </div>
+  </header>
+
+  <main class="content">
+    <section id="dashboard" class="module active">
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3"><div class="card-clean stat-card"><div class="stat-icon"><i class="bi bi-cash-stack"></i></div><div class="stat-label" data-i18n="todayCollection">Today Collection</div><div id="collection" class="stat-value">৳0</div></div></div>
+        <div class="col-6 col-xl-3"><div class="card-clean stat-card"><div class="stat-icon"><i class="bi bi-cpu"></i></div><div class="stat-label">CPU</div><div id="cpu" class="stat-value">—</div></div></div>
+        <div class="col-6 col-xl-3"><div class="card-clean stat-card"><div class="stat-icon"><i class="bi bi-memory"></i></div><div class="stat-label">RAM</div><div id="ram" class="stat-value">—</div></div></div>
+        <div class="col-6 col-xl-3"><div class="card-clean stat-card"><div class="stat-icon"><i class="bi bi-people"></i></div><div class="stat-label" data-i18n="pppoeOnline">PPPoE Online</div><div id="online" class="stat-value">—</div></div></div>
+      </div>
+      <div class="card-clean section-card mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3"><div><div class="section-title" data-i18n="liveTraffic">Live Traffic</div><div class="section-subtitle" data-i18n="trafficSubtitle">MikroTik interface TX/RX monitoring</div></div><select id="iface" class="form-select" style="max-width:240px"></select></div>
+        <div style="height:330px;margin-top:18px"><canvas id="trafficChart"></canvas></div>
+      </div>
+      <div class="card-clean section-card"><div class="d-flex justify-content-between align-items-center mb-3"><div class="section-title" data-i18n="recentPayments">Recent Payments</div><a href="/transactions" class="text-success fw-bold text-decoration-none small" data-i18n="allPayments">All Payments</a></div><div id="payments"></div></div>
+    </section>
+
+    <section id="contentPage" class="module">
+      <div id="pageContent"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const translations={
+en:{
+customerGroup:"Customer",reportGroup:"Report",paymentsGroup:"Payments",hotspotGroup:"Hotspot",coreSystem:"Core System",general:"General",
+allCustomer:"All Customer",addCustomer:"Add Customer",onlineCustomer:"Online Customer",offlineCustomer:"Offline Customer",activeCustomer:"Active Customer",expireCustomer:"Expire Customer",expireTodayYesterday:"Expire Today & Yesterday",expire7Days:"Expire in 7 Days",newCustomer:"New Customer",dueCollection:"Due Collection",
+monthlyCollectionDue:"Monthly Collection & Due",monthlySales:"Monthly Sales",invoiceReport:"Invoice Report",pendingInvoice:"Pending Invoice",allPayments:"All Payments",paymentRequest:"Payment Request",bkashPayments:"bKash Payments",nagadPayments:"Nagad Payments",rocketPayments:"Rocket Payments",
+hotspotDashboard:"Dashboard",allUsers:"All Users",activeUsers:"Active Users",onlineUsers:"Online Users",profiles:"Profiles",serverProfiles:"Server Profiles",pppoe:"PPPoE",devices:"Devices",plans:"Plan & Packages",ipPools:"IP Pools",oltManagement:"OLT Management",monitor:"Monitor",networkDiagram:"Network Diagram",
+generalSetting:"General Setting",vpnServer:"VPN Server",accountSupport:"Account & Support",expenses:"Expenses",hr:"HR",liveTracking:"Live Tracking",userReseller:"User & Reseller",
+todayCollection:"Today Collection",pppoeOnline:"PPPoE Online",liveTraffic:"Live Traffic",trafficSubtitle:"MikroTik interface TX/RX monitoring",recentPayments:"Recent Payments",routerOffline:"Router offline",routerOnline:"Router online",
+addNewCustomer:"Add New Customer",username:"Username",password:"Password",profile:"Profile",callerId:"Caller ID",phoneComment:"Phone / Comment",createCustomer:"Create Customer",customerCreated:"Customer created and synchronized successfully.",customerError:"Unable to create customer.",pppoeUsers:"PPPoE Users",status:"Status",action:"Action",kick:"Kick",enable:"Enable",disable:"Disable",active:"Active",disabled:"Disabled",noUsers:"No PPPoE users found.",module:"Module",moduleShell:"This module is connected to the enterprise API engine.",openPppoe:"Open PPPoE",openHotspot:"Open Hotspot",openPayments:"Open Payments",paymentTransactions:"Payment Transactions",channel:"Channel",trxId:"TrxID",sender:"Sender",amount:"Amount",used:"Used",yes:"Yes",no:"No",noPayments:"No payments.",mikrotikMonitor:"MikroTik Monitor",uptime:"Uptime",networkDiagramText:"Network diagram and device topology are available from the connected network modules."
+},
+bn:{
+customerGroup:"গ্রাহক",reportGroup:"রিপোর্ট",paymentsGroup:"পেমেন্ট",hotspotGroup:"হটস্পট",coreSystem:"কোর সিস্টেম",general:"সাধারণ",
+allCustomer:"সকল গ্রাহক",addCustomer:"গ্রাহক যোগ",onlineCustomer:"অনলাইন গ্রাহক",offlineCustomer:"অফলাইন গ্রাহক",activeCustomer:"সক্রিয় গ্রাহক",expireCustomer:"মেয়াদ শেষ গ্রাহক",expireTodayYesterday:"আজ ও গতকাল মেয়াদ শেষ",expire7Days:"৭ দিনে মেয়াদ শেষ",newCustomer:"নতুন গ্রাহক",dueCollection:"বকেয়া আদায়",
+monthlyCollectionDue:"মাসিক আদায় ও বকেয়া",monthlySales:"মাসিক বিক্রয়",invoiceReport:"ইনভয়েস রিপোর্ট",pendingInvoice:"পেন্ডিং ইনভয়েস",allPayments:"সকল পেমেন্ট",paymentRequest:"পেমেন্ট রিকোয়েস্ট",bkashPayments:"বিকাশ পেমেন্ট",nagadPayments:"নগদ পেমেন্ট",rocketPayments:"রকেট পেমেন্ট",
+hotspotDashboard:"ড্যাশবোর্ড",allUsers:"সকল ইউজার",activeUsers:"সক্রিয় ইউজার",onlineUsers:"অনলাইন ইউজার",profiles:"প্রোফাইল",serverProfiles:"সার্ভার প্রোফাইল",pppoe:"PPPoE",devices:"ডিভাইস",plans:"প্ল্যান ও প্যাকেজ",ipPools:"IP পুল",oltManagement:"OLT ম্যানেজমেন্ট",monitor:"মনিটর",networkDiagram:"নেটওয়ার্ক ডায়াগ্রাম",
+generalSetting:"সাধারণ সেটিং",vpnServer:"VPN সার্ভার",accountSupport:"অ্যাকাউন্ট ও সাপোর্ট",expenses:"খরচ",hr:"HR",liveTracking:"লাইভ ট্র্যাকিং",userReseller:"ইউজার ও রিসেলার",
+todayCollection:"আজকের আদায়",pppoeOnline:"PPPoE অনলাইন",liveTraffic:"লাইভ ট্রাফিক",trafficSubtitle:"MikroTik ইন্টারফেস TX/RX মনিটরিং",recentPayments:"সাম্প্রতিক পেমেন্ট",routerOffline:"রাউটার অফলাইন",routerOnline:"রাউটার অনলাইন",
+addNewCustomer:"নতুন গ্রাহক যোগ",username:"ইউজারনেম",password:"পাসওয়ার্ড",profile:"প্রোফাইল",callerId:"কলার আইডি",phoneComment:"ফোন / মন্তব্য",createCustomer:"গ্রাহক তৈরি করুন",customerCreated:"গ্রাহক সফলভাবে তৈরি ও সিঙ্ক হয়েছে।",customerError:"গ্রাহক তৈরি করা যায়নি।",pppoeUsers:"PPPoE ইউজার",status:"স্ট্যাটাস",action:"অ্যাকশন",kick:"কিক",enable:"চালু",disable:"বন্ধ",active:"সক্রিয়",disabled:"নিষ্ক্রিয়",noUsers:"কোনো PPPoE ইউজার পাওয়া যায়নি।",module:"মডিউল",moduleShell:"এই মডিউলটি এন্টারপ্রাইজ API ইঞ্জিনের সাথে সংযুক্ত।",openPppoe:"PPPoE খুলুন",openHotspot:"হটস্পট খুলুন",openPayments:"পেমেন্ট খুলুন",paymentTransactions:"পেমেন্ট ট্রানজেকশন",channel:"চ্যানেল",trxId:"TrxID",sender:"প্রেরক",amount:"পরিমাণ",used:"ব্যবহৃত",yes:"হ্যাঁ",no:"না",noPayments:"কোনো পেমেন্ট নেই।",mikrotikMonitor:"MikroTik মনিটর",uptime:"আপটাইম",networkDiagramText:"নেটওয়ার্ক ডায়াগ্রাম ও ডিভাইস টপোলজি সংযুক্ত নেটওয়ার্ক মডিউল থেকে পাওয়া যায়।"
+}};
+let currentLanguage="en",trafficChart=null,trafficTimer=null;
+const esc=v=>{const d=document.createElement("div");d.textContent=v==null?"":v;return d.innerHTML};
+const t=k=>(translations[currentLanguage]&&translations[currentLanguage][k])||translations.en[k]||k;
+const api=(url,options={})=>fetch(url,Object.assign({cache:"no-store",headers:{"Content-Type":"application/json"}},options)).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok||d.success===false)throw new Error(d.error||"Request failed");return d});
+
+function toggleSubmenu(id,button){const el=document.getElementById(id);if(!el)return;const open=el.classList.toggle("show");button.classList.toggle("open",open)}
+function toggleSidebar(force){const sb=document.getElementById("sidebar"),ov=document.getElementById("sidebarOverlay");const show=typeof force==="boolean"?force:!sb.classList.contains("show");sb.classList.toggle("show",show);ov.classList.toggle("show",show)}
+function updateLanguage(language){
+ currentLanguage=language==="bn"?"bn":"en";document.getElementById("languageSwitcher").value=currentLanguage;
+ document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.getAttribute("data-i18n");if(translations[currentLanguage][key])el.textContent=translations[currentLanguage][key]});
+ if(document.getElementById("pageTitle").dataset.key)document.getElementById("pageTitle").textContent=t(document.getElementById("pageTitle").dataset.key);
+ loadDashboard(); 
+}
+function setTitle(label,key){const el=document.getElementById("pageTitle");el.dataset.key=key||"";el.textContent=key?t(key):label}
+function loadContentPage(page){
+ toggleSidebar(false);
+ const dash=document.getElementById("dashboard"),content=document.getElementById("contentPage"),box=document.getElementById("pageContent");dash.classList.remove("active");content.classList.add("active");
+ const titles={customers:["allCustomer","All Customer"],addCustomer:["addNewCustomer","Add New Customer"],online:["onlineCustomer","Online Customer"],offline:["offlineCustomer","Offline Customer"],active:["activeCustomer","Active Customer"],expired:["expireCustomer","Expire Customer"],expireNear:["expireTodayYesterday","Expire Today & Yesterday"],expire7:["expire7Days","Expire in 7 Days"],newCustomer:["newCustomer","New Customer"],due:["dueCollection","Due Collection"],payments:["allPayments","All Payments"],bkash:["bkashPayments","bKash Payments"],nagad:["nagadPayments","Nagad Payments"],rocket:["rocketPayments","Rocket Payments"],pppoe:["pppoe","PPPoE"],monitor:["monitor","Monitor"],devices:["devices","Devices"],hotspot:["hotspotDashboard","Dashboard"],hotspotUsers:["allUsers","All Users"],hotspotActive:["activeUsers","Active Users"],hotspotOnline:["onlineUsers","Online Users"],hotspotProfiles:["profiles","Profiles"],hotspotServer:["serverProfiles","Server Profiles"],reports:["monthlyCollectionDue","Monthly Collection & Due"],sales:["monthlySales","Monthly Sales"],invoice:["invoiceReport","Invoice Report"],pending:["pendingInvoice","Pending Invoice"],requests:["paymentRequest","Payment Request"],settings:["generalSetting","General Setting"],vpn:["vpnServer","VPN Server"],support:["accountSupport","Account & Support"],expenses:["expenses","Expenses"],hr:["hr","HR"],tracking:["liveTracking","Live Tracking"],reseller:["userReseller","User & Reseller"],plans:["plans","Plan & Packages"],pools:["ipPools","IP Pools"],olt:["oltManagement","OLT Management"],diagram:["networkDiagram","Network Diagram"]};
+ const meta=titles[page]||["module","Module"];setTitle(meta[1],meta[0]);
+ if(page==="addCustomer"||page==="pppoe"){renderCustomerPage();return}
+ if(["payments","bkash","nagad","rocket"].includes(page)){renderPayments(page==="payments"?"":page);return}
+ if(page==="monitor"||page==="devices"){renderMonitor();return}
+ if(page==="hotspot"||page==="hotspotUsers"||page==="hotspotActive"||page==="hotspotOnline"||page==="hotspotProfiles"||page==="hotspotServer"){box.innerHTML='<div class="card-clean section-card"><div class="section-title">'+esc(t("hotspotDashboard"))+'</div><div class="section-subtitle mt-1">Hotspot API module</div><div class="mt-4"><a class="btn btn-green" href="/hotspot">Open Hotspot Engine</a></div></div>';return}
+ box.innerHTML='<div class="card-clean section-card"><div class="section-title">'+esc(t(meta[0]))+'</div><div class="section-subtitle mt-2">'+esc(t("moduleShell"))+'</div><div class="d-flex flex-wrap gap-2 mt-4"><a class="btn btn-green" href="/pppoe">'+esc(t("openPppoe"))+'</a><a class="btn btn-green" href="/hotspot">'+esc(t("openHotspot"))+'</a><a class="btn btn-green" href="/transactions">'+esc(t("openPayments"))+'</a></div></div>';
+}
+function renderCustomerPage(){
+ const box=document.getElementById("pageContent");
+ box.innerHTML='<div class="card-clean section-card mb-4"><div class="section-title">'+esc(t("addNewCustomer"))+'</div><div class="section-subtitle mb-4">PPPoE / MikroTik customer provisioning</div><form id="customerForm" class="row g-3"><div class="col-md-6"><label class="form-label fw-bold">'+esc(t("username"))+'</label><input name="username" class="form-control" required></div><div class="col-md-6"><label class="form-label fw-bold">'+esc(t("password"))+'</label><input name="password" class="form-control" required></div><div class="col-md-6"><label class="form-label fw-bold">'+esc(t("profile"))+'</label><select id="customerProfile" name="profile" class="form-select" required></select></div><div class="col-md-6"><label class="form-label fw-bold">'+esc(t("callerId"))+'</label><input name="callerId" class="form-control"></div><div class="col-12"><label class="form-label fw-bold">'+esc(t("phoneComment"))+'</label><input name="comment" class="form-control"></div><div class="col-12 d-flex align-items-center gap-3"><button class="btn btn-green" type="submit"><i class="bi bi-person-plus me-1"></i>'+esc(t("createCustomer"))+'</button><span id="customerResult" class="small"></span></div></form></div><div class="card-clean section-card"><div class="section-title mb-3">'+esc(t("pppoeUsers"))+'</div><div id="userTable" class="table-wrap"></div></div>';
+ api("/api/pppoe/profiles").then(d=>{document.getElementById("customerProfile").innerHTML=(d.profiles||[]).map(x=>'<option value="'+esc(x.name)+'">'+esc(x.name)+'</option>').join("")}).catch(()=>{});
+ loadUsers();
+ document.getElementById("customerForm").onsubmit=async e=>{e.preventDefault();const result=document.getElementById("customerResult");result.textContent="";try{await api("/api/pppoe/users/create",{method:"POST",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});result.className="small text-success fw-bold";result.textContent=t("customerCreated");e.target.reset();await loadUsers()}catch(err){result.className="small text-danger fw-bold";result.textContent=err.message||t("customerError")}};
+}
+async function loadUsers(){const box=document.getElementById("userTable");if(!box)return;try{const d=await api("/api/pppoe/users");const rows=d.users||[];box.innerHTML=rows.length?'<table class="table align-middle"><thead><tr><th>'+t("username")+'</th><th>'+t("profile")+'</th><th>'+t("status")+'</th><th>'+t("action")+'</th></tr></thead><tbody>'+rows.map(x=>'<tr><td class="fw-bold">'+esc(x.username)+'</td><td>'+esc(x.profile||"—")+'</td><td><span class="badge badge-soft rounded-pill">'+esc(x.disabled?t("disabled"):t("active"))+'</span></td><td><button class="btn btn-sm btn-outline-dark me-1" data-kick="'+esc(x.username)+'">'+t("kick")+'</button><button class="btn btn-sm btn-green" data-toggle="'+esc(x.username)+'" data-disabled="'+(!x.disabled)+'">'+(x.disabled?t("enable"):t("disable"))+'</button></td></tr>').join("")+'</tbody></table>':'<div class="empty">'+t("noUsers")+'</div>';box.querySelectorAll("[data-kick]").forEach(b=>b.onclick=async()=>{await api("/api/pppoe/kick-user",{method:"POST",body:JSON.stringify({username:b.dataset.kick})});loadUsers()});box.querySelectorAll("[data-toggle]").forEach(b=>b.onclick=async()=>{await api("/api/pppoe/toggle-user",{method:"POST",body:JSON.stringify({username:b.dataset.toggle,disabled:b.dataset.disabled==="true"})});loadUsers()})}catch(e){box.innerHTML='<div class="empty text-danger">'+esc(e.message)+'</div>}}
+async function renderPayments(filter){const box=document.getElementById("pageContent");box.innerHTML='<div class="card-clean section-card"><div class="section-title mb-3">'+esc(t("paymentTransactions"))+'</div><div id="txTable" class="table-wrap"></div></div>';try{const d=await api("/api/payments/transactions"+(filter?"?channel="+encodeURIComponent(filter):""));const rows=d.transactions||[];document.getElementById("txTable").innerHTML=rows.length?'<table class="table"><thead><tr><th>'+t("channel")+'</th><th>'+t("trxId")+'</th><th>'+t("sender")+'</th><th>'+t("amount")+'</th><th>'+t("status")+'</th><th>'+t("used")+'</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+esc(x.channel)+'</td><td class="fw-bold">'+esc(x.trx_id)+'</td><td>'+esc(x.sender_phone||"—")+'</td><td>৳'+Number(x.amount).toFixed(2)+'</td><td>'+esc(x.status)+'</td><td>'+(x.used?t("yes"):t("no"))+'</td></tr>').join("")+'</tbody></table>':'<div class="empty">'+t("noPayments")+'</div>'}catch(e){document.getElementById("txTable").innerHTML='<div class="empty text-danger">'+esc(e.message)+'</div>'}}
+async function renderMonitor(){const box=document.getElementById("pageContent");box.innerHTML='<div class="card-clean section-card"><div class="section-title">'+esc(t("mikrotikMonitor"))+'</div><div class="row g-3 mt-1"><div class="col-md-4"><div class="p-3 rounded-3 bg-light"><small>CPU</small><div id="mc" class="fs-3 fw-black fw-bold">—</div></div></div><div class="col-md-4"><div class="p-3 rounded-3 bg-light"><small>RAM</small><div id="mr" class="fs-3 fw-bold">—</div></div></div><div class="col-md-4"><div class="p-3 rounded-3 bg-light"><small>'+esc(t("uptime"))+'</small><div id="mu" class="fs-6 fw-bold mt-2">—</div></div></div></div><div class="mt-4" style="height:300px"><canvas id="monitorChart"></canvas></div></div>';try{const r=await api("/api/router/resources");document.getElementById("mc").textContent=r.cpuLoad+"%";document.getElementById("mr").textContent=r.memoryUsagePercent+"%";document.getElementById("mu").textContent=r.uptime}catch(e){}}
+async function loadDashboard(){
+ try{const [r,p,i,s]=await Promise.all([api("/api/router/resources"),api("/api/pppoe/active"),api("/api/router/interfaces"),api("/api/payments/summary")]);
+ document.getElementById("cpu").textContent=r.cpuLoad+"%";document.getElementById("ram").textContent=r.memoryUsagePercent+"%";document.getElementById("online").textContent=(p.sessions||[]).length;document.getElementById("collection").textContent="৳"+Number((s.summary||{}).today_collection||0).toLocaleString();
+ const status=document.getElementById("routerStatus");status.className="router-status status-on";status.innerHTML='<i class="bi bi-circle-fill me-1"></i><span>'+esc(t("routerOnline"))+'</span>';
+ const sel=document.getElementById("iface");const current=sel.value;if(!sel.options.length)sel.innerHTML=(i.interfaces||[]).map(x=>'<option value="'+esc(x.name)+'">'+esc(x.name)+'</option>').join("");if(current)sel.value=current;
+ document.getElementById("payments").innerHTML=(s.recent||[]).map(x=>'<div class="d-flex justify-content-between align-items-center border-bottom py-2"><span><b>'+esc(String(x.channel).toUpperCase())+'</b> <span class="text-secondary">· '+esc(x.trx_id)+'</span></span><b>৳'+Number(x.amount).toFixed(2)+'</b></div>').join("")||'<div class="empty">'+t("noPayments")+'</div>';
+ if(sel.value&&!trafficTimer)startTraffic(sel.value);
+ }catch(e){const status=document.getElementById("routerStatus");status.className="router-status status-off";status.innerHTML='<i class="bi bi-circle-fill me-1"></i><span>'+esc(t("routerOffline"))+'</span>'}
+}
+async function pollTraffic(name){if(!name)return;try{const d=await api("/api/router/traffic?interface="+encodeURIComponent(name));if(!trafficChart){trafficChart=new Chart(document.getElementById("trafficChart"),{type:"line",data:{labels:[],datasets:[{label:"RX Mbps",data:[],tension:.3},{label:"TX Mbps",data:[],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{position:"bottom"}}}})}trafficChart.data.labels.push(new Date().toLocaleTimeString());trafficChart.data.datasets[0].data.push(d.rxMbps);trafficChart.data.datasets[1].data.push(d.txMbps);if(trafficChart.data.labels.length>30){trafficChart.data.labels.shift();trafficChart.data.datasets.forEach(x=>x.data.shift())}trafficChart.update()}catch(e){}}
+function startTraffic(name){if(trafficTimer)clearInterval(trafficTimer);pollTraffic(name);trafficTimer=setInterval(()=>pollTraffic(name),2500)}
+document.getElementById("iface").addEventListener("change",e=>startTraffic(e.target.value));
+loadDashboard();setInterval(loadDashboard,5000);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
