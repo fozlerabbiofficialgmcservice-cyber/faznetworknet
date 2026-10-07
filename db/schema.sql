@@ -32,8 +32,37 @@ CREATE TABLE IF NOT EXISTS pppoe_users (
   raw_config JSONB NOT NULL DEFAULT '{}'::jsonb,
   synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status TEXT NOT NULL DEFAULT 'active',
+  expiry_date TIMESTAMPTZ
 );
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id BIGSERIAL PRIMARY KEY,
+  channel VARCHAR(20) NOT NULL CHECK (channel IN ('bkash','nagad','rocket')),
+  trx_id VARCHAR(100) NOT NULL UNIQUE,
+  sender_phone VARCHAR(40),
+  amount NUMERIC(12,2) NOT NULL,
+  status VARCHAR(20) NOT NULL CHECK (status IN ('processed','unmatched','duplicate')),
+  matched_username VARCHAR(100),
+  raw_sms TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS hotspot_vouchers (
+  id BIGSERIAL PRIMARY KEY,
+  username VARCHAR(100) NOT NULL UNIQUE,
+  password VARCHAR(100) NOT NULL,
+  profile VARCHAR(100) NOT NULL,
+  validity VARCHAR(50) NOT NULL,
+  price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'unused' CHECK (status IN ('unused','active','expired')),
+  comment VARCHAR(500),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_pppoe_users_profile ON pppoe_users(profile);
 CREATE INDEX IF NOT EXISTS idx_pppoe_users_disabled ON pppoe_users(disabled);
