@@ -92,7 +92,7 @@ async function users(req, res) {
 
     if (filter === "active") {
       conditions.push("u.status = 'active'");
-      conditions.push("(u.expiry_date IS NULL OR u.expiry_date > NOW())");
+      conditions.push("u.expiry_date > NOW()");
       conditions.push("u.disabled = FALSE");
     } else if (filter === "left") {
       conditions.push("(LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE)");
