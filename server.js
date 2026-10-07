@@ -36,7 +36,7 @@ app.get("/router",(req,res)=>{
 
 app.use("/api/router",routerRoutes);
 app.use("/api/pppoe",pppoeRoutes);
-app.use("/api/payments",paymentRoutes);
+app.use("/api",paymentRoutes);
 app.use("/api/hotspot",hotspotRoutes);
 app.get("/pppoe",(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));
 app.get("/transactions",(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));
