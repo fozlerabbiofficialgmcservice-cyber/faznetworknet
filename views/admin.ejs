@@ -162,6 +162,13 @@
             border-color: var(--accent-color);
             box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
         }
+        .customer-live-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
+        .customer-live-table td { vertical-align: middle; font-size: 13px; }
+        .customer-status { min-width: 78px; }
+        .customer-session { font-size: 11px; line-height: 1.35; }
+        .customer-search-wrap { min-width: 260px; }
+        .customer-action-group .btn { min-width: 34px; }
+        .customer-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
         
         @media (max-width: 768px) {
             .sidebar { left: calc(-1 * var(--sidebar-width)); }
@@ -199,17 +206,17 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="switchView('all-customer')"><span data-key="all_customer">All Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="switchView('add-customer')"><span data-key="add_customer">Add Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="online_customer">Online Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="offline_customer">Offline Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="active_customer">Active Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="left_customer">Left Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="expire_customer">Expire Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="expire_today_yesterday">Expire Today & Yesterday</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="expire_7_days">Expire in 7 Days</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="new_customer">New Customer</span></a></li>
-                    <li><a href="javascript:void(0)"><span data-key="due_collection">Due Collection</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('all', 'all_customer')"><span data-key="all_customer">All Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="showAddCustomerForm()"><span data-key="add_customer">Add Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('online', 'online_customer')"><span data-key="online_customer">Online Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('offline', 'offline_customer')"><span data-key="offline_customer">Offline Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('active', 'active_customer')"><span data-key="active_customer">Active Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('left', 'left_customer')"><span data-key="left_customer">Left Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('expire', 'expire_customer')"><span data-key="expire_customer">Expire Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('expire_today_yesterday', 'expire_today_yesterday')"><span data-key="expire_today_yesterday">Expire Today & Yesterday</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('expire_7_days', 'expire_7_days')"><span data-key="expire_7_days">Expire in 7 Days</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('new', 'new_customer')"><span data-key="new_customer">New Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('due', 'due_collection')"><span data-key="due_collection">Due Collection</span></a></li>
                 </ul>
             </li>
 
@@ -503,7 +510,8 @@
                 'human_resource':'Human Resource','department':'Department','all_employees':'All Employees','added_employees':'Added Employees',
                 'live_tracking':'Live Tracking','google_map':'Google Map','user_reseller':'User & Reseller','sub_staff':'Sub-Staff',
                 'customer_management':'Customer Management','add_new_customer':'Add New Customer','label_fullname':'Full Name *','label_phone':'Phone Number *','label_username':'Username *','label_password':'Password *','label_package':'Package Selection *','label_billing_duration':'Billing Duration *','opt_1_month':'1 Month (30 Days)','btn_reset':'Reset','btn_save_customer':'Save Customer',
-                'ph_fullname':'e.g. John Doe','ph_phone':'e.g. 01700000000','ph_username':'pppoe_user','ph_password':'••••••••'
+                'ph_fullname':'e.g. John Doe','ph_phone':'e.g. 01700000000','ph_username':'pppoe_user','ph_password':'••••••••',
+                'customer_table':'Customer Records','search_customers':'Search customers...','full_name_phone':'Full Name / Phone','username':'Username','package_profile':'Package / Profile','ip_caller_id':'IP / Caller-ID','status_badge':'Status','expiry_date':'Expiry Date','actions':'Actions','online_status':'Online','offline_status':'Offline','expired_status':'Expired','kick':'Kick','enable':'Enable','disable':'Disable','view':'View','no_customers':'No customers found for this filter.','loading_customers':'Loading customers...','router_live':'Live MikroTik','uptime':'Uptime','view_customer':'Customer Details'
             },
             'bn': {
                 'brand':'FAZ NETWORK','dashboard':'ড্যাশবোর্ড','customer':'কাস্টমার','all_customer':'অল কাস্টমার','add_customer':'অ্যাড কাস্টমার',
@@ -520,7 +528,8 @@
                 'human_resource':'হিউম্যান রিসোর্স','department':'ডিপার্টমেন্ট','all_employees':'সব কর্মচারী','added_employees':'যুক্ত কর্মচারী',
                 'live_tracking':'লাইভ ট্র্যাকিং','google_map':'গুগল ম্যাপ','user_reseller':'ইউজার ও রিসেলার','sub_staff':'সাব-স্টাফ',
                 'customer_management':'কাস্টমার ম্যানেজমেন্ট','add_new_customer':'নতুন কাস্টমার যুক্ত করুন','label_fullname':'পূর্ণ নাম *','label_phone':'ফোন নম্বর *','label_username':'ইউজারনেম *','label_password':'পাসওয়ার্ড *','label_package':'প্যাকেজ নির্বাচন *','label_billing_duration':'বিলিং মেয়াদ *','opt_1_month':'১ মাস (৩০ দিন)','btn_reset':'রিসেট','btn_save_customer':'সংরক্ষণ করুন',
-                'ph_fullname':'যেমন: জন ডো','ph_phone':'যেমন: ০১৭০০০০০০০০','ph_username':'pppoe_user','ph_password':'••••••••'
+                'ph_fullname':'যেমন: জন ডো','ph_phone':'যেমন: ০১৭০০০০০০০০','ph_username':'pppoe_user','ph_password':'••••••••',
+                'customer_table':'কাস্টমার রেকর্ড','search_customers':'কাস্টমার খুঁজুন...','full_name_phone':'পূর্ণ নাম / ফোন','username':'ইউজারনেম','package_profile':'প্যাকেজ / প্রোফাইল','ip_caller_id':'IP / Caller-ID','status_badge':'স্ট্যাটাস','expiry_date':'মেয়াদ শেষ','actions':'অ্যাকশন','online_status':'অনলাইন','offline_status':'অফলাইন','expired_status':'এক্সপায়ার','kick':'কিক','enable':'চালু','disable':'বন্ধ','view':'দেখুন','no_customers':'এই ফিল্টারে কোনো কাস্টমার পাওয়া যায়নি।','loading_customers':'কাস্টমার লোড হচ্ছে...','router_live':'লাইভ MikroTik','uptime':'আপটাইম','view_customer':'কাস্টমার তথ্য'
             }
         };
 
@@ -544,11 +553,15 @@
         };
 
         let currentPaymentChannel = '';
+        let currentCustomerTitleKey = '';
+        let currentCustomerFilter = 'all';
+        let currentCustomerUsers = [];
         let trafficChart = null;
         let trafficTimer = null;
         let metricsTimer = null;
 
         function switchView(viewName, channel = '') {
+            currentCustomerTitleKey = '';
             const target = document.getElementById('view-' + viewName) ? viewName : 'dashboard';
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
             document.getElementById('view-' + target).style.display = 'block';
@@ -576,6 +589,9 @@
                 const key = el.getAttribute('data-placeholder-key');
                 if (translations[lang] && translations[lang][key]) el.placeholder = translations[lang][key];
             });
+            if (currentCustomerTitleKey && translations[lang]?.[currentCustomerTitleKey]) {
+                document.getElementById('pageTitle').innerText = translations[lang][currentCustomerTitleKey];
+            }
             localStorage.setItem('faz_preferred_lang', lang);
         }
 
@@ -596,25 +612,215 @@
             return data;
         }
 
-        async function fetchCustomers() {
-            const tbody = document.getElementById('pppoeUserList');
-            if (!tbody) return;
+        function showAddCustomerForm() {
+            switchView('add-customer');
+        }
+
+        function customerTitle(key) {
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            return translations[lang]?.[key] || translations.en[key] || key;
+        }
+
+        function customerStatus(user) {
+            if (user.computed_status === 'expired' || (user.expiry_date && new Date(user.expiry_date).getTime() <= Date.now())) {
+                return { key: 'expired_status', cls: 'bg-danger', online: false };
+            }
+            if (user.online) return { key: 'online_status', cls: 'bg-success', online: true };
+            return { key: 'offline_status', cls: 'bg-secondary', online: false };
+        }
+
+        function filterCustomerRows(query) {
+            const q = String(query || '').trim().toLowerCase();
+            document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+
+        function renderCustomerTable(users) {
+            currentCustomerUsers = users || [];
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            const t = translations[lang] || translations.en;
+            const content = document.getElementById('dynamicPageContent');
+            if (!content) return;
+
+            content.innerHTML = `
+                <section id="view-customer-filter" class="admin-view">
+                    <div class="card card-custom">
+                        <div class="card-custom-header flex-wrap">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-people text-success fs-5"></i>
+                                <span data-key="customer_table">${escapeHtml(t.customer_table)}</span>
+                                <span class="badge bg-success">${users.length}</span>
+                                <span class="badge bg-light text-success border"><i class="bi bi-broadcast"></i> <span data-key="router_live">${escapeHtml(t.router_live)}</span></span>
+                            </div>
+                            <div class="customer-search-wrap ms-auto mt-2 mt-md-0">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                    <input id="customerLiveSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="filterCustomerRows(this.value)">
+                                </div>
+                            </div>
+                            <button class="btn btn-outline-success btn-sm mt-2 mt-md-0" onclick="refreshCustomerSection()"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover mb-0 customer-live-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th data-key="full_name_phone">${escapeHtml(t.full_name_phone)}</th>
+                                        <th data-key="username">${escapeHtml(t.username)}</th>
+                                        <th data-key="package_profile">${escapeHtml(t.package_profile)}</th>
+                                        <th data-key="ip_caller_id">${escapeHtml(t.ip_caller_id)}</th>
+                                        <th data-key="status_badge">${escapeHtml(t.status_badge)}</th>
+                                        <th data-key="expiry_date">${escapeHtml(t.expiry_date)}</th>
+                                        <th data-key="actions">${escapeHtml(t.actions)}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="customerFilterBody">
+                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>`;
+
+            updateLanguage(lang);
+        }
+
+        function customerRowHtml(user, index, t) {
+            const status = customerStatus(user);
+            const fullName = user.comment || user.raw_config?.['full-name'] || user.raw_config?.name || '-';
+            const phone = user.phone || '-';
+            const ip = user.session_ip || user.remote_address || user.remoteAddress || '-';
+            const caller = user.session_caller_id || user.caller_id || '-';
+            const expiry = user.expiry_date ? new Date(user.expiry_date).toLocaleString() : '-';
+            const sessionMeta = status.online
+                ? `<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ${escapeHtml(t.uptime)}: ${escapeHtml(user.session_uptime || '-')}</div>`
+                : '';
+            const statusBadge = `<span class="badge ${status.cls} customer-status" data-key="${status.key}">${escapeHtml(t[status.key])}</span>${sessionMeta}`;
+            const disabled = Boolean(user.disabled);
+            const toggleLabel = disabled ? t.enable : t.disable;
+            const toggleIcon = disabled ? 'bi-toggle-on' : 'bi-toggle-off';
+            const safeUsername = encodeURIComponent(user.username || '');
+            return `<tr data-customer-row>
+                <td>${index}</td>
+                <td><div class="fw-semibold">${escapeHtml(fullName)}</div><div class="text-muted small">${escapeHtml(phone)}</div></td>
+                <td><strong>${escapeHtml(user.username)}</strong></td>
+                <td><span class="badge bg-info text-dark">${escapeHtml(user.profile || 'N/A')}</span></td>
+                <td><div class="customer-ip">${escapeHtml(ip)}</div><div class="text-muted small">${escapeHtml(caller)}</div></td>
+                <td>${statusBadge}</td>
+                <td>${escapeHtml(expiry)}</td>
+                <td>
+                    <div class="btn-group btn-group-sm customer-action-group">
+                        <button class="btn btn-outline-danger" title="${escapeHtml(t.kick)}" onclick="kickCustomerFromSection('${safeUsername}')"><i class="bi bi-power"></i></button>
+                        <button class="btn btn-outline-success" title="${escapeHtml(toggleLabel)}" onclick="toggleCustomerFromSection('${safeUsername}', ${!disabled})"><i class="bi ${toggleIcon}"></i></button>
+                        <button class="btn btn-outline-secondary" title="${escapeHtml(t.view)}" onclick="viewCustomerDetails('${safeUsername}')"><i class="bi bi-eye"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        async function loadCustomerSection(filterType, titleKey) {
+            currentCustomerFilter = filterType;
+            currentCustomerTitleKey = titleKey;
+            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+            document.getElementById('pageTitle').innerText = customerTitle(titleKey);
+            document.getElementById('dynamicPageContent').innerHTML = `
+                <section id="view-customer-filter" class="admin-view">
+                    <div class="card card-custom">
+                        <div class="card-custom-header"><i class="bi bi-hourglass-split text-success fs-5"></i><span data-key="loading_customers">Loading customers...</span></div>
+                        <div class="card-body text-center py-5"><div class="spinner-border text-success" role="status"></div></div>
+                    </div>
+                </section>`;
             try {
-                const data = await jsonFetch('/api/pppoe/users');
+                const data = await jsonFetch('/api/pppoe/users?filter=' + encodeURIComponent(filterType));
+                renderCustomerTable(data.users || []);
+            } catch (error) {
+                document.getElementById('dynamicPageContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error.message) + '</div>';
+            }
+            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
+        }
+
+        async function refreshCustomerSection() {
+            await loadCustomerSection(currentCustomerFilter, currentCustomerTitleKey || 'all_customer');
+        }
+
+        async function kickCustomerFromSection(encodedUsername) {
+            const username = decodeURIComponent(encodedUsername);
+            if (!confirm('Kick user ' + username + '?')) return;
+            try {
+                await jsonFetch('/api/pppoe/kick-user', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({username})
+                });
+                await refreshCustomerSection();
+            } catch (error) { alert(error.message); }
+        }
+
+        async function toggleCustomerFromSection(encodedUsername, disabled) {
+            const username = decodeURIComponent(encodedUsername);
+            try {
+                await jsonFetch('/api/pppoe/toggle-user', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({username, disabled})
+                });
+                await refreshCustomerSection();
+            } catch (error) { alert(error.message); }
+        }
+
+        function viewCustomerDetails(encodedUsername) {
+            const username = decodeURIComponent(encodedUsername);
+            const user = currentCustomerUsers.find(item => String(item.username) === username);
+            if (!user) return;
+            const session = user.session || {};
+            const lang = localStorage.getItem('faz_preferred_lang') || 'en';
+            const t = translations[lang] || translations.en;
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-person-circle text-success me-2"></i>${escapeHtml(t.view_customer)}: ${escapeHtml(user.username)}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-2">
+                                <div class="col-6"><small class="text-muted">${escapeHtml(t.full_name_phone)}</small><div>${escapeHtml(user.comment || '-')}</div><div>${escapeHtml(user.phone || '-')}</div></div>
+                                <div class="col-6"><small class="text-muted">${escapeHtml(t.package_profile)}</small><div>${escapeHtml(user.profile || '-')}</div></div>
+                                <div class="col-6"><small class="text-muted">${escapeHtml(t.ip_caller_id)}</small><div>${escapeHtml(user.session_ip || user.remote_address || '-')}</div><div>${escapeHtml(user.session_caller_id || user.caller_id || '-')}</div></div>
+                                <div class="col-6"><small class="text-muted">${escapeHtml(t.expiry_date)}</small><div>${escapeHtml(user.expiry_date ? new Date(user.expiry_date).toLocaleString() : '-')}</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            const instance = new bootstrap.Modal(modal);
+            modal.addEventListener('hidden.bs.modal', () => modal.remove());
+            instance.show();
+        }
+
+        async function fetchCustomers() {
+            try {
+                const data = await jsonFetch('/api/pppoe/users?filter=all');
                 const users = data.users || [];
+                const tbody = document.getElementById('pppoeUserList');
+                if (!tbody) return;
                 tbody.innerHTML = users.length ? users.map(u => {
                     const disabled = Boolean(u.disabled);
                     return '<tr>' +
                         '<td><strong>' + escapeHtml(u.username) + '</strong></td>' +
-                        '<td><span class="badge bg-info text-dark">' + escapeHtml(u.profile || u.profile_name || 'N/A') + '</span></td>' +
+                        '<td><span class="badge bg-info text-dark">' + escapeHtml(u.profile || 'N/A') + '</span></td>' +
                         '<td>' + escapeHtml(u.phone || '-') + '</td>' +
                         '<td><span class="badge ' + (disabled ? 'bg-danger' : 'bg-success') + '">' + (disabled ? 'Disabled' : 'Active') + '</span></td>' +
                         '<td>' + escapeHtml(u.expiry_date ? new Date(u.expiry_date).toLocaleString() : 'Active') + '</td>' +
-                        '<td><button class="btn btn-sm btn-outline-danger" onclick="kickUser(\'' + escapeHtml(u.username).replace(/'/g, "\\'") + '\')">Kick</button></td>' +
+                        '<td><button class="btn btn-sm btn-outline-danger" onclick="kickUser(\\'' + escapeHtml(u.username).replace(/'/g, "\\\\'") + '\\')">Kick</button></td>' +
                     '</tr>';
                 }).join('') : '<tr><td colspan="6" class="text-center py-3">No customers found. Click Sync MikroTik.</td></tr>';
             } catch (error) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger">' + escapeHtml(error.message) + '</td></tr>';
+                const tbody = document.getElementById('pppoeUserList');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-danger">' + escapeHtml(error.message) + '</td></tr>';
             }
         }
 
