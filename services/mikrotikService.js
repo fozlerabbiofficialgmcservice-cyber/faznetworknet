@@ -90,7 +90,7 @@ class MikroTikService {
     const name=this._str(data.name).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
     return this._withConnection("Hotspot profile creation",async(connection)=>{
-      const params=this._writeParams({name,"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout});
+      const params=this._writeParams({name,"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout,"on-login":data.onLogin});
       await connection.write("/ip/hotspot/user/profile/add",params); return {name};
     });
   }
@@ -101,7 +101,7 @@ class MikroTikService {
       const rows=await connection.write("/ip/hotspot/user/profile/print");
       const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
       if(!item||!item[".id"]) throw new Error("Hotspot profile \""+name+"\" was not found on MikroTik.");
-      const params=this._writeParams({".id":item[".id"],"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1});
+      const params=this._writeParams({".id":item[".id"],"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout,"on-login":data.onLogin});
       await connection.write("/ip/hotspot/user/profile/set",params); return {name,id:this._str(item[".id"])};
     });
   }
