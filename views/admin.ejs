@@ -1549,6 +1549,14 @@
             }
         };
 
+        function emergencyUiUnfreeze() {
+            document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop').forEach(function(el) { el.remove(); });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            document.body.style.pointerEvents = 'auto';
+        }
+
         function purgeStuckBackdrops() {
             document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
             document.querySelectorAll('.offcanvas-backdrop').forEach(function(el) { el.remove(); });
@@ -1568,6 +1576,7 @@
             if (sidebar && window.innerWidth < 768) sidebar.classList.remove('show');
             var sidebarButton = document.getElementById('mobileSidebarToggle');
             if (sidebarButton) sidebarButton.setAttribute('aria-expanded', 'false');
+            document.body.style.pointerEvents = 'auto';
         }
 
         window.navigateToCustomerProfile = function(customerId){
@@ -2292,7 +2301,7 @@ async function deletePlan(id,name){
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            const instance = new bootstrap.Modal(modal);
+            const instance = getOrCreateModal(modal);
             modal.addEventListener('hidden.bs.modal', () => modal.remove());
             instance.show();
             setTimeout(()=>document.getElementById('manualMatchUsername')?.focus(),300);
@@ -2313,19 +2322,35 @@ async function deletePlan(id,name){
             } catch (error) { alert(error.message); }
         }
 
+        emergencyUiUnfreeze();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', emergencyUiUnfreeze, { once: true });
+        } else {
+            emergencyUiUnfreeze();
+        }
+
         function customerTitle(key) {
             const lang = localStorage.getItem('faz_preferred_lang') || 'en';
             return translations[lang]?.[key] || translations.en[key] || key;
         }
 
+        function getOrCreateModal(modalElement) {
+            if (!modalElement || !window.bootstrap?.Modal) return null;
+            return bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+        }
+
         function formatBdPhoneNumber(phone) {
             if (!phone) return '—';
-            let clean = phone.toString().replace(/[^0-9]/g, '');
-            if (clean.startsWith('880')) clean = clean.substring(2);
-            else if (clean.startsWith('00880')) clean = clean.substring(4);
-            else if (clean.startsWith('00')) clean = clean.substring(1);
-            if (!clean.startsWith('0') && clean.length === 10) clean = '0' + clean;
-            return clean || '—';
+            try {
+                let clean = String(phone).replace(/[^0-9]/g, '');
+                if (clean.startsWith('00880')) clean = clean.substring(4);
+                else if (clean.startsWith('880')) clean = clean.substring(2);
+                else if (clean.startsWith('00')) clean = clean.substring(1);
+                if (!clean.startsWith('0') && clean.length === 10) clean = '0' + clean;
+                return clean || '—';
+            } catch (e) {
+                return String(phone || '—');
+            }
         }
 
         function parseCustomerMetadata(user) {
@@ -2453,7 +2478,15 @@ async function deletePlan(id,name){
             }
         }
 
-        window.openCustomerEditModal=openCustomerEditModal;
+        try {
+            window.openCustomerEditModal=openCustomerEditModal;
+            window.deleteCustomer=deleteCustomer;
+            window.quickRenewCustomer=quickRenewCustomer;
+        } catch (actionInitError) {
+            console.error('[Customer Actions] Initialization failed:', actionInitError);
+        }
+
+        try {
         window.deleteCustomer=deleteCustomer;
         window.quickRenewCustomer=quickRenewCustomer;
 
@@ -2490,8 +2523,8 @@ async function deletePlan(id,name){
                 if(viewBtn){event.preventDefault();viewCustomerDetails(encodeURIComponent(username));}
             });
             window.__customerActionDelegationBound=true;
-        }
-
+        } catch (actionBindingError) {
+            console.error('[Customer Actions] Event binding failed:', actionBindingError);
         }
 
         function customerBillingCounts(users) {
@@ -2726,6 +2759,7 @@ async function deletePlan(id,name){
         }
 
         async function refreshCustomerSection() {
+            emergencyUiUnfreeze();
             await loadCustomerSection(currentCustomerFilter, currentCustomerTitleKey || 'all_customer');
         }
 
@@ -2788,7 +2822,7 @@ async function deletePlan(id,name){
                     </div>
                 </div>`;
             document.body.appendChild(modal);
-            const instance = new bootstrap.Modal(modal);
+            const instance = getOrCreateModal(modal);
             modal.addEventListener('hidden.bs.modal', () => modal.remove());
             instance.show();
         }
