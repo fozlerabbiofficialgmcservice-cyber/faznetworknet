@@ -32,46 +32,6 @@ const dashboardBody = `
           <button id="publicCustomerCheckBtn" type="submit" class="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-700 disabled:opacity-60">Check Account</button>
         </form>
         <div id="publicCustomerResult" class="mt-5 hidden"></div>
-        <div id="customerLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="customerLoginTitle">
-          <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-              <div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Self-Care</p><h3 id="customerLoginTitle" class="text-xl font-black text-slate-900">Customer Login</h3><p class="mt-1 text-xs text-slate-500">Use your PPPoE username or registered phone number.</p></div>
-              <button type="button" id="closeCustomerLoginBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
-            </div>
-            <div class="p-5">
-              <div id="customerLoginPanel">
-                <form id="customerLoginForm" class="space-y-4">
-                  <div><label for="customerLoginIdentifier" class="mb-1 block text-sm font-bold text-slate-700">Username / Phone Number</label><input id="customerLoginIdentifier" type="text" maxlength="120" autocomplete="username" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="PPPoE username or phone number"></div>
-                  <div><label for="customerLoginPassword" class="mb-1 block text-sm font-bold text-slate-700">Password</label><input id="customerLoginPassword" type="password" maxlength="255" autocomplete="current-password" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="PPPoE password"></div>
-                  <div id="customerLoginError" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></div>
-                  <button id="customerLoginSubmit" type="submit" class="w-full rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-700 disabled:opacity-60">Login to Account</button>
-                </form>
-              </div>
-              <div id="customerDashboardPanel" class="hidden"></div>
-            </div>
-          </div>
-        </div>
-        
-        <div id="supportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
-          <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-              <div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Helpdesk</p><h3 id="supportTitle" class="text-xl font-black text-slate-900">FAZ NETWORK Support</h3></div>
-              <button type="button" id="closeSupportBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
-            </div>
-            <div class="p-5 space-y-3">
-              <a href="https://wa.me/88013399328887" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100">
-                <span class="text-xl">💬</span><span><strong class="block text-slate-900">WhatsApp</strong><span class="text-sm text-slate-600">Chat with FAZ NETWORK support</span></span>
-              </a>
-              <a href="tel:01339932887" class="flex items-center gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100">
-                <span class="text-xl">☎</span><span><strong class="block text-slate-900">Helpline</strong><span class="text-sm text-slate-600">01339932887</span></span>
-              </a>
-              <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs font-black uppercase tracking-wide text-slate-400">Office Address</p>
-                <p class="mt-1 text-sm font-semibold text-slate-800"><%= process.env.OFFICE_ADDRESS || "FAZ NETWORK Office — Please contact the helpline for the current office address." %></p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -96,6 +56,47 @@ const dashboardBody = `
     </div>
     <div class="p-6"><div class="h-80"><canvas id="traffic-chart"></canvas></div></div>
   </div>
+<div id="customerLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="customerLoginTitle">
+  <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+    <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+      <div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Self-Care</p><h3 id="customerLoginTitle" class="text-xl font-black text-slate-900">Customer Login</h3><p class="mt-1 text-xs text-slate-500">Use your PPPoE username or registered phone number.</p></div>
+      <button type="button" id="closeCustomerLoginBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
+    </div>
+    <div class="p-5">
+      <div id="customerLoginPanel">
+        <form id="customerLoginForm" class="space-y-4">
+          <div><label for="customerLoginIdentifier" class="mb-1 block text-sm font-bold text-slate-700">Username / Phone Number</label><input id="customerLoginIdentifier" type="text" maxlength="120" autocomplete="username" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="PPPoE username or phone number"></div>
+          <div><label for="customerLoginPassword" class="mb-1 block text-sm font-bold text-slate-700">Password</label><input id="customerLoginPassword" type="password" maxlength="255" autocomplete="current-password" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="PPPoE password"></div>
+          <div id="customerLoginError" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></div>
+          <button id="customerLoginSubmit" type="submit" class="w-full rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-700 disabled:opacity-60">Login to Account</button>
+        </form>
+      </div>
+      <div id="customerDashboardPanel" class="hidden"></div>
+    </div>
+  </div>
+</div>
+
+<div id="supportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
+  <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+    <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+      <div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Helpdesk</p><h3 id="supportTitle" class="text-xl font-black text-slate-900">FAZ NETWORK Support</h3></div>
+      <button type="button" id="closeSupportBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
+    </div>
+    <div class="p-5 space-y-3">
+      <a href="https://wa.me/88013399328887" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100">
+        <span class="text-xl">💬</span><span><strong class="block text-slate-900">WhatsApp</strong><span class="text-sm text-slate-600">Chat with FAZ NETWORK support</span></span>
+      </a>
+      <a href="tel:01339932887" class="flex items-center gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100">
+        <span class="text-xl">☎</span><span><strong class="block text-slate-900">Helpline</strong><span class="text-sm text-slate-600">01339932887</span></span>
+      </a>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400">Office Address</p>
+        <p class="mt-1 text-sm font-semibold text-slate-800"><%= process.env.OFFICE_ADDRESS || "FAZ NETWORK Office — Please contact the helpline for the current office address." %></p>
+      </div>
+    </div>
+  </div>
+</div>
+
 </section>`;
 %>
 <script>
