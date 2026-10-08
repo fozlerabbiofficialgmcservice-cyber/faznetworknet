@@ -1,0 +1,1 @@
+const express=require("express");const controller=require("../controllers/settingsController");const router=express.Router();router.get("/website",controller.website);router.post("/website",controller.saveWebsite);module.exports=router;
