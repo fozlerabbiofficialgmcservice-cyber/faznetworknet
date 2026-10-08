@@ -621,60 +621,106 @@ async function renew(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 async function removeCustomer(req,res){
-  const username=clean(req.body?.username,100), id=clean(req.params?.id||req.body?.id,50);
-  if(!username&&!id)return res.status(400).json({success:false,message:"Username or customer ID is required."});
-  try{
-    const current=await db.query(
-      id ? "SELECT id,username FROM customers WHERE id::text=$1 LIMIT 1" : "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
-      [id||username]
-    );
-    if(!current.rows.length)return res.status(404).json({success:false,message:"Customer not found."});
-    const customerId=current.rows[0].id;
-    const resolvedUsername=clean(current.rows[0].username||username,100);
-    if(!resolvedUsername)return res.status(404).json({success:false,message:"Customer not found."});
+  const target=clean(req.params?.id||req.body?.id||req.body?.username,100);
+  if(!target)return res.status(400).json({success:false,message:"Customer identifier is required"});
 
-    // RouterOS cleanup is best-effort only. The database is the system of
-    // record for customer deletion, so a missing/already-deleted MikroTik
-    // secret must NEVER block the PostgreSQL deletion.
-    let routerCleanup={terminatedSessions:0,removed:false};
-    try{
-      routerCleanup=await mikrotikService.removeCustomer(resolvedUsername);
-    }catch(routerErr){
-      console.warn(
-        `[MikroTik Safe Delete] Could not remove ${resolvedUsername} from router (maybe already deleted):`,
-        routerErr?.message||routerErr
+  let username=null;
+  let customerId=null;
+  let routerCleanup={terminatedSessions:0,removed:false};
+
+  try{
+    // Resolve the target from either customers or pppoe_users. pppoe_users
+    // does not rely on a customer_id column, so username is the durable join key.
+    const customerResult=await db.query(
+      "SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",
+      [target]
+    );
+    if(customerResult.rows.length){
+      customerId=customerResult.rows[0].id;
+      username=clean(customerResult.rows[0].username,100)||null;
+    }else{
+      const pppoeResult=await db.query(
+        "SELECT id,username FROM pppoe_users WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",
+        [target]
       );
+      if(pppoeResult.rows.length){
+        username=clean(pppoeResult.rows[0].username,100)||null;
+        const linkedCustomer=await db.query(
+          "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
+          [username]
+        );
+        if(linkedCustomer.rows.length){
+          customerId=linkedCustomer.rows[0].id;
+          username=clean(linkedCustomer.rows[0].username,100)||username;
+        }
+      }else{
+        // Last-resort username fallback: deletion must not be blocked merely
+        // because the identifier exists in neither lookup table.
+        username=target;
+      }
     }
 
-    // Database cleanup is unconditional and atomic. If RouterOS already lost
-    // the secret, we still remove the local records and create a tombstone so
-    // a later sync cannot resurrect the deleted username.
+    if(!username)username=target;
+
+    // MikroTik is best-effort only. Missing secrets/sessions, router errors,
+    // or an unavailable router must NEVER block local database deletion.
+    try{
+      routerCleanup=await mikrotikService.removeCustomer(username);
+    }catch(routerErr){
+      console.warn("[MikroTik Safe Delete] Cleanup skipped:",routerErr?.message||routerErr);
+    }
+
     await db.withTransaction(async(client)=>{
-      // Delete every customer-owned record in one PostgreSQL transaction.
-      await client.query("DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",[resolvedUsername]);
-      await client.query("DELETE FROM audit_logs WHERE customer_id=$1",[customerId]);
-
-      // invoices is optional in some deployments; clean it only when present.
-      const invoiceTable=await client.query("SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='invoices' LIMIT 1");
-      if(invoiceTable.rows.length){
-        const invoiceCustomerColumn=await client.query("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name='customer_id' LIMIT 1");
-        if(invoiceCustomerColumn.rows.length) await client.query("DELETE FROM invoices WHERE customer_id=$1",[customerId]);
-      }
-
-      await client.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[resolvedUsername]);
-
-      // Leave a tombstone so a later RouterOS sync cannot resurrect this
-      // explicitly deleted customer as a stale pppoe_users record.
       await client.query(
-        "INSERT INTO customer_deletion_tombstones(username,customer_id,deleted_at) VALUES(LOWER($1),$2,NOW()) ON CONFLICT(username) DO UPDATE SET customer_id=EXCLUDED.customer_id,deleted_at=NOW()",
-        [resolvedUsername,customerId]
+        "DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",
+        [username]
       );
 
-      await client.query("DELETE FROM customers WHERE id=$1",[customerId]);
+      if(customerId){
+        await client.query("DELETE FROM audit_logs WHERE customer_id=$1",[customerId]);
+      }else{
+        // No customer row is required for deletion, but remove any orphaned
+        // audit rows that can be associated by username when that schema exists.
+        const auditUsernameColumn=await client.query(
+          "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='audit_logs' AND column_name='username' LIMIT 1"
+        );
+        if(auditUsernameColumn.rows.length){
+          await client.query("DELETE FROM audit_logs WHERE LOWER(username)=LOWER($1)",[username]);
+        }
+      }
+
+      const invoiceTable=await client.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='invoices' LIMIT 1"
+      );
+      if(invoiceTable.rows.length&&customerId){
+        const invoiceCustomerColumn=await client.query(
+          "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name='customer_id' LIMIT 1"
+        );
+        if(invoiceCustomerColumn.rows.length){
+          await client.query("DELETE FROM invoices WHERE customer_id=$1",[customerId]);
+        }
+      }
+
+      await client.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[username]);
+      await client.query("DELETE FROM customers WHERE LOWER(username)=LOWER($1)",[username]);
+
+      await client.query(
+        "INSERT INTO customer_deletion_tombstones(username,customer_id,deleted_at) VALUES(LOWER($1),$2,NOW()) ON CONFLICT(username) DO UPDATE SET customer_id=EXCLUDED.customer_id,deleted_at=NOW()",
+        [username,customerId]
+      );
     });
 
-    return res.json({success:true,message:"Customer deleted successfully",username:resolvedUsername,terminatedSessions:routerCleanup?.terminatedSessions||0});
-  }catch(error){return errorResponse(res,error);}
+    return res.json({
+      success:true,
+      message:"Customer completely removed from system",
+      username,
+      customerId:customerId||null,
+      terminatedSessions:routerCleanup?.terminatedSessions||0
+    });
+  }catch(error){
+    console.error("[CUSTOMER DELETE] Unconditional deletion failed:",error);
+    return errorResponse(res,error);
+  }
 }
 async function updateCustomer(req,res){
   const body=req.body||{},id=clean(req.params.id||body.id||body.username,100);
