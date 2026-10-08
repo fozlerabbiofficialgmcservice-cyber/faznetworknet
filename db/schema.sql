@@ -164,3 +164,11 @@ ALTER TABLE packages ALTER COLUMN pool_name DROP NOT NULL;
 ALTER TABLE packages DROP CONSTRAINT IF EXISTS packages_price_check;
 ALTER TABLE packages ADD CONSTRAINT packages_price_check CHECK(price >= 0);
 ALTER TABLE packages ALTER COLUMN rate_limit DROP NOT NULL;
+
+-- 360-degree customer management hub fields.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS alternative_phone VARCHAR(40);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS olt_pon_port VARCHAR(120);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS distribution_box VARCHAR(150);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_serial VARCHAR(150);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS fiber_drop_core VARCHAR(80);
+CREATE INDEX IF NOT EXISTS idx_transactions_matched_username_created ON transactions(matched_username, created_at DESC);
