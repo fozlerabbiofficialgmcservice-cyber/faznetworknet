@@ -176,6 +176,9 @@ async function createCustomer(req, res) {
     );
 
     const customerId = inserted.rows[0].id;
+    // A new admin-created customer explicitly revives its username, so clear
+    // any previous deletion tombstone before router synchronization.
+    await db.query("DELETE FROM customer_deletion_tombstones WHERE LOWER(username)=LOWER($1)",[customer.username]);
     let provisioning = "pending";
 
     try {
@@ -635,6 +638,7 @@ async function removeCustomer(req,res){
     const result=await mikrotikService.removeCustomer(resolvedUsername);
 
     await db.withTransaction(async(client)=>{
+      // Delete every customer-owned record in one PostgreSQL transaction.
       await client.query("DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",[resolvedUsername]);
       await client.query("DELETE FROM audit_logs WHERE customer_id=$1",[customerId]);
 
@@ -646,6 +650,14 @@ async function removeCustomer(req,res){
       }
 
       await client.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[resolvedUsername]);
+
+      // Leave a tombstone so a later RouterOS sync cannot resurrect this
+      // explicitly deleted customer as a stale pppoe_users record.
+      await client.query(
+        "INSERT INTO customer_deletion_tombstones(username,customer_id,deleted_at) VALUES(LOWER($1),$2,NOW()) ON CONFLICT(username) DO UPDATE SET customer_id=EXCLUDED.customer_id,deleted_at=NOW()",
+        [resolvedUsername,customerId]
+      );
+
       await client.query("DELETE FROM customers WHERE id=$1",[customerId]);
     });
 
