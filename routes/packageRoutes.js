@@ -4,6 +4,7 @@ const router=express.Router();
 router.get("/",controller.list);
 router.get("/pools",controller.pools);
 router.post("/",controller.create);
+router.post("/save",controller.savePlan);
 router.put("/:id",controller.update);
 router.delete("/:id",controller.remove);
 router.post("/sync",controller.sync);
