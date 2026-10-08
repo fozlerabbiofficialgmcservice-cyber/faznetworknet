@@ -2,12 +2,20 @@ const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 
 function normalizePhone(value){let p=String(value||"").replace(/[^\d+]/g,"");if(p.startsWith("+880"))p="0"+p.slice(4);if(p.startsWith("880"))p="0"+p.slice(3);return p;}
-function channelFrom(text){const t=String(text||"").toLowerCase();if(/bkash|b-kash|বিকাশ/.test(t))return"bkash";if(/nagad|নগদ/.test(t))return"nagad";if(/rocket|রকেট|dutch.?bangla/.test(t))return"rocket";return null;}
+const VERIFIED_SMS_SENDERS={bkash:new Set(["bkash"]),nagad:new Set(["nagad"]),rocket:new Set(["16216","01190016216","096667"]),upay:new Set(["upay"])};
+function normalizeSmsSender(value){return String(value||"").trim().replace(/\s+/g,"").toLowerCase();}
+function channelFromSender(sender){const s=normalizeSmsSender(sender);for(const [channel,senders] of Object.entries(VERIFIED_SMS_SENDERS)){if(senders.has(s))return channel;}return null;}
+function channelFrom(text){const t=String(text||"").toLowerCase();if(/bkash|b-kash|বিকাশ/.test(t))return"bkash";if(/nagad|নগদ/.test(t))return"nagad";if(/rocket|রকেট|dutch.?bangla/.test(t))return"rocket";if(/upay|উপায়|উপায়/.test(t))return"upay";return null;}
+function isPersonalSmsSender(sender){return /^\+?88?01\d{9}$/.test(String(sender||"").replace(/\s+/g,""));}
 function parseSms(body,headers){
  const raw=typeof body==="string"?body:JSON.stringify(body||{});
- const sender=String(headers["x-sms-sender"]||headers["x-sender"]||"");
+ const sender=String(headers["x-sms-sender"]||headers["x-sender"]||(typeof body==="object"&&(body.sender||body.smsSender||body.from)||"")).trim();
+ if(!sender)throw new Error("SMS sender ID is required.");
+ if(isPersonalSmsSender(sender))throw new Error("Personal 11-digit SMS sender numbers are not accepted.");
+ const senderChannel=channelFromSender(sender);
+ if(!senderChannel)throw new Error("Unverified SMS sender ID.");
  const text=raw+" "+sender;
- const channel=channelFrom(text);
+ const channel=senderChannel||channelFrom(text);
  if(!channel)throw new Error("Unsupported payment channel.");
  const trx=(text.match(/(?:trx(?:id)?|transaction(?:\\s*id)?|txn(?:id)?)[\\s:#=-]*([A-Z0-9]{6,30})/i)||[])[1]||(text.match(/\\b([A-Z]{2,5}\\d{6,20})\\b/)||[])[1];
  const amountMatch=text.match(/(?:amount|received|payment|tk|taka|৳)[\\s:=\\-]*([0-9]{2,8}(?:[,.][0-9]{1,2})?)/i);
@@ -26,7 +34,12 @@ function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z"
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
 async function renewCustomer(c){const expiration=addCalendarMonths(new Date().toISOString().slice(0,10),Math.max(1,Number(c.duration_months||1))),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});await mikrotikService.kickActiveUser(c.username);await db.query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,profile,c.price,expiration,c.id]);await db.query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[profile,pool,expiration,comment,c.username]);return expiration;}
 async function webhook(req,res){
- const expected=String(process.env.MACRODROID_WEBHOOK_KEY||"");
+ let expected=String(process.env.MACRODROID_WEBHOOK_KEY||"");
+ try{
+  const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret')");
+  const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
+  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()==="true" && settings.personal_payment_webhook_secret) expected=String(settings.personal_payment_webhook_secret);
+ }catch(_){ /* preserve existing environment-based webhook authentication if settings storage is unavailable */ }
  const provided=String(req.get("x-webhook-token")||req.get("x-macrodroid-token")||"");
  if(!expected||provided!==expected)return res.status(401).json({success:false,error:"Unauthorized webhook."});
  try{
@@ -51,14 +64,14 @@ async function webhook(req,res){
 async function list(req,res){
  try{
   const gateway=String(req.query.gateway||req.query.channel||"all").trim().toLowerCase();
-  const allowed=["all","bkash","nagad","rocket","pending","requests"];
+  const allowed=["all","bkash","nagad","rocket","upay","pending","requests"];
   if(!allowed.includes(gateway)) return res.status(400).json({success:false,error:"Invalid payment gateway filter."});
   const page=Math.max(1,Number.parseInt(req.query.page||"1",10)||1);
   const limit=Math.min(200,Math.max(1,Number.parseInt(req.query.limit||"50",10)||50));
   const offset=(page-1)*limit;
   const params=[];
   let where="";
-  if(["bkash","nagad","rocket"].includes(gateway)){params.push(gateway);where="WHERE channel=$1";}
+  if(["bkash","nagad","rocket","upay"].includes(gateway)){params.push(gateway);where="WHERE channel=$1";}
   else if(gateway==="pending"){where="WHERE status='unmatched' OR (status IN ('processed','PAID') AND used=false)";}
   else if(gateway==="requests"){where="WHERE status='unmatched' AND used=false";}
 
@@ -84,7 +97,7 @@ async function manualMatch(req,res){
   const username=String(req.body.username||"").trim();
   if(!trxId||!username)return res.status(400).json({success:false,error:"trxId and username are required."});
 
-  const t=await db.query("SELECT * FROM transactions WHERE UPPER(trx_id)=UPPER($1) LIMIT 1",[trxId]);
+  const t=await db.query("SELECT * FROM transactions WHERE LOWER(trx_id)=LOWER($1) LIMIT 1",[trxId]);
   if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});
   const tx=t.rows[0];
   if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be manually matched."});
@@ -99,6 +112,31 @@ async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(
 
 const verifyBuckets=new Map();
 function rateLimit(key){const now=Date.now();const bucket=verifyBuckets.get(key)||{start:now,count:0};if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}bucket.count++;verifyBuckets.set(key,bucket);return bucket.count<=10;}
-async function verifyTrx(req,res){const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});try{const trx=String(req.body.trxId||req.body.trxid||req.body.txnId||req.body.txnid||"").trim().toUpperCase();if(!trx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});const q=await db.query("SELECT * FROM transactions WHERE trx_id=$1 LIMIT 1",[trx]);if(!q.rows.length)return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});const amount=Number(tx.amount);const requestedAmount=Number(req.body.amount||0);if(requestedAmount&&requestedAmount!==amount)return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});const profile=PACKAGE_PROFILES[amount];if(!profile)return res.status(400).json({success:false,error:"No hotspot package is mapped to this payment amount."});const username=credential(),password=credential().slice(-8);await mikrotikService.createHotspotUser({username,password,profile,comment:"FAZ PORTAL | TrxID: "+trx+" | Package: "+PACKAGE_VALIDITY[amount]});await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[username,tx.id]);return res.json({success:true,username,password,profile,package:PACKAGE_VALIDITY[amount],amount,loginUrl:req.body.loginUrl||req.body.linkLoginOnly||null});}catch(e){return errorResponse(res,e,503);}}
+async function verifyTrx(req,res){
+ const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});
+ try{
+  const phone=normalizePhone(req.body.phone||"");
+  if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
+  const trx=String(req.body.trxId||req.body.trxid||req.body.txnId||req.body.txnid||"").trim().toUpperCase();
+  if(!trx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
+  const q=await db.query("SELECT * FROM transactions WHERE LOWER(trx_id)=LOWER($1) LIMIT 1",[trx]);
+  if(!q.rows.length)return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});
+  const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
+  const amount=Number(tx.amount),requestedAmount=Number(req.body.amount||0);
+  if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
+  const packages=await db.query("SELECT id,plan_name,profile_name,price,duration_months FROM packages WHERE price=$1 ORDER BY id ASC",[amount]);
+  if(!packages.rows.length)return res.status(400).json({success:false,error:"No package is mapped to this payment amount."});
+  const distinctProfiles=[...new Set(packages.rows.map(row=>String(row.profile_name||row.plan_name||"").trim()).filter(Boolean))];
+  if(distinctProfiles.length!==1)return res.status(400).json({success:false,error:"Payment amount maps to multiple Hotspot profiles. Configure one unique package/profile for this amount."});
+  const profile=distinctProfiles[0], hotspotProfiles=await mikrotikService.getHotspotProfiles();
+  const hotspotProfile=hotspotProfiles.find(item=>String(item.name||"").trim().toLowerCase()===profile.toLowerCase());
+  if(!hotspotProfile)return res.status(400).json({success:false,error:"The mapped Hotspot profile is not available on MikroTik."});
+  const validity=String(hotspotProfile.sessionTimeout||"").trim();
+  if(!validity)return res.status(400).json({success:false,error:"The mapped Hotspot profile has no session-timeout validity configured."});
+  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,comment:"FAZ PORTAL | TrxID: "+trx+" | Paid: ৳"+amount});
+  await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[phone,tx.id]);
+  return res.json({success:true,username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:req.body.loginUrl||req.body.linkLoginOnly||null});
+ }catch(e){return errorResponse(res,e,503);}
+}
 
 module.exports={webhook,list,manualMatch,summary,verifyTrx};
