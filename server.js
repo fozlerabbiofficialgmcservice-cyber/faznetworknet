@@ -79,7 +79,9 @@ app.get("/",async (req,res)=>{
 });
 
 app.get("/router",requireAdmin,(req,res)=>res.render("settings",{title:"Router Settings",page:"router",routerHost:String(process.env.ROUTER_HOST||""),routerPort:Number.parseInt(process.env.ROUTER_PORT||"8728",10)}));
-app.use("/api/router",requireAdmin,routerRoutes);app.use("/api/pppoe",requireAdmin,pppoeRoutes);app.use("/api",paymentRoutes);app.use("/api/customers",requireAdmin,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireAdmin,packageRoutes);app.use("/api/packages",requireAdmin,packageRoutes);app.use("/api/ip-pools",requireAdmin,ipPoolRoutes);app.use("/api/settings",requireAdmin,settingsRoutes);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireAdmin,hotspotRoutes);app.post("*",paymentController.dynamicWebhook);
+// Resolve the configured webhook path before other POST routes so an admin-selected
+// custom endpoint remains usable even when its path overlaps an existing API path.
+app.post("*",paymentController.dynamicWebhook);app.use("/api/router",requireAdmin,routerRoutes);app.use("/api/pppoe",requireAdmin,pppoeRoutes);app.use("/api",paymentRoutes);app.use("/api/customers",requireAdmin,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireAdmin,packageRoutes);app.use("/api/packages",requireAdmin,packageRoutes);app.use("/api/ip-pools",requireAdmin,ipPoolRoutes);app.use("/api/settings",requireAdmin,settingsRoutes);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireAdmin,hotspotRoutes);
 app.get("/pppoe",requireAdmin,(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireAdmin,(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireAdmin,(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));

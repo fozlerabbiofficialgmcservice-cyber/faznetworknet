@@ -120,18 +120,26 @@ async function verifyTrx(req,res){
   const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
   const amount=Number(tx.amount),requestedAmount=Number(req.body.amount||0);
   if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
-  const savedSettings=await db.query("SELECT key,value FROM app_settings WHERE key IN ('hotspot_price_profile_map','hotspot_default_profile')");
-  const settings=Object.fromEntries((savedSettings.rows||[]).map(row=>[row.key,row.value]));
-  let mapping={};try{mapping=JSON.parse(settings.hotspot_price_profile_map||"{}");}catch(_){}
-  if(!mapping||typeof mapping!=="object"||Array.isArray(mapping))mapping={};
-  const mappedProfile=String(mapping[amount.toFixed(2)]||mapping[String(amount)]||"").trim();
-  if(!mappedProfile)return res.status(400).json({success:false,error:"No Hotspot profile is mapped to ৳"+amount.toFixed(2)+". Ask the administrator to configure this amount in Hotspot Webhook Settings."});
-  const profile=mappedProfile, hotspotProfiles=await mikrotikService.getHotspotProfiles();
-  const hotspotProfile=hotspotProfiles.find(item=>String(item.name||"").trim().toLowerCase()===profile.toLowerCase());
-  if(!hotspotProfile)return res.status(400).json({success:false,error:"The mapped Hotspot profile is not available on MikroTik."});
-  const validity=String(hotspotProfile.sessionTimeout||"").trim();
-  if(!validity)return res.status(400).json({success:false,error:"The mapped Hotspot profile has no session-timeout validity configured."});
-  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,comment:"FAZ PORTAL | TrxID: "+trx+" | Paid: ৳"+amount});
+  // Read the latest profile prices/validity from app_settings on every verification.
+  // The Hotspot Profile editor persists this metadata; no preset amount map is required.
+  const metadataResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
+  let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
+  if(!profileMetadata||typeof profileMetadata!=="object"||Array.isArray(profileMetadata))profileMetadata={};
+  const hotspotProfiles=await mikrotikService.getHotspotProfiles();
+  const matchingProfiles=hotspotProfiles.filter(item=>{
+   const metadata=profileMetadata[String(item.name||"")]||{};
+   return Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
+  });
+  if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
+  // If several profiles share a price, use the first active MikroTik profile consistently.
+  const hotspotProfile=matchingProfiles[0];
+  const metadata=profileMetadata[String(hotspotProfile.name||"")]||{};
+  const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
+  let validityConfig;
+  try{validityConfig=metadata.validityValue?normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):parseStoredValidity(hotspotProfile);}catch(_){validityConfig=parseStoredValidity(hotspotProfile);}
+  const validity=String(validityConfig.validity||"").trim();
+  if(!validity&&!Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0))return res.status(400).json({success:false,error:"The selected Hotspot profile has no usable validity or data quota configured."});
+  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+trx+" | Paid: ৳"+amount});
   await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[phone,tx.id]);
   return res.json({success:true,username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:req.body.loginUrl||req.body.linkLoginOnly||null});
  }catch(e){return errorResponse(res,e,503);}
