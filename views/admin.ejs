@@ -2118,7 +2118,7 @@ async function deletePlan(id,name){
                 const response=await fetch('/api/settings/hotspot-profile-settings',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({mapping,defaultProfile:document.getElementById('hotspotDefaultProfile')?.value||''}),cache:'no-store'});
                 const data=await response.json();if(!response.ok||data.success===false)throw new Error(data.error||data.message||'Unable to save Hotspot profile mappings.');
                 if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Profile mappings saved.';}
-                if(status=document.getElementById('hotspotProfileSyncStatus')){status.textContent='Saved';status.className='badge bg-success ms-auto';}
+                const status=document.getElementById('hotspotProfileSyncStatus');if(status){status.textContent='Saved';status.className='badge bg-success ms-auto';}
             }catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save mappings.';}}finally{btn.disabled=false;}
         });
 
