@@ -647,10 +647,9 @@ async function changeCustomerPackage(req,res){
     }
 
     // Package changes do not modify the customer's explicit static IP.
-    const dbRemoteAddress=payload.customer.remoteAddress||null;
     await db.query(
-      "UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,remote_address=$4,status=$5,updated_at=NOW() WHERE id=$6",
-      [plan.plan_name,plan.profile_name,plan.price,dbRemoteAddress,expired?"expired":"active",payload.customer.id]
+      "UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,status=$4,updated_at=NOW() WHERE id=$5",
+      [plan.plan_name,plan.profile_name,plan.price,expired?"expired":"active",payload.customer.id]
     );
     await db.query(
       "UPDATE pppoe_users SET profile=$1,remote_address=$2,status=$3,disabled=$4,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($5)",

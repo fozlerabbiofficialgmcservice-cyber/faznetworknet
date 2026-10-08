@@ -127,6 +127,10 @@ CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
 CREATE INDEX IF NOT EXISTS idx_customers_profile ON customers(profile);
 CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
 
+-- Customer networking fields: keep legacy/customer-management queries schema-safe.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS remote_address VARCHAR(50);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS ip_pool VARCHAR(100);
+
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS expiration_date DATE;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_status TEXT NOT NULL DEFAULT 'unpaid';
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_paid_at TIMESTAMPTZ;
