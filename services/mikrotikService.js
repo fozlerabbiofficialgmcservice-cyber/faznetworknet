@@ -83,7 +83,7 @@ class MikroTikService {
   async getHotspotProfiles() {
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), sharedUsers: this._str(item["shared-users"]), idleTimeout: this._str(item["idle-timeout"]), keepaliveTimeout: this._str(item["keepalive-timeout"]), statusAutorefresh: this._str(item["status-autorefresh"]), raw: item })).filter((item) => item.name);
+      return (Array.isArray(rows) ? rows : []).map((item) => ({ id:this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), sharedUsers: this._str(item["shared-users"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), keepaliveTimeout: this._str(item["keepalive-timeout"]), statusAutorefresh: this._str(item["status-autorefresh"]), raw: item })).filter((item) => item.name);
     });
   }
   async createHotspotProfile(data) {
@@ -121,13 +121,18 @@ class MikroTikService {
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
     return this._withConnection("Hotspot user creation", async (connection) => { const params=this._writeParams({ name: username, password, profile, server:data.server, "limit-uptime":data.timeLimit||data["limit-uptime"], "limit-bytes-total":data.dataLimit||data["limit-bytes-total"], comment:data.comment }); await connection.write("/ip/hotspot/user/add", params); return { username }; });
   }
-  async kickActiveHotspotUser(username) {
-    const name=this._str(username).trim(); if(!name) throw new Error("Hotspot username is required.");
+  async kickActiveHotspotUser(username,idValue) {
+    const name=this._str(username).trim(), requestedId=this._str(idValue).trim();
+    if(!name&&!requestedId) throw new Error("Hotspot username or session id is required.");
     return this._withConnection("active Hotspot user kick", async (connection) => {
-      const rows=await connection.write("/ip/hotspot/active/print");
-      const matches=(Array.isArray(rows)?rows:[]).filter((item)=>this._str(item.user)===name && item[".id"]);
+      let matches=[];
+      if(requestedId) matches=[{".id":requestedId,user:name}];
+      else {
+        const rows=await connection.write("/ip/hotspot/active/print");
+        matches=(Array.isArray(rows)?rows:[]).filter((item)=>this._str(item.user)===name && item[".id"]);
+      }
       for(const session of matches) await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
-      return {username:name,kicked:matches.length>0,count:matches.length};
+      return {username:name,kicked:matches.length>0,count:matches.length,id:requestedId||this._str(matches[0]?.[".id"])};
     });
   }
   async removeHotspotUser(username) {
