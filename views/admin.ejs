@@ -2579,7 +2579,7 @@ async function deletePlan(id,name){
                 setVal('cpFullName',customer.fullName||customer.full_name||'');setVal('cpPhone',customer.phone||'');setVal('cpAltPhone',customer.alternative_phone||'');
                 setVal('cpAddress',customer.installation_address||'');setVal('cpOltPon',customer.olt_pon_port||'');setVal('cpDistribution',customer.distribution_box||'');
                 setVal('cpOnuMac',customer.onu_mac||'');setVal('cpOnuSerial',customer.onu_serial||'');setVal('cpFiberCore',customer.fiber_drop_core||'');
-                setVal('cpUsername',customer.username||name);setVal('cpPassword',customer.password||'');setVal('cpRemoteAddress',customer.remote_address||'');setVal('cpRemarks',customer.remarks||'');
+                setVal('cpUsername',customer.username||name);setVal('cpPassword',customer.password||'');setVal('cpRemarks',customer.remarks||'');
                 setVal('cpExpiration',safeDate);
                 const planSelect=modalEl.querySelector('#cpPlan');if(planSelect){
                     planSelect.innerHTML=plans.length?plans.map(p=>'<option value="'+escapeHtml(p.profileName||p.name)+'" data-price="'+Number(p.price||0)+'">'+escapeHtml(p.name||p.profileName||'Plan')+(p.rateLimit?' · '+escapeHtml(p.rateLimit):'')+' — ৳'+Number(p.price||0).toFixed(2)+'</option>').join(''):'<option value="">No plans configured</option>';
