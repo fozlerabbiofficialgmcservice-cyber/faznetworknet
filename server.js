@@ -12,4 +12,6 @@ app.get("/router",(req,res)=>res.render("settings",{title:"Router Settings",page
 app.use("/api/router",routerRoutes);app.use("/api/pppoe",pppoeRoutes);app.use("/api",paymentRoutes);app.use("/api",customerRoutes);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",hotspotRoutes);
 app.get("/pppoe",(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
-initializeDatabase().catch(e=>console.error("[Database] Startup initialization failed:",e.message)).finally(()=>app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT)));module.exports=app;
+app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));
+initializeDatabase().catch(e=>console.error("[Database] Startup initialization failed:",e.message));
+module.exports=app;
