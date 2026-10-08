@@ -938,7 +938,7 @@
             modal.tabIndex=-1;
             modal.innerHTML='<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content border-0 shadow-lg">'+
               '<div class="modal-header"><div><h5 class="modal-title fw-bold"><i class="bi bi-hdd-network text-success me-2"></i>'+(p.id?'Edit':'Create')+' Server Profile</h5><div class="small text-muted">Synchronize directly with MikroTik /ip/hotspot/profile</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>'+
-              '<form id="hotspotServerProfileForm"><div class="modal-body"><input type="hidden" id="planId" value=""><div class="row g-3">'+
+              '<form id="hotspotServerProfileForm"><div class="modal-body"><input type="hidden" id="hotspotServerProfileId" value=""><div class="row g-3">'+
               '<div class="col-md-6"><label class="form-label">Profile Name *</label><input id="hsServerProfileName" class="form-control" maxlength="100" required value="'+escapeHtml(p.name||'')+'"></div>'+
               '<div class="col-md-6"><label class="form-label">Hotspot Address</label><input id="hsServerHotspotAddress" class="form-control font-monospace" placeholder="192.168.88.1" value="'+escapeHtml(p.hotspotAddress||'')+'"></div>'+
               '<div class="col-md-6"><label class="form-label">DNS Name</label><input id="hsServerDnsName" class="form-control" placeholder="login.faznetwork.net" value="'+escapeHtml(p.dnsName||'')+'"></div>'+
@@ -1597,7 +1597,7 @@
             document.body.insertAdjacentHTML('beforeend',
                 '<div class="modal fade" id="planModal" tabindex="-1" aria-hidden="true">' +
                 '<div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">' +
-                '<form id="planForm"><div class="modal-header"><div><h5 class="modal-title" id="planModalTitle">Create Plan</h5><div class="small text-muted">MikroTik PPP Profile</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+                '<form id="planForm"><input type="hidden" id="planId" value=""><div class="modal-header"><div><h5 class="modal-title" id="planModalTitle">Create Plan</h5><div class="small text-muted">MikroTik PPP Profile</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
                 '<div class="modal-body"><div class="row g-3">' +
                 '<div class="col-md-6"><label class="form-label">Plan Name *</label><input id="planName" class="form-control" required></div>' +
                 '<div class="col-md-6"><label class="form-label">Exact Monthly Price (৳) *</label><input id="planPrice" type="number" step="0.01" min="0.01" class="form-control" required></div>' +
@@ -1611,7 +1611,6 @@
                 '</form></div></div></div>'
             );
             el=document.getElementById('planModal');
-            el.querySelector('#planForm').addEventListener('submit',savePlan);
             return el;
         }
 
@@ -1635,8 +1634,9 @@
         async function openPlanModal(plan=null){
             purgeStuckBackdrops();
             currentPackageEdit=plan||null;
-            document.getElementById('planId').value=plan?.id??'';
             const el=ensurePlanModal();
+            const idEl=document.getElementById('planId');
+            if(idEl) idEl.value=plan?.id??'';
             document.getElementById('planModalTitle').textContent=plan?'Edit Plan':'Create Plan';
             document.getElementById('planName').value=plan?.plan_name||plan?.name||'';
             document.getElementById('planPrice').value=plan?.price??'';
@@ -1715,21 +1715,96 @@ async function deletePlan(id,name){
             }
         }
 
-        function handlePlanActionClick(event){
-            const edit=event.target.closest('.edit-plan-btn');
-            if(edit){
-                const plan=JSON.parse(edit.getAttribute('data-plan-json')||'{}');
-                openPlanModal(plan);
-                return;
-            }
-            const del=event.target.closest('.delete-plan-btn');
-            if(del)deletePlan(del.dataset.id,del.dataset.name);
+        window.openCreatePlanModal = function() {
+            currentPackageEdit = null;
+            purgeStuckBackdrops();
+            openPlanModal(null);
+        };
+
+        window.openPlanModal = openPlanModal;
+
+        if(!window.__planPackageDelegationBound){
+            document.addEventListener('click', function(e) {
+                const createBtn = e.target.closest('#createPlanBtn, .create-plan-btn');
+                if (createBtn) {
+                    e.preventDefault();
+                    window.openCreatePlanModal();
+                    return;
+                }
+
+                const editBtn = e.target.closest('.edit-plan-btn');
+                if (editBtn) {
+                    e.preventDefault();
+                    let plan = null;
+                    try {
+                        plan = JSON.parse(editBtn.getAttribute('data-plan-json') || '{}');
+                    } catch (_) {
+                        plan = {
+                            id: editBtn.getAttribute('data-id') || '',
+                            name: editBtn.getAttribute('data-name') || '',
+                            price: editBtn.getAttribute('data-price') || '',
+                            duration_months: editBtn.getAttribute('data-duration') || '1',
+                            rate_limit: editBtn.getAttribute('data-ratelimit') || '',
+                            local_address: editBtn.getAttribute('data-localaddress') || '',
+                            remote_address: editBtn.getAttribute('data-remoteaddress') || '',
+                            dns_server: editBtn.getAttribute('data-dnsserver') || '',
+                            change_tcp_mss: editBtn.getAttribute('data-tcpmss') || 'default'
+                        };
+                    }
+
+                    const idEl = document.getElementById('planId');
+                    const nameEl = document.getElementById('planName');
+                    const priceEl = document.getElementById('planPrice');
+                    const durationEl = document.getElementById('planDuration');
+                    const rateEl = document.getElementById('planRateLimit');
+                    const localEl = document.getElementById('planLocalAddress');
+                    const remoteEl = document.getElementById('planRemoteAddress');
+                    const dnsEl = document.getElementById('planDnsServer');
+                    const mssEl = document.getElementById('planChangeTcpMss');
+
+                    if (idEl) idEl.value = editBtn.getAttribute('data-id') || plan.id || '';
+                    if (nameEl) nameEl.value = editBtn.getAttribute('data-name') || plan.plan_name || plan.name || '';
+                    if (priceEl) priceEl.value = editBtn.getAttribute('data-price') || plan.price || '';
+                    if (durationEl) durationEl.value = editBtn.getAttribute('data-duration') || plan.duration_months || plan.duration || '1';
+                    if (rateEl) rateEl.value = editBtn.getAttribute('data-ratelimit') || plan.rate_limit || plan.rateLimit || '';
+                    if (localEl) localEl.value = editBtn.getAttribute('data-localaddress') || plan.local_address || plan.localAddress || '';
+                    if (remoteEl) remoteEl.value = editBtn.getAttribute('data-remoteaddress') || plan.remote_address || plan.remoteAddress || plan.pool_name || '';
+                    if (dnsEl) dnsEl.value = editBtn.getAttribute('data-dnsserver') || plan.dns_server || plan.dnsServer || '';
+                    if (mssEl) mssEl.value = editBtn.getAttribute('data-tcpmss') || plan.change_tcp_mss || plan.changeTcpMss || 'default';
+
+                    purgeStuckBackdrops();
+                    openPlanModal(plan);
+                    return;
+                }
+
+                const deleteBtn = e.target.closest('.delete-plan-btn');
+                if (deleteBtn) {
+                    e.preventDefault();
+                    const planId = deleteBtn.getAttribute('data-id') || '';
+                    const planName = deleteBtn.getAttribute('data-name') || '';
+                    if (!planName) return;
+                    if (!confirm('Are you sure you want to delete Plan "' + planName + '" from MikroTik and Database?')) return;
+
+                    deletePlan(planId, planName).catch(function(error) {
+                        console.error('[PLAN UI] Delete error:', error);
+                        alert(error?.message || 'Network error while deleting plan.');
+                    });
+                }
+            });
+
+            document.addEventListener('submit', function(e) {
+                const form = e.target.closest('#planForm, #createPlanForm');
+                if (!form) return;
+                e.preventDefault();
+                savePlan(e);
+            });
+
+            window.__planPackageDelegationBound = true;
         }
 
-        if(!window.__planPackageEventsBound){
-            document.addEventListener('click',handlePlanActionClick);
-            window.__planPackageEventsBound=true;
-        }
+        window.savePlan = savePlan;
+        window.deletePlan = deletePlan;
+        window.syncPlansFromMikrotik = syncPlansFromMikrotik;
 
         async function loadPlanPackages(){
             purgeStuckBackdrops();
@@ -1758,7 +1833,7 @@ async function deletePlan(id,name){
             }).join('');
             el.innerHTML='<section class="admin-view"><div class="card card-custom"><div class="card-header bg-white d-flex align-items-center"><h5 class="mb-0">Plan & Packages <span class="badge bg-success">'+(d.packages||[]).length+'</span></h5><div class="ms-auto d-flex gap-2"><button class="btn btn-success" id="syncPlansBtn" onclick="syncPlansFromMikrotik()"><i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik</button><button class="btn btn-primary" onclick="openCreatePlanModal()"><i class="bi bi-plus-lg me-1"></i> Create Plan</button></div></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>#</th><th>Plan / Profile</th><th>Local Address</th><th>Remote Address / IP Pool</th><th>DNS Servers</th><th>Rate Limit</th><th>Exact Bill</th><th>Duration</th><th>TCP MSS</th><th class="text-end">Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="10" class="text-center py-4 text-muted">No plans found.</td></tr>')+'</tbody></table></div></div></section>';
         }
-        let currentPaymentChannel = '';
+        window.loadPlans = loadPlanPackages;\n\n        let currentPaymentChannel = '';
         let currentPaymentGateway = 'all';
         let currentPaymentTitleKey = '';
         let currentPaymentPage = 1;
