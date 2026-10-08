@@ -73,11 +73,67 @@ class MikroTikService {
     return this._withConnection("Hotspot server profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/profile/print");
       return (Array.isArray(rows) ? rows : []).map((item) => ({
-        id: this._str(item[".id"]), name: this._str(item.name), hotspotAddress: this._str(item["hotspot-address"]),
-        dnsName: this._str(item["dns-name"]), htmlDirectory: this._str(item["html-directory"]),
-        rateLimit: this._str(item["rate-limit"]), loginBy: this._str(item["login-by"]),
-        useRadius: this._bool(item["use-radius"]), raw: item
+        id: this._str(item[".id"]),
+        name: this._str(item.name),
+        hotspotAddress: this._str(item["hotspot-address"]),
+        dnsName: this._str(item["dns-name"]),
+        htmlDirectory: this._str(item["html-directory"]),
+        loginBy: this._str(item["login-by"]),
+        rateLimit: this._str(item["rate-limit"]),
+        statusAutorefresh: this._str(item["status-autorefresh"]),
+        sharedUsers: this._str(item["shared-users"]),
+        raw: item
       })).filter((item) => item.name);
+    });
+  }
+  async createHotspotServerProfile(data) {
+    const name=this._str(data.name).trim();
+    if(!name || name.toLowerCase()==='default') throw new Error("A custom server profile name is required.");
+    return this._withConnection("Hotspot server profile creation",async(connection)=>{
+      const params=this._writeParams({
+        name,
+        "hotspot-address":data.hotspotAddress,
+        "dns-name":data.dnsName,
+        "html-directory":data.htmlDirectory || "hotspot",
+        "login-by":data.loginBy,
+        "rate-limit":data.rateLimit,
+        "status-autorefresh":data.statusAutorefresh
+      });
+      await connection.write("/ip/hotspot/profile/add",params);
+      return {name};
+    });
+  }
+  async _findHotspotServerProfile(connection,identifier) {
+    const key=this._str(identifier).trim();
+    const rows=await connection.write("/ip/hotspot/profile/print");
+    const items=Array.isArray(rows)?rows:[];
+    const match=items.find(item=>this._str(item[".id"])===key) || items.find(item=>this._str(item.name)===key);
+    if(!match||!match[".id"]) throw new Error('Hotspot server profile "'+key+'" was not found on MikroTik.');
+    if(this._str(match.name).toLowerCase()==='default') throw new Error("The default server profile cannot be modified.");
+    return match;
+  }
+  async updateHotspotServerProfile(identifier,data) {
+    return this._withConnection("Hotspot server profile update",async(connection)=>{
+      const item=await this._findHotspotServerProfile(connection,identifier);
+      const params=this._writeParams({
+        ".id":item[".id"],
+        name:data.name,
+        "hotspot-address":data.hotspotAddress,
+        "dns-name":data.dnsName,
+        "html-directory":data.htmlDirectory || "hotspot",
+        "login-by":data.loginBy,
+        "rate-limit":data.rateLimit,
+        "status-autorefresh":data.statusAutorefresh
+      });
+      await connection.write("/ip/hotspot/profile/set",params);
+      return {id:this._str(item[".id"]),name:data.name};
+    });
+  }
+  async deleteHotspotServerProfile(identifier) {
+    return this._withConnection("Hotspot server profile deletion",async(connection)=>{
+      const item=await this._findHotspotServerProfile(connection,identifier);
+      await connection.write("/ip/hotspot/profile/remove",["=.id="+item[".id"]]);
+      return {id:this._str(item[".id"]),name:this._str(item.name)};
     });
   }
   async getHotspotProfiles() {
