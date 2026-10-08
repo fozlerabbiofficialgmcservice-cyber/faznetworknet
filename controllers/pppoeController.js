@@ -21,6 +21,11 @@ function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
 
+function extractExpiryDate(comment) {
+  const match = String(comment || "").match(/(?:^|[|;\s])EXP:\s*(\d{4}-\d{2}-\d{2})/i);
+  return match ? match[1] : "";
+}
+
 function extractPhone(comment) {
   const text = String(comment || "");
   const match = text.match(/(?:phone|mobile|tel|মোবাইল|ফোন)\s*[:=-]?\s*([+\d][\d\s-]{7,})/i);
@@ -56,17 +61,17 @@ async function syncFromRouter() {
       const comment = user.comment || "";
       await client.query(
         `INSERT INTO pppoe_users
-          (username, password, profile, service, caller_id, disabled, comment, phone, local_address, remote_address, router_id, raw_config, synced_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,NOW(),NOW())
+          (username, password, profile, service, caller_id, disabled, comment, phone, local_address, remote_address, router_id, raw_config, expiry_date, status, synced_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < CURRENT_DATE THEN 'expired' ELSE 'active' END,NOW(),NOW())
          ON CONFLICT (username) DO UPDATE SET
            password=COALESCE(EXCLUDED.password, pppoe_users.password), profile=EXCLUDED.profile, service=EXCLUDED.service,
            caller_id=EXCLUDED.caller_id, disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
            phone=COALESCE(NULLIF(EXCLUDED.phone,''), pppoe_users.phone), local_address=EXCLUDED.local_address,
-           remote_address=EXCLUDED.remote_address, router_id=EXCLUDED.router_id, raw_config=EXCLUDED.raw_config,
-           synced_at=NOW(), updated_at=NOW()`,
+           remote_address=EXCLUDED.remote_address, router_id=EXCLUDED.router_id, raw_config=EXCLUDED.raw_config, expiry_date=EXCLUDED.expiry_date,
+           status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()`,
         [
           user.name, user.password, user.profile, user.service, user.callerId, user.disabled, comment,
-          extractPhone(comment), user.localAddress, user.remoteAddress, routerId, JSON.stringify(user.raw || {})
+          extractPhone(comment), user.localAddress, user.remoteAddress, routerId, JSON.stringify(user.raw || {}), extractExpiryDate(comment)
         ]
       );
     }
