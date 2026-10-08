@@ -2819,10 +2819,14 @@ async function deletePlan(id,name){
             purgeStuckBackdrops();
             currentCustomerFilter = filterType;
             currentCustomerTitleKey = titleKey;
+            const dynamic = document.getElementById('dynamicPageContent');
+            if (!dynamic) return;
+            dynamic.style.display = 'block';
+            dynamic.hidden = false;
             document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
             setPageTitleSafe(customerTitle(titleKey));
-            document.getElementById('dynamicPageContent').innerHTML = `
-                <section id="view-customer-filter" class="admin-view">
+            dynamic.innerHTML = `
+                <section id="view-customer-filter" class="admin-view" style="display:block">
                     <div class="card card-custom">
                         <div class="card-custom-header"><i class="bi bi-hourglass-split text-success fs-5"></i><span data-key="loading_customers">Loading customers...</span></div>
                         <div class="card-body text-center py-5"><div class="spinner-border text-success" role="status"></div></div>
@@ -2833,11 +2837,28 @@ async function deletePlan(id,name){
                     ? '/api/customers?status=' + encodeURIComponent(filterType === 'all' ? 'all' : filterType)
                     : '/api/pppoe/users?filter=' + encodeURIComponent(filterType);
                 const data = await jsonFetch(endpoint);
-                renderCustomerTable(data.users || []);
+                if (data && data.success === false && !Array.isArray(data.users) && !Array.isArray(data.customers)) {
+                    throw new Error(data.message || 'Unable to load customer records.');
+                }
+                const users = Array.isArray(data?.users) ? data.users : (Array.isArray(data?.customers) ? data.customers : []);
+                renderCustomerTable(users);
+                dynamic.style.display = 'block';
+                dynamic.hidden = false;
+                const rendered = document.getElementById('view-customer-filter');
+                if (rendered) {
+                    rendered.style.display = 'block';
+                    rendered.hidden = false;
+                }
             } catch (error) {
-                document.getElementById('dynamicPageContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error.message) + '</div>';
+                dynamic.style.display = 'block';
+                dynamic.hidden = false;
+                dynamic.innerHTML = '<section class="admin-view" style="display:block"><div class="alert alert-danger m-3"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error?.message || 'Unable to load customer records.') + '</div></section>';
+                console.error('[Customer Section] render/fetch failed:', error);
+            } finally {
+                dynamic.style.display = 'block';
+                dynamic.hidden = false;
+                if (window.innerWidth <= 768) document.getElementById('sidebar')?.classList.remove('show');
             }
-            if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
         }
 
         async function refreshCustomerSection() {
