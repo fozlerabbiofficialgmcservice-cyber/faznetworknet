@@ -69,7 +69,7 @@ function buildHotspotOnLoginScript(config) {
     ' :local sched ("faz-exp-" . $u);' +
     ' :local oldSched [/system scheduler find where name=$sched];' +
     ' :if ([:len $oldSched] > 0) do={ /system scheduler remove $oldSched; };' +
-    ' /system scheduler add name=$sched interval=' + validity.validity + ' start-time=startup on-event=(\"/ip hotspot active remove [find where user=\\\"\" . $u . \"\\\"]; /ip hotspot user disable [find where name=\\\"\" . $u . \"\\\"]; /system scheduler remove [find where name=\\\"faz-exp-\" . $u . \"\\\"];\");';
+    ' /system scheduler add name=$sched interval=' + validity.validity + ' start-time=[/system clock get time] on-event=(\"/ip hotspot active remove [find where user=\\\"\" . $u . \"\\\"]; /ip hotspot user disable [find where name=\\\"\" . $u . \"\\\"]; /system scheduler remove [find where name=\\\"faz-exp-\" . $u . \"\\\"];\");';
 }
 
 module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript };
