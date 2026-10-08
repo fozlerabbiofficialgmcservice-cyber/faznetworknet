@@ -683,6 +683,44 @@
     </div>
 
     <script>
+        window.jsonFetch = async function(url, options = {}) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            try {
+                const response = await fetch(url, {
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                    ...options,
+                    signal: options.signal || controller.signal
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 401) {
+                    if (!window.__adminRedirecting) {
+                        window.__adminRedirecting = true;
+                        window.location.href = data?.redirect === '/login'
+                            ? '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search)
+                            : '/login';
+                    }
+                    return { success: false, message: data?.message || 'Unauthorized' };
+                }
+                if (!response.ok || data.success === false) {
+                    const message = data.message || data.error || ((response.status || '') + ' ' + (response.statusText || 'Server error'));
+                    if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message) && !adminDbConnected) {
+                        await refreshAdminDbHealth();
+                        if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
+                    }
+                    throw new Error(message);
+                }
+                return data;
+            } catch (error) {
+                const message = error?.name === 'AbortError' ? 'Request timed out' : (error?.message || String(error));
+                console.error('[jsonFetch Error]:', url, error);
+                return { success: false, message };
+            } finally {
+                clearTimeout(timeout);
+            }
+        };
+
         function safeSetText(idOrSelector, text) {
             let el = document.getElementById(idOrSelector);
             if (!el && typeof idOrSelector === 'string') {
@@ -2031,35 +2069,6 @@ async function deletePlan(id,name){
             window.__adminDbWarningTimer = setTimeout(() => { toast.style.display = 'none'; }, 6000);
         }
 
-        async function jsonFetch(url, options = {}) {
-            try {
-                const response = await fetch(url, { credentials: "same-origin", ...options });
-                const data = await response.json().catch(() => ({}));
-                if (response.status === 401 && data?.redirect === '/login') {
-                    if (!window.__adminRedirecting) {
-                        window.__adminRedirecting = true;
-                        window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
-                    }
-                    throw new Error(data.message || 'Session expired');
-                }
-                if (!response.ok || data.success === false) {
-                    const message = data.message || data.error || ((response.status || '') + ' ' + (response.statusText || 'Server error'));
-                    if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message) && !adminDbConnected) {
-                        await refreshAdminDbHealth();
-                        if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
-                    }
-                    throw new Error(message);
-                }
-                return data;
-            } catch (error) {
-                if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(String(error?.message || '')) && !adminDbConnected) {
-                    await refreshAdminDbHealth();
-                    if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
-                }
-                throw error;
-            }
-        }
-
         function showAddCustomerForm() {
             switchView('add-customer');
         }
@@ -3008,31 +3017,60 @@ async function deletePlan(id,name){
         }
 
         function initializeAdminRuntime() {
-            const dashboardInterface = document.getElementById('dashboardInterface');
-            if (dashboardInterface && !dashboardInterface.dataset.runtimeBound) {
-                dashboardInterface.dataset.runtimeBound = '1';
-                dashboardInterface.addEventListener('change', function() {
-                    if (trafficChart) {
-                        trafficChart.data.labels = [];
-                        trafficChart.data.datasets.forEach(d => d.data = []);
-                        trafficChart.update('none');
-                    }
-                    pollTraffic();
-                });
+            try {
+                const dashboardInterface = document.getElementById('dashboardInterface');
+                if (dashboardInterface && !dashboardInterface.dataset.runtimeBound) {
+                    dashboardInterface.dataset.runtimeBound = '1';
+                    dashboardInterface.addEventListener('change', function() {
+                        try {
+                            if (trafficChart) {
+                                trafficChart.data.labels = [];
+                                trafficChart.data.datasets.forEach(d => d.data = []);
+                                trafficChart.update('none');
+                            }
+                            void safeAdminBootStep('traffic refresh', () => pollTraffic());
+                        } catch (error) {
+                            console.error('[Admin Boot] traffic change handler failed:', error);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('[Admin Boot] event binding failed:', error);
             }
 
-            // Dashboard boot must never be held hostage by one failing subsystem.
-            safeAdminBootStep('switch dashboard view', () => switchView('dashboard'));
-            safeAdminBootStep('initial dashboard refresh', () => refreshDashboard());
-            safeAdminBootStep('traffic polling', () => startTrafficPolling());
+            try { void safeAdminBootStep('switch dashboard view', () => switchView('dashboard')); }
+            catch (error) { console.error('[Admin Boot] switch dashboard failed:', error); }
 
-            if (metricsTimer) clearInterval(metricsTimer);
-            metricsTimer = setInterval(() => {
-                safeAdminBootStep('router metrics', () => loadRouterMetrics());
-                if (document.getElementById('view-dashboard')?.style.display !== 'none') safeAdminBootStep('dashboard refresh', () => refreshDashboard());
-                if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) safeAdminBootStep('hotspot metrics', () => refreshHotspotDashboardMetrics());
-                if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) safeAdminBootStep('payment refresh', () => fetchPaymentsSection());
-            }, 5000);
+            try { void safeAdminBootStep('initial dashboard refresh', () => refreshDashboard()); }
+            catch (error) { console.error('[Admin Boot] dashboard refresh failed:', error); }
+
+            try { void safeAdminBootStep('traffic polling', () => startTrafficPolling()); }
+            catch (error) { console.error('[Admin Boot] traffic polling failed:', error); }
+
+            try {
+                if (metricsTimer) clearInterval(metricsTimer);
+                metricsTimer = setInterval(() => {
+                    try { void safeAdminBootStep('router metrics', () => loadRouterMetrics()); }
+                    catch (error) { console.error('[Admin Poll] router metrics failed:', error); }
+                    try {
+                        if (document.getElementById('view-dashboard')?.style.display !== 'none') {
+                            void safeAdminBootStep('dashboard refresh', () => refreshDashboard());
+                        }
+                    } catch (error) { console.error('[Admin Poll] dashboard refresh failed:', error); }
+                    try {
+                        if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) {
+                            void safeAdminBootStep('hotspot metrics', () => refreshHotspotDashboardMetrics());
+                        }
+                    } catch (error) { console.error('[Admin Poll] hotspot metrics failed:', error); }
+                    try {
+                        if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) {
+                            void safeAdminBootStep('payment refresh', () => fetchPaymentsSection());
+                        }
+                    } catch (error) { console.error('[Admin Poll] payment refresh failed:', error); }
+                }, 5000);
+            } catch (error) {
+                console.error('[Admin Boot] metrics timer failed:', error);
+            }
         }
 
         if (document.readyState === 'loading') {
