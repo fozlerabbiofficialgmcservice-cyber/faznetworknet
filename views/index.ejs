@@ -80,7 +80,7 @@ const dashboardBody = `
           '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Package / Plan</p><p class="mt-1 font-bold text-slate-800">'+esc(c.package||c.profile||'-')+'</p></div>'+
           '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Expiration</p><p class="mt-1 font-bold text-slate-800">'+esc(expiry)+'</p></div>'+
           '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Remaining Days</p><p class="mt-1 font-bold text-slate-800">'+esc(days)+'</p></div>'+
-          '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Billing</p><p class="mt-1 font-bold '+(paid?'text-emerald-600':'text-amber-600')+'">'+esc(c.billingStatus||'Due')+'</p></div>'+
+          '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Billing Status</p><p class="mt-1 font-bold '+(paid?'text-emerald-600':'text-red-600')+'">'+esc(paid?'Paid':'Unpaid')+'</p></div>'+
         '</div>'+
         '<div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">'+
           '<div><span class="font-semibold">Live IP:</span> '+esc(c.liveIp||'Not online')+'</div>'+
