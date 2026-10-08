@@ -450,7 +450,7 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)"><span data-key="website_setting">Website Setting</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('website-settings'); return false;"><span data-key="website_setting">Website Setting</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="sms_setting">SMS Setting</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="backup_restore">Backup & Restore</span></a></li>
                 </ul>
@@ -577,6 +577,18 @@
                         <tbody id="recentPaymentsBody"><tr><td colspan="5" class="text-center py-3 text-muted">Loading payments...</td></tr></tbody></table>
                     </div>
                 </div>
+            </section>
+
+            <!-- VIEW: WEBSITE SETTINGS -->
+            <section id="view-website-settings" class="admin-view" style="display:none">
+                <div class="row g-4"><div class="col-12"><div class="card card-custom shadow-sm border-0">
+                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-broadcast-pin text-success fs-5"></i><div><div class="fw-semibold">Personal Payment Gateway Webhook</div><small class="text-muted fw-normal">Configure the inbound webhook used by your personal MFS payment automation.</small></div></div><span id="paymentWebhookStatus" class="badge bg-secondary ms-auto">Not configured</span></div>
+                    <div class="card-body p-4"><form id="paymentWebhookSettingsForm" novalidate><div class="row g-4">
+                        <div class="col-12"><label for="paymentWebhookUrl" class="form-label fw-semibold">Webhook URL</label><input id="paymentWebhookUrl" type="url" class="form-control font-monospace" placeholder="https://example.com/api/webhooks/macrodroid-sms" autocomplete="url"><div class="form-text">The endpoint that your SMS automation device/service should POST payment notifications to.</div></div>
+                        <div class="col-lg-8"><label for="paymentWebhookSecret" class="form-label fw-semibold">Webhook Secret Key / Token</label><input id="paymentWebhookSecret" type="password" class="form-control font-monospace" placeholder="Leave blank to keep the existing secret" autocomplete="new-password"><div id="paymentWebhookSecretHint" class="form-text">The saved secret is never returned to the browser.</div></div>
+                        <div class="col-lg-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" role="switch" id="paymentWebhookEnabled"><label class="form-check-label fw-semibold" for="paymentWebhookEnabled">Enable automation</label></div></div>
+                    </div><div id="paymentWebhookSettingsResult" class="small mt-3"></div><div class="d-flex justify-content-end mt-4"><button id="paymentWebhookSaveBtn" type="submit" class="btn btn-success px-4"><i class="bi bi-check2-circle me-1"></i>Save Webhook Settings</button></div></form></div>
+                </div></div></div>
             </section>
 
             <!-- VIEW 2: ADD CUSTOMER -->
@@ -1636,7 +1648,8 @@
             dashboard: 'Dashboard',
             'add-customer': 'Add New Customer',
             'all-customer': 'All Customer (PPPoE)',
-            payments: 'All Payments'
+            payments: 'All Payments',
+            'website-settings': 'Website Settings'
         };
 
         let currentIpPoolEdit = null; let ipPoolCache = {};
@@ -2060,7 +2073,15 @@ async function deletePlan(id,name){
         let trafficPollInFlight = false;
         let metricsPollInFlight = false;
 
-        function switchView(viewName, channel = '') {
+        let websiteSettingsLoaded=false;
+        async function loadWebsiteSettings(){
+            const form=document.getElementById('paymentWebhookSettingsForm');if(!form||websiteSettingsLoaded)return;
+            const result=document.getElementById('paymentWebhookSettingsResult');
+            try{const data=await jsonFetch('/api/settings/website'),s=data.settings||{};const url=document.getElementById('paymentWebhookUrl'),secret=document.getElementById('paymentWebhookSecret'),enabled=document.getElementById('paymentWebhookEnabled');if(url)url.value=s.webhookUrl||((window.location.origin||'')+'/api/webhooks/macrodroid-sms');if(enabled)enabled.checked=Boolean(s.webhookEnabled);if(secret)secret.value='';const status=document.getElementById('paymentWebhookStatus');if(status){status.textContent=s.webhookEnabled?'Enabled':'Disabled';status.className='badge ms-auto '+(s.webhookEnabled?'bg-success':'bg-secondary');}const hint=document.getElementById('paymentWebhookSecretHint');if(hint)hint.textContent=s.secretConfigured?'A secret is already saved. Leave this field blank to keep it unchanged.':'No secret is saved yet.';websiteSettingsLoaded=true;}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to load Website Settings.';}}
+        }
+        document.getElementById('paymentWebhookSettingsForm')?.addEventListener('submit',async function(event){event.preventDefault();const btn=document.getElementById('paymentWebhookSaveBtn'),result=document.getElementById('paymentWebhookSettingsResult');if(btn)btn.disabled=true;if(result){result.className='small mt-3 text-muted';result.textContent='Saving settings...';}try{const payload={webhookUrl:document.getElementById('paymentWebhookUrl')?.value.trim()||'',webhookSecret:document.getElementById('paymentWebhookSecret')?.value||'',webhookEnabled:Boolean(document.getElementById('paymentWebhookEnabled')?.checked)};const response=await fetch('/api/settings/website',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),cache:'no-store'});let data={};try{data=await response.json();}catch(_){}if(!response.ok||data.success===false)throw new Error(data.error||data.message||'Unable to save settings.');if(result){result.className='small mt-3 text-success fw-semibold';result.textContent=data.message||'Webhook settings saved successfully.';}websiteSettingsLoaded=false;await loadWebsiteSettings();}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to save settings.';}}finally{if(btn)btn.disabled=false;}});
+
+        function switchView(viewName, channel = '')
             purgeStuckBackdrops();
             currentCustomerTitleKey = '';
             currentPaymentTitleKey = '';
@@ -2077,6 +2098,8 @@ async function deletePlan(id,name){
                 fetchCustomers();
             } else if (target === 'payments') {
                 fetchPayments(currentPaymentChannel);
+            } else if (target === 'website-settings') {
+                loadWebsiteSettings();
             }
             if (window.innerWidth < 768) closeSidebarMobile();
         }
