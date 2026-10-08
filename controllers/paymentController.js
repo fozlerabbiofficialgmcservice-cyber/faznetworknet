@@ -4,6 +4,7 @@ const mikrotikService=require("../services/mikrotikService");
 const {parseSms}=require("../services/paymentWebhookParser");
 function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
+function normalizePhone(value){const bangla="০১২৩৪৫৬৭৮৯";let digits=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/\D/g,"");if(digits.startsWith("880")&&digits.length===13)digits="0"+digits.slice(3);return digits;}
 function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
 function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;const day=d.getUTCDate(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Number(months),1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(day,last));return t.toISOString().slice(0,10);}
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
@@ -119,11 +120,13 @@ async function verifyTrx(req,res){
   const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
   const amount=Number(tx.amount),requestedAmount=Number(req.body.amount||0);
   if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
-  const packages=await db.query("SELECT id,plan_name,profile_name,price,duration_months FROM packages WHERE price=$1 ORDER BY id ASC",[amount]);
-  if(!packages.rows.length)return res.status(400).json({success:false,error:"No package is mapped to this payment amount."});
-  const distinctProfiles=[...new Set(packages.rows.map(row=>String(row.profile_name||row.plan_name||"").trim()).filter(Boolean))];
-  if(distinctProfiles.length!==1)return res.status(400).json({success:false,error:"Payment amount maps to multiple Hotspot profiles. Configure one unique package/profile for this amount."});
-  const profile=distinctProfiles[0], hotspotProfiles=await mikrotikService.getHotspotProfiles();
+  const savedSettings=await db.query("SELECT key,value FROM app_settings WHERE key IN ('hotspot_price_profile_map','hotspot_default_profile')");
+  const settings=Object.fromEntries((savedSettings.rows||[]).map(row=>[row.key,row.value]));
+  let mapping={};try{mapping=JSON.parse(settings.hotspot_price_profile_map||"{}");}catch(_){}
+  if(!mapping||typeof mapping!=="object"||Array.isArray(mapping))mapping={};
+  const mappedProfile=String(mapping[amount.toFixed(2)]||mapping[String(amount)]||"").trim();
+  if(!mappedProfile)return res.status(400).json({success:false,error:"No Hotspot profile is mapped to ৳"+amount.toFixed(2)+". Ask the administrator to configure this amount in Website Settings."});
+  const profile=mappedProfile, hotspotProfiles=await mikrotikService.getHotspotProfiles();
   const hotspotProfile=hotspotProfiles.find(item=>String(item.name||"").trim().toLowerCase()===profile.toLowerCase());
   if(!hotspotProfile)return res.status(400).json({success:false,error:"The mapped Hotspot profile is not available on MikroTik."});
   const validity=String(hotspotProfile.sessionTimeout||"").trim();
