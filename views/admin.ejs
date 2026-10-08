@@ -693,43 +693,50 @@
             console.warn('[Admin Boot] backdrop cleanup failed:', error);
         }
 
+        // Guaranteed Global Fetch Helper
         window.jsonFetch = async function(url, options = {}) {
+            const timeoutMs = options.timeout || 8000;
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
             try {
-                const response = await fetch(url, {
+                const { timeout: _ignoredTimeout, ...fetchOptions } = options;
+                const res = await fetch(url, {
                     credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-                    ...options,
-                    signal: options.signal || controller.signal
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        ...(fetchOptions.headers || {})
+                    },
+                    ...fetchOptions,
+                    signal: fetchOptions.signal || controller.signal
                 });
-                const data = await response.json().catch(() => ({}));
-                if (response.status === 401) {
-                    if (!window.__adminRedirecting) {
-                        window.__adminRedirecting = true;
-                        window.location.href = data?.redirect === '/login'
-                            ? '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search)
-                            : '/login';
-                    }
-                    return { success: false, message: data?.message || 'Unauthorized' };
+
+                clearTimeout(timeoutId);
+
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return { success: false, message: 'Unauthorized. Redirecting...' };
                 }
-                if (!response.ok || data.success === false) {
-                    const message = data.message || data.error || ((response.status || '') + ' ' + (response.statusText || 'Server error'));
-                    if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message) && !adminDbConnected) {
-                        await refreshAdminDbHealth();
-                        if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
-                    }
-                    throw new Error(message);
+
+                const contentType = res.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    return await res.json();
                 }
-                return data;
-            } catch (error) {
-                const message = error?.name === 'AbortError' ? 'Request timed out' : (error?.message || String(error));
-                console.error('[jsonFetch Error]:', url, error);
-                return { success: false, message };
-            } finally {
-                clearTimeout(timeout);
+
+                const text = await res.text();
+                return { success: res.ok, data: text };
+            } catch (err) {
+                clearTimeout(timeoutId);
+                console.error('[jsonFetch Failed]:', url, err.name === 'AbortError' ? 'Request Timed Out' : err.message);
+                return {
+                    success: false,
+                    message: err.name === 'AbortError' ? 'Request Timed Out' : err.message
+                };
             }
         };
+        // Alias for backward compatibility
+        window.fetchJson = window.jsonFetch;
 
         function safeSetText(idOrSelector, text) {
             let el = document.getElementById(idOrSelector);
@@ -1117,7 +1124,7 @@
         function printHotspotSlip(){
             const card=document.getElementById('hotspotCreatedCredentials'); if(!card)return;
             const w=window.open('', '_blank', 'width=420,height=600'); if(!w)return;
-            w.document.write('<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}</style></head><body><div class="slip">'+card.innerHTML+'</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
+            w.document.write(`<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}</style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
 <div class="modal fade" id="customerProfileModal" tabindex="-1" aria-labelledby="modalCustomerTitle" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow-lg">
@@ -1205,7 +1212,7 @@
     </div>
   </div>
 </div>
-</body></html>');
+</body></html>`);
             w.document.close();
         }
         async function loadAddHotspotUserView(){
@@ -1841,17 +1848,33 @@ async function deletePlan(id,name){
             }catch(err){alert('Network error while deleting plan: '+(err?.message||'Unknown error'));}
         }
 
-        async function syncPlansFromMikrotik(){
-            const button=document.getElementById('syncPlansBtn');
-            if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';}
-            try{
-                const response=await fetch('/api/packages/sync',{method:'POST'});
-                const data=await response.json().catch(()=>({}));
-                if(!response.ok||data.success===false)throw new Error(data.message||'MikroTik profile sync failed.');
-                await loadPlanPackages();
-                alert('Synced '+Number(data.count||0)+' MikroTik PPP profiles.');
-            }catch(error){alert(error.message);}finally{
-                if(button){button.disabled=false;button.innerHTML='<i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik';}
+        async function syncPlansFromMikrotik() {
+            const syncBtn = document.getElementById('syncPlansBtn') || document.querySelector('.sync-plans-btn');
+            const origHtml = syncBtn ? syncBtn.innerHTML : '';
+            if (syncBtn) {
+                syncBtn.disabled = true;
+                syncBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Syncing...';
+            }
+
+            try {
+                const data = await window.jsonFetch('/api/packages/sync', { method: 'POST' });
+                if (!data.success) {
+                    throw new Error(data.message || 'Sync failed');
+                }
+
+                alert(data.message || 'Sync completed successfully!');
+                if (typeof window.loadPlans === 'function') {
+                    await window.loadPlans();
+                } else {
+                    window.location.reload();
+                }
+            } catch (err) {
+                alert('Failed to sync plans from MikroTik: ' + (err?.message || 'Unknown error'));
+            } finally {
+                if (syncBtn) {
+                    syncBtn.disabled = false;
+                    syncBtn.innerHTML = origHtml;
+                }
             }
         }
 
@@ -2010,6 +2033,48 @@ async function deletePlan(id,name){
             }
             if (window.innerWidth < 768) closeSidebarMobile();
         }
+
+        window.switchView = switchView;
+
+        window.showSection = function(sectionId) {
+            const id = String(sectionId || '').trim();
+            if (!id) return;
+
+            const viewName = id.replace(/^view-/, '');
+            const directTarget = document.getElementById(id) ||
+                document.querySelector('[data-section="' + CSS.escape(id) + '"]');
+            const viewTarget = document.getElementById('view-' + viewName);
+
+            if (viewTarget && typeof window.switchView === 'function') {
+                window.switchView(viewName);
+                return;
+            }
+
+            document.querySelectorAll('.admin-view, .admin-section, .content-section, [data-section]').forEach(function(el) {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            });
+
+            const target = directTarget || viewTarget;
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            }
+
+            document.querySelectorAll('.sidebar .nav-link, .nav-item a, .menu-item a').forEach(function(link) {
+                link.classList.remove('active');
+                const onclick = link.getAttribute('onclick') || '';
+                if (onclick.includes(id) || onclick.includes(viewName) || link.getAttribute('data-target') === id) {
+                    link.classList.add('active');
+                }
+            });
+
+            if (id === 'plans' || id === 'packagesSection') {
+                if (typeof window.loadPlans === 'function') window.loadPlans();
+            } else if (id === 'customers' || id === 'pppoeSection') {
+                if (typeof window.loadCustomers === 'function') window.loadCustomers();
+            }
+        };
 
         function updateLanguage(lang) {
             document.documentElement.lang = lang;
