@@ -304,7 +304,9 @@ async function publicCustomerCheck(req,res){
     }catch(error){console.warn("[Public Customer session warning]:",error.message);}
 
     const paidUntil=normalizeDate(dbUser?.paid_until);
-    const paidCurrentCycle=String(dbUser?.billing_status||"").toLowerCase()==="paid" && Boolean(paidUntil && paidUntil>=today) && !Boolean(mtSecret?.disabled);
+    const accountState=String(dbUser?.status||"").trim().toLowerCase();
+    const suspended=Boolean(mtSecret?.disabled)||["expired","suspended","disabled","left","terminated","due"].includes(accountState);
+    const paidCurrentCycle=String(dbUser?.billing_status||"").toLowerCase()==="paid" && Boolean(paidUntil && paidUntil>=today) && !suspended && dateStatus(expiration)==="active";
     const billing=paidCurrentCycle?"Paid":"Unpaid";
     const profile=clean(mtSecret?.profile||dbUser?.profile||dbUser?.linked_profile_name||dbUser?.package_name||"-",100);
     const packageName=clean(dbUser?.linked_plan_name||dbUser?.package_name||profile,100);
