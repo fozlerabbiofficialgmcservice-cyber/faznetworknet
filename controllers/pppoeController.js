@@ -351,8 +351,8 @@ async function removeUser(req,res){
       }
 
       await client.query(
-        "DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1) OR ($2::bigint IS NOT NULL AND id=$2)",
-        [username,null]
+        "DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",
+        [username]
       );
 
       await client.query(
