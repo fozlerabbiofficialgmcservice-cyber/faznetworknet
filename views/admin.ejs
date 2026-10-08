@@ -2995,6 +2995,11 @@ async function deletePlan(id,name){
             trafficTimer = setInterval(pollTraffic, 2500);
         }
 
+        async function safeAdminBootStep(label, task) {
+            try { return await Promise.resolve().then(task); }
+            catch (error) { console.error('[Admin Boot] ' + label + ' failed:', error); return null; }
+        }
+
         function initializeAdminRuntime() {
             const dashboardInterface = document.getElementById('dashboardInterface');
             if (dashboardInterface && !dashboardInterface.dataset.runtimeBound) {
@@ -3009,18 +3014,17 @@ async function deletePlan(id,name){
                 });
             }
 
-            // Dashboard is the initial operational view.
-            switchView('dashboard');
-            refreshDashboard();
-            startTrafficPolling();
+            // Dashboard boot must never be held hostage by one failing subsystem.
+            safeAdminBootStep('switch dashboard view', () => switchView('dashboard'));
+            safeAdminBootStep('initial dashboard refresh', () => refreshDashboard());
+            safeAdminBootStep('traffic polling', () => startTrafficPolling());
 
-            // Background live metrics: 5-second refresh regardless of current view.
             if (metricsTimer) clearInterval(metricsTimer);
             metricsTimer = setInterval(() => {
-                loadRouterMetrics();
-                if (document.getElementById('view-dashboard')?.style.display !== 'none') refreshDashboard();
-                if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) refreshHotspotDashboardMetrics();
-                if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) fetchPaymentsSection();
+                safeAdminBootStep('router metrics', () => loadRouterMetrics());
+                if (document.getElementById('view-dashboard')?.style.display !== 'none') safeAdminBootStep('dashboard refresh', () => refreshDashboard());
+                if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) safeAdminBootStep('hotspot metrics', () => refreshHotspotDashboardMetrics());
+                if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) safeAdminBootStep('payment refresh', () => fetchPaymentsSection());
             }, 5000);
         }
 
