@@ -364,7 +364,7 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="window.showSection('view-all-customers', event)"><span data-key="all_customer">All Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.showSection('view-all-customers', event); window.loadCustomerRecords();"><span data-key="all_customer">All Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.showSection('view-add-customer', event)"><span data-key="add_customer">Add Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('online', 'online_customer')"><span data-key="online_customer">Online Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('offline', 'offline_customer')"><span data-key="offline_customer">Offline Customer</span></a></li>
@@ -2960,27 +2960,88 @@ async function deletePlan(id,name){
         };
 
         window.loadCustomerRecords = async function() {
-            const loader = document.getElementById('customerLoadingSpinner') || document.querySelector('.loading-customers');
-            const tableContainer = document.getElementById('customerTableContainer') || document.getElementById('view-all-customers') || document.getElementById('dynamicPageContent');
-            if (loader) loader.style.display = 'block';
+            const tbody = document.getElementById('pppoeUserList');
+
+            if (!tbody) {
+                console.error('[Customer Records] #pppoeUserList was not found.');
+                return;
+            }
+
+            // Immediately replace the stale placeholder while the real request runs.
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading customer records...</td></tr>';
+
             try {
                 const res = await fetch('/api/customers', { credentials: 'same-origin' });
                 if (!res.ok) throw new Error('HTTP error! status: ' + res.status);
+
                 const payload = await res.json();
-                const customers = Array.isArray(payload) ? payload :
-                    (Array.isArray(payload?.data) ? payload.data :
-                    (Array.isArray(payload?.customers) ? payload.customers :
-                    (Array.isArray(payload?.users) ? payload.users : [])));
-                window.renderCustomerRows(customers);
+                const customers = Array.isArray(payload)
+                    ? payload
+                    : (Array.isArray(payload?.data)
+                        ? payload.data
+                        : (Array.isArray(payload?.customers)
+                            ? payload.customers
+                            : (Array.isArray(payload?.users) ? payload.users : [])));
+
+                if (!customers.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">No PPPoE customers found.</td></tr>';
+                    return;
+                }
+
+                const rows = [];
+                customers.forEach(function(c) {
+                    try {
+                        const customer = (c && typeof c === 'object') ? c : {};
+                        const id = customer.id || customer.customer_id || '';
+                        const username = String(customer.username || '').trim();
+                        const profile = customer.profile || customer.package_name || '—';
+                        const phone = formatBdPhoneNumber(customer.phone || customer.mobile);
+                        const rawStatus = String(customer.billing_status || customer.status || customer.computed_status || 'unpaid').toLowerCase();
+                        const status = rawStatus === 'expired' ? 'expired' : rawStatus === 'active' || rawStatus === 'paid' ? 'active' : 'unpaid';
+                        const statusClass = status === 'active' ? 'bg-success' : status === 'expired' ? 'bg-danger' : 'bg-warning text-dark';
+                        const expiryRaw = String(customer.expiration_date || customer.expiry_date || '').slice(0, 10);
+                        let expiry = '—';
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(expiryRaw)) {
+                            expiry = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Dhaka',
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                            }).format(new Date(expiryRaw + 'T00:00:00+06:00'));
+                        }
+                        const price = Number(customer.price ?? customer.monthly_bill ?? customer.monthlyBill ?? 0) || 0;
+                        const safeId = String(id);
+                        const safeUsername = String(username);
+
+                        rows.push(
+                            '<tr>' +
+                            '<td><strong>' + escapeHtml(safeUsername || '—') + '</strong></td>' +
+                            '<td><span class="badge bg-info text-dark">' + escapeHtml(String(profile)) + '</span></td>' +
+                            '<td>' + escapeHtml(phone || '—') + '</td>' +
+                            '<td><span class="badge ' + statusClass + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span></td>' +
+                            '<td>' + escapeHtml(expiry) + '</td>' +
+                            '<td class="text-nowrap">' +
+                                '<button type="button" class="btn btn-sm btn-outline-success me-1" title="Quick Renew" onclick="window.quickRenewCustomer(' + JSON.stringify(safeId) + ',' + price + ')"><i class="bi bi-arrow-repeat"></i></button>' +
+                                '<button type="button" class="btn btn-sm btn-outline-primary me-1" title="Edit" onclick="window.openCustomerEditModal(' + JSON.stringify(safeId) + ')"><i class="bi bi-pencil"></i></button>' +
+                                '<button type="button" class="btn btn-sm btn-outline-danger" title="Delete" onclick="window.deleteCustomer(' + JSON.stringify(safeId) + ',' + JSON.stringify(safeUsername) + ')"><i class="bi bi-trash"></i></button>' +
+                            '</td>' +
+                            '</tr>'
+                        );
+                    } catch (rowError) {
+                        console.error('[Customer Records] Skipping malformed customer row:', rowError, c);
+                    }
+                });
+
+                tbody.innerHTML = rows.length
+                    ? rows.join('')
+                    : '<tr><td colspan="6" class="text-center py-3 text-muted">No PPPoE customers found.</td></tr>';
             } catch (err) {
                 console.error('Failed to load customers:', err);
-                const tbody = document.querySelector('#customerTable tbody') || document.querySelector('#customerFilterBody');
-                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Failed to load customer records: ' + escapeHtml(err?.message || 'Unknown error') + '. Please refresh.</td></tr>';
-                else if (tableContainer) tableContainer.innerHTML = '<div class="alert alert-danger">Failed to load customer records: ' + escapeHtml(err?.message || 'Unknown error') + '. Please refresh.</div>';
-            } finally {
-                if (loader) { loader.classList.add('d-none'); loader.style.display = 'none'; }
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Failed to load customer records: ' +
+                    escapeHtml(err?.message || 'Unknown error') + '. Please refresh.</td></tr>';
             }
         };
+
 
         async function loadCustomerSection(filterType, titleKey) {
             try {
