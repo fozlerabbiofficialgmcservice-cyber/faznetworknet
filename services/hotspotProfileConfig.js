@@ -9,31 +9,21 @@ const UNIT_ALIASES = {
 function normalizeProfileValidity(value, unit) {
   const n = Number(value);
   const u = UNIT_ALIASES[String(unit || "").trim().toLowerCase()];
-  if (!Number.isSafeInteger(n) || n <= 0) {
-    throw new Error("Validity must be a positive whole number.");
-  }
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Error("Validity must be a positive whole number.");
   if (!u) throw new Error("Validity unit must be minutes, hours, days, or GB.");
-
   if (u === "gb") {
     const bytes = n * 1073741824;
     if (!Number.isSafeInteger(bytes)) throw new Error("GB quota is too large.");
     return { value: n, unit: u, validity: "", validityLabel: n + " GB", limitBytesTotal: bytes };
   }
-
   const suffix = { minutes: "m", hours: "h", days: "d" }[u];
   const singular = { minutes: "Minute", hours: "Hour", days: "Day" }[u];
-  return {
-    value: n,
-    unit: u,
-    validity: String(n) + suffix,
-    validityLabel: n + " " + singular + (n === 1 ? "" : "s"),
-    limitBytesTotal: 0
-  };
+  return { value: n, unit: u, validity: String(n) + suffix, validityLabel: n + " " + singular + (n === 1 ? "" : "s"), limitBytesTotal: 0 };
 }
 
 function parseStoredValidity(profile) {
   const timeout = String(profile?.sessionTimeout || profile?.["session-timeout"] || "").trim();
-  const match = timeout.match(/^(\d+)(m|h|d)$/i);
+  const match = timeout.match(/^(\\d+)(m|h|d)$/i);
   if (!match) return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
   return normalizeProfileValidity(Number(match[1]), match[2].toLowerCase());
 }
@@ -43,10 +33,8 @@ function buildHotspotOnLoginScript(config) {
   const sharedUsers = Math.max(1, Number(config.sharedUsers) || 1);
   const profileName = String(config.name || "").replace(/[^a-zA-Z0-9_. -]/g, "").slice(0, 80);
   const policy = validity.validity || validity.validityLabel;
-
-  // Always persist MAC and the RouterOS login-by method in the user's comment.
-  // Bind mac-address only for single-user profiles to avoid locking shared vouchers
-  // to one device. RouterOS stores the authentication method on the active entry.
+  // Persist MAC/login method in the comment. Bind the MAC only for single-user
+  // profiles so shared vouchers are not accidentally locked to one device.
   const bindMac = sharedUsers === 1 ? " /ip hotspot user set $uid mac-address=$loginMac;" : "";
   const prefix = [
     ':local u $user',
@@ -55,19 +43,20 @@ function buildHotspotOnLoginScript(config) {
     ':local activeId [/ip hotspot active find where user=$u]',
     ':if ([:len $activeId] > 0) do={ :set auth [/ip hotspot active get $activeId login-by]; }',
     ':local uid [/ip hotspot user find where name=$u]',
-    ':if ([:len $uid] > 0) do={ /ip hotspot user set $uid comment=("FAZ|PROFILE=' + profileName + '|VALIDITY=' + policy + '|MAC=".$loginMac."|AUTH=".$auth + '");' + bindMac + ' }'
+    ':if ([:len $uid] > 0) do={ /ip hotspot user set $uid comment=("FAZ|PROFILE=' + profileName + '|VALIDITY=' + policy + '|MAC=".$loginMac."|AUTH=".$auth);' + bindMac + ' }'
   ].join("; ");
 
   if (validity.unit === "gb") {
     return prefix + " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=" + validity.limitBytesTotal + "; };";
   }
 
-  // Start validity on first login only. Reconnects must not extend a prepaid
-  // package, so an existing expiry scheduler is deliberately left untouched.
+  // Anchor expiry to first login: reconnects must not extend prepaid validity.
   return prefix +
     " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };" +
     ' :local sched ("faz-exp-" . $u);' +
-    ' :if ([:len [/system scheduler find where name=$sched]] = 0) do={ /system scheduler add name=$sched interval=' + validity.validity + ' start-time=[/system clock get time] on-event=(\\\"/ip hotspot active remove [find where user=\\\\\\\"\\\\\\" . $u . \\\"\\\\\\\"]; /ip hotspot user disable [find where name=\\\\\\\"\\\\\\" . $u . \\\"\\\\\\\"]; /system scheduler remove [find where name=\\\\\\\"faz-exp-\\\\" . $u . \\\"\\\\\\\"];\\\"); };';
+    ' :if ([:len [/system scheduler find where name=$sched]] = 0) do={ /system scheduler add name=$sched interval=' +
+    validity.validity +
+    ' start-time=[/system clock get time] on-event=("/ip hotspot active remove [find where user=\\\"" . $u . "\\\"]; /ip hotspot user disable [find where name=\\\"" . $u + '\\\"]; /system scheduler remove [find where name=\\\"faz-exp-" . $u . "\\\"];"); };';
 }
 
 module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript };
