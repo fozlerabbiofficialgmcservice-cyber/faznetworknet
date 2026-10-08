@@ -156,16 +156,28 @@ async function createUser(req,res){
 }
 async function dashboardMetrics(req,res){
   try{
-    const [users,sessions,revenue]=await Promise.all([
+    const [allUsers,activeSessions]=await Promise.all([
       mikrotikService.getHotspotUsers(),
-      mikrotikService.getActiveHotspotSessions(),
-      db.query("SELECT COALESCE(SUM(price),0) AS total FROM hotspot_vouchers WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'")
+      mikrotikService.getActiveHotspotSessions()
     ]);
-    const explicit=users.filter(u=>String(u.username||"").toLowerCase()!=="default-trial"&&String(u.profile||"").trim()&&String(u.profile||"").toLowerCase()!=="default-trial");
-    const live=sessions.filter(s=>String(s.username||"").toLowerCase()!=="default-trial");
-    const recentActiveSessions=live.slice(-5).reverse().map(s=>({username:s.username,ip:s.address,mac:s.macAddress,uptime:s.uptime,rxBytes:s.bytesIn,txBytes:s.bytesOut}));
-    const totalBytes=live.reduce((sum,s)=>sum+Number(s.bytesIn||0)+Number(s.bytesOut||0),0);
-    return res.json({success:true,totalUsers:explicit.length,onlineUsers:live.length,todayRevenue:Number(revenue.rows?.[0]?.total||0),totalActiveBandwidthUsage:totalBytes,recentActiveSessions});
+    const customerUsers=(Array.isArray(allUsers)?allUsers:[]).filter(user=>{
+      const username=String(user?.username||"").trim().toLowerCase();
+      return username&&username!=="default-trial";
+    });
+    const liveSessions=(Array.isArray(activeSessions)?activeSessions:[]).filter(session=>{
+      const username=String(session?.username||"").trim().toLowerCase();
+      return username&&username!=="default-trial";
+    });
+    const totalUsers=customerUsers.length;
+    const activeUsers=liveSessions.length;
+    const offlineUsers=Math.max(0,totalUsers-activeUsers);
+    return res.json({
+      success:true,
+      totalUsers,
+      activeUsers,
+      offlineUsers,
+      todayRevenue:0.00
+    });
   }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
