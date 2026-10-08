@@ -291,6 +291,26 @@ class MikroTikService {
       return {username:name,kicked:matches.length>0,count:matches.length,id:requestedId||this._str(matches[0]?.[".id"])};
     });
   }
+  async rechargeHotspotUser(data) {
+    const username=this._str(data.username).trim(),password=this._str(data.password),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim();
+    if(!username||!password||!profile||!validity)throw new Error("Hotspot recharge requires username, password, profile, and validity.");
+    return this._withConnection("Hotspot user recharge",async(connection)=>{
+      const rows=await connection.write("/ip/hotspot/user/print");
+      const matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===username&&item[".id"]);
+      const comment=data.comment||("FAZ NETWORK | Recharge | "+username);
+      if(matches.length){
+        const item=matches[0];
+        await connection.write("/ip/hotspot/user/set",this._writeParams({".id":item[".id"],password,profile,disabled:false,"limit-uptime":validity,comment}));
+        await connection.write("/ip/hotspot/user/reset-counters",["=.id="+item[".id"]]);
+        const activeRows=await connection.write("/ip/hotspot/active/print");
+        for(const session of (Array.isArray(activeRows)?activeRows:[]).filter(s=>this._str(s.user)===username&&s[".id"]))await connection.write("/ip/hotspot/active/remove",["=.id="+session[".id"]]);
+        return {username,profile,validity,created:false};
+      }
+      await connection.write("/ip/hotspot/user/add",this._writeParams({name:username,password,profile,server:data.server||"all","limit-uptime":validity,comment}));
+      return {username,profile,validity,created:true};
+    });
+  }
+
   async removeHotspotUser(username) {
     const name=this._str(username).trim(); if(!name) throw new Error("Hotspot username is required.");
     return this._withConnection("Hotspot user removal", async (connection) => {
