@@ -15,7 +15,27 @@ class MikroTikService {
     if (!user) throw new Error("MikroTik configuration error: ROUTER_USER is not configured.");
     return { host, port, user, password };
   }
-  _createConnection(config) { return new RouterOSAPI({ host: config.host, port: config.port, user: config.user, password: config.password, timeout: CONNECTION_TIMEOUT_MS / 1000 }); }
+  _createConnection(config) {
+    const connection = new RouterOSAPI({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      password: config.password,
+      timeout: CONNECTION_TIMEOUT_MS / 1000
+    });
+
+    // node-routeros emits asynchronous `error` events for malformed/unexpected
+    // RouterOS replies (for example: `!empty`). Without a listener, Node treats
+    // the EventEmitter error as uncaught and terminates the entire web process,
+    // which causes Render to return intermittent 502 Bad Gateway responses.
+    if (typeof connection.on === "function") {
+      connection.on("error", (error) => {
+        console.warn("[MikroTik Connection Error]:", error?.message || error);
+      });
+    }
+
+    return connection;
+  }
   async _withConnection(operationName, operation) {
     const connection = this._createConnection(this._getConfig());
     let connectTimer;
