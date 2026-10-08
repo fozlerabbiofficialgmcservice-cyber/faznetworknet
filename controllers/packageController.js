@@ -188,38 +188,118 @@ async function remove(req,res){
 }
 async function deletePlan(req,res){return remove(req,res);}
 
+let syncInFlight = false;
+
 async function sync(req,res){
+  if(syncInFlight){
+    return res.status(409).json({
+      success:false,
+      message:"MikroTik package sync is already running. Please wait for the current sync to finish."
+    });
+  }
+
+  syncInFlight = true;
   try{
-    const [profiles,pools]=await Promise.all([mikrotikService.fetchExistingProfiles(),mikrotikService.getIpPools()]);
-    const poolMap=new Map(pools.map(p=>[String(p.name).toLowerCase(),p]));
-    const synced=[];
-    for(const profile of profiles){
-      const raw=profile.raw||{};
-      const remote=String(profile.remoteAddress||raw["remote-address"]||"").trim();
-      const localAddress=String(profile.localAddress||raw["local-address"]||"").trim();
-      const dnsServer=String(profile.dnsServer||raw["dns-server"]||"").trim();
-      const rateLimit=String(profile.rateLimit||raw["rate-limit"]||"").trim();
-      const changeTcpMss=String(profile.changeTcpMss||raw["change-tcp-mss"]||"default").trim()||"default";
-      const matchedPool=poolMap.get(remote.toLowerCase());
-      const remoteAddress=matchedPool?.name||remote;
-      const current=await db.query("SELECT * FROM packages WHERE profile_name=$1 OR plan_name=$1 LIMIT 1",[profile.name]);
-      if(current.rows.length){
-        const row=current.rows[0];
-        const updated=await db.query(
-          "UPDATE packages SET pool_name=$1,profile_name=$2,local_address=$3,remote_address=$4,dns_server=$5,change_tcp_mss=$6,rate_limit=$7,updated_at=NOW() WHERE id=$8 RETURNING *",
-          [remoteAddress,profile.name,localAddress,remoteAddress,dnsServer||null,changeTcpMss,rateLimit||null,row.id]
-        );
-        synced.push(updated.rows[0]);
-      }else{
-        const inserted=await db.query(
-          "INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss) VALUES($1,$2,$1,$3,0,1,$4,$5,$6,$7) ON CONFLICT(plan_name) DO UPDATE SET profile_name=EXCLUDED.profile_name,rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,dns_server=EXCLUDED.dns_server,change_tcp_mss=EXCLUDED.change_tcp_mss,updated_at=NOW() RETURNING *",
-          [profile.name,remoteAddress,rateLimit||null,localAddress,remoteAddress,dnsServer||null,changeTcpMss]
-        );
-        synced.push(inserted.rows[0]);
-      }
+    // MikroTik access is centrally managed by mikrotikService:
+    // connections and commands have hard timeouts and are closed in finally.
+    const [profiles,pools]=await Promise.all([
+      mikrotikService.fetchExistingProfiles(),
+      mikrotikService.getIpPools()
+    ]);
+
+    if(!Array.isArray(profiles)){
+      return res.status(502).json({success:false,message:"Invalid response from MikroTik profile sync."});
     }
-    res.json({success:true,count:synced.length,packages:synced});
-  }catch(e){errorResponse(res,e);}
+
+    const poolMap=new Map(
+      (Array.isArray(pools)?pools:[]).map(p=>[String(p.name||"").toLowerCase(),p])
+    );
+
+    const rows=profiles
+      .map(profile=>{
+        const raw=profile.raw||{};
+        const name=String(profile.name||"").trim();
+        if(!name)return null;
+
+        const remote=String(profile.remoteAddress||raw["remote-address"]||"").trim();
+        const localAddress=String(profile.localAddress||raw["local-address"]||"").trim();
+        const dnsServer=String(profile.dnsServer||raw["dns-server"]||"").trim();
+        const rateLimit=String(profile.rateLimit||raw["rate-limit"]||"").trim();
+        const changeTcpMss=String(profile.changeTcpMss||raw["change-tcp-mss"]||"default").trim()||"default";
+        const matchedPool=poolMap.get(remote.toLowerCase());
+
+        return {
+          name,
+          poolName:matchedPool?.name||remote||null,
+          rateLimit:rateLimit||null,
+          localAddress:localAddress||null,
+          remoteAddress:remote||null,
+          dnsServer:dnsServer||null,
+          changeTcpMss
+        };
+      })
+      .filter(Boolean);
+
+    if(!rows.length){
+      return res.json({
+        success:true,
+        count:0,
+        packages:[],
+        message:"No MikroTik PPP profiles were returned to synchronize."
+      });
+    }
+
+    // One PostgreSQL statement replaces the old sequential per-profile query loop.
+    // This avoids hundreds of awaited DB round trips and reduces pool pressure.
+    const params=[
+      rows.map(x=>x.name),
+      rows.map(x=>x.poolName),
+      rows.map(x=>x.rateLimit),
+      rows.map(x=>x.localAddress),
+      rows.map(x=>x.remoteAddress),
+      rows.map(x=>x.dnsServer),
+      rows.map(x=>x.changeTcpMss)
+    ];
+
+    const result=await db.query(
+      `INSERT INTO packages
+        (plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss)
+       SELECT
+        names.name,pools.pool_name,names.name,rates.rate_limit,0,1,locals.local_address,
+        remotes.remote_address,dns.dns_server,mss.change_tcp_mss
+       FROM
+        unnest($1::text[]) WITH ORDINALITY AS names(name,ord)
+        JOIN unnest($2::text[]) WITH ORDINALITY AS pools(pool_name,ord) USING(ord)
+        JOIN unnest($3::text[]) WITH ORDINALITY AS rates(rate_limit,ord) USING(ord)
+        JOIN unnest($4::text[]) WITH ORDINALITY AS locals(local_address,ord) USING(ord)
+        JOIN unnest($5::text[]) WITH ORDINALITY AS remotes(remote_address,ord) USING(ord)
+        JOIN unnest($6::text[]) WITH ORDINALITY AS dns(dns_server,ord) USING(ord)
+        JOIN unnest($7::text[]) WITH ORDINALITY AS mss(change_tcp_mss,ord) USING(ord)
+       ON CONFLICT(plan_name) DO UPDATE SET
+        pool_name=COALESCE(EXCLUDED.pool_name,packages.pool_name),
+        profile_name=EXCLUDED.profile_name,
+        rate_limit=COALESCE(EXCLUDED.rate_limit,packages.rate_limit),
+        local_address=COALESCE(EXCLUDED.local_address,packages.local_address),
+        remote_address=COALESCE(EXCLUDED.remote_address,packages.remote_address),
+        dns_server=COALESCE(EXCLUDED.dns_server,packages.dns_server),
+        change_tcp_mss=COALESCE(EXCLUDED.change_tcp_mss,packages.change_tcp_mss),
+        updated_at=NOW()
+       RETURNING *`,
+      params
+    );
+
+    return res.json({
+      success:true,
+      count:result.rows.length,
+      packages:result.rows,
+      message:`Successfully synchronized ${result.rows.length} profiles from MikroTik!`
+    });
+  }catch(e){
+    console.error("[PACKAGE SYNC ERROR]",e);
+    return errorResponse(res,e);
+  }finally{
+    syncInFlight=false;
+  }
 }
 
 module.exports={list,pools,create,update,savePlan,remove,deletePlan,sync};
