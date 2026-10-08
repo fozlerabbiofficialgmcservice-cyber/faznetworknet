@@ -436,6 +436,25 @@ class MikroTikService {
     });
   }
   async _findSecret(connection, username) { const rows = await connection.write("/ppp/secret/print"); const match = (Array.isArray(rows) ? rows : []).find((item) => this._str(item.name) === username); if (!match || !match[".id"]) throw new Error("PPPoE user \"" + username + "\" was not found on MikroTik."); return match; }
+  async updateSecretIdentity(username, data) {
+    const oldName = this._str(username).trim();
+    const newName = this._str(data?.username).trim();
+    if (!oldName || !newName) throw new Error("Current and new PPPoE username are required.");
+    return this._withConnection("PPPoE user identity update", async (connection) => {
+      const secret = await this._findSecret(connection, oldName);
+      const params = [
+        "=.id=" + secret[".id"],
+        "=name=" + newName,
+        "=password=" + this._str(data?.password),
+        "=profile=" + this._str(data?.profile),
+        "=comment=" + this._str(data?.comment),
+        "=disabled=" + (data?.disabled ? "yes" : "no")
+      ];
+      await connection.write("/ppp/secret/set", params);
+      return { username: newName, previousUsername: oldName, id: this._str(secret[".id"]) };
+    });
+  }
+
   async updateSecret(username,data){const name=this._str(username).trim();return this._withConnection("PPPoE user update",async(connection)=>{const secret=await this._findSecret(connection,name);const params=this._writeParams({password:data.password,profile:data.profile,"remote-address":data.remoteAddress,"caller-id":data.callerId,comment:data.comment,disabled:data.disabled?"yes":"no"});await connection.write("/ppp/secret/set",["=.id="+secret[".id"],...params]);return {username:name};});}
   async toggleSecret(username, disabled) { const name = this._str(username).trim(); return this._withConnection("PPPoE user toggle", async (connection) => { const secret = await this._findSecret(connection, name); await connection.write("/ppp/secret/set", ["=.id=" + secret[".id"], "=disabled=" + (disabled ? "yes" : "no")]); return { username: name, disabled: Boolean(disabled) }; }); }
   async kickActiveUser(username) { const name = this._str(username).trim(); return this._withConnection("active PPPoE user kick", async (connection) => { const rows = await connection.write("/ppp/active/print"); const matches = (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.name) === name && this._str(item.service).toLowerCase() === "pppoe" && item[".id"]); if (!matches.length) return { username: name, kicked: false, count: 0, message: "User is not currently online." }; for (const session of matches) await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]); return { username: name, kicked: true, count: matches.length }; }); }
