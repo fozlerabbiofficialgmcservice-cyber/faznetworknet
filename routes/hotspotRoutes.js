@@ -7,7 +7,7 @@ router.get("/profiles",controller.profiles);
 router.post("/profiles/create",controller.createProfile);
 router.post("/profiles/update",controller.updateProfile);
 router.post("/profiles/delete",controller.deleteProfile);
-router.get("/server-profiles",controller.serverProfiles);
+router.get("/server-profiles",controller.serverProfiles);\nrouter.post("/server-profiles",controller.createServerProfile);\nrouter.put("/server-profiles/:id",controller.updateServerProfile);\nrouter.delete("/server-profiles/:id",controller.deleteServerProfile);
 router.get("/vouchers",controller.list);
 router.get("/active",controller.active);
 router.post("/active/disconnect",controller.disconnectActive);
