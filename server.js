@@ -10,11 +10,11 @@ app.get("/login",(req,res)=>{
   if(isAdminAuthenticated(req)) return res.redirect("/admin");
   return res.render("login",{next:String(req.query.next||"/admin"),error:null});
 });
-app.post("/login",(req,res)=>{
+app.post("/login",async (req,res)=>{
   const username=String(req.body?.username||"").trim();
   const password=String(req.body?.password||"");
   const nextTarget=String(req.body?.next||"/admin");
-  if(!adminCredentialsValid(username,password)) return res.status(401).render("login",{next:nextTarget,error:"Invalid admin username or password."});
+  if(!(await adminCredentialsValid(username,password))) return res.status(401).render("login",{next:nextTarget,error:"Invalid admin username or password."});
   setSessionCookie(res,username,req);
   return res.redirect(nextTarget.startsWith("/")&&!nextTarget.startsWith("//")?nextTarget:"/admin");
 });
