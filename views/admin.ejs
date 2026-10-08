@@ -198,7 +198,12 @@
             .main-content{margin-left:0;width:100%;max-width:100%;padding:12px}
             .main-content>.navbar{margin-bottom:12px!important}
             .hotspot-live-table,.customer-live-table,.payment-ledger-table{min-width:760px}
-            .hotspot-live-table th,.hotspot-live-table td,.customer-live-table th,.customer-live-table td,.payment-ledger-table th,.payment-ledger-table td{white-space:nowrap;padding:8px 10px}
+            .hotspot-profile-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
+        .hotspot-profile-table td { vertical-align: middle; font-size: 13px; }
+        .hotspot-profile-table .badge { font-weight: 600; }
+        @media (max-width: 768px) { .hotspot-profile-table { min-width: 920px; } }
+        
+        .hotspot-live-table th,.hotspot-live-table td,.customer-live-table th,.customer-live-table td,.payment-ledger-table th,.payment-ledger-table td{white-space:nowrap;padding:8px 10px}
             .hotspot-search,.customer-search-wrap,.payment-search-wrap{min-width:0;width:100%}
         }
 
@@ -572,22 +577,89 @@
             return false;
         };
 
-        window.loadHotspotProfiles = function(titleKey) {
-            console.log('[HOTSPOT UI] loadHotspotProfiles triggered');
-            if (document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display = 'none';
+        window.loadHotspotProfiles = async function(titleKey) {
+            console.log('[HOTSPOT UI] enterprise loadHotspotProfiles triggered');
+            currentHotspotMode='profiles';
+            currentHotspotTitleKey=titleKey || 'hotspot_profile';
+            setHotspotTitle(currentHotspotTitleKey);
+
+            const dashboard=document.getElementById('view-dashboard');
+            if(dashboard) dashboard.style.display='none';
+
             const container=document.getElementById('dynamicPageContent');
             if(!container) return false;
             container.style.display='block';
-            const title=document.getElementById('pageTitle');
-            safeSetText('pageTitle', 'Hotspot Profiles');
-            container.innerHTML='<div class="card card-custom p-4"><p class="text-muted">Fetching MikroTik Hotspot Profiles...</p></div>';
-            fetch('/api/hotspot/profiles').then(function(r){return r.json();}).then(function(d){
-                const profiles=Array.isArray(d.profiles)?d.profiles:[];
-                container.innerHTML='<div class="card card-custom p-4 shadow-sm border-0"><h6 class="fw-bold mb-3">Available MikroTik Hotspot Profiles</h6><ul class="list-group">'+(profiles.map(function(p){return '<li class="list-group-item d-flex justify-content-between align-items-center">'+(p.name||'-')+' <span class="badge bg-primary rounded-pill">'+(p['rate-limit']||'No Limit')+'</span></li>';}).join('')||'<li class="list-group-item">No profiles found</li>')+'</ul></div>';
-            }).catch(function(){container.innerHTML='<div class="alert alert-danger">Error loading profiles</div>';});
+            if(typeof closeSidebarMobile==='function') closeSidebarMobile();
+
+            const renderLoading=()=>{
+                container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0"><div class="card-body text-center py-5"><div class="spinner-border text-success mb-3" role="status"></div><div class="text-muted">Loading MikroTik bandwidth profiles...</div></div></div></section>';
+            };
+            const renderError=(message)=>{
+                container.innerHTML='<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger shadow-sm"><i class="bi bi-exclamation-triangle-fill me-2"></i>'+escapeHtml(message || 'Unable to load Hotspot profiles.')+'</div></section>';
+            };
+            const rateBadge=(value)=>{
+                const rate=String(value || '').trim();
+                if(!rate || rate.toLowerCase()==='no limit' || rate.toLowerCase()==='unlimited') {
+                    return '<span class="badge rounded-pill bg-light text-secondary border"><i class="bi bi-infinity me-1"></i>Unlimited</span>';
+                }
+                const cls=rate.toLowerCase().includes('/') ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-info-subtle text-info-emphasis border border-info-subtle';
+                return '<span class="badge rounded-pill '+cls+' font-monospace">'+escapeHtml(rate)+'</span>';
+            };
+            const renderTable=(profiles)=>{
+                currentHotspotProfiles=Array.isArray(profiles)?profiles:[];
+                const rows=currentHotspotProfiles.map((p,index)=>{
+                    const name=String(p.name || p.profile || '').trim() || 'Unnamed Profile';
+                    const rate=p.rateLimit ?? p['rate-limit'] ?? '';
+                    const shared=p.sharedUsers ?? p['shared-users'] ?? 1;
+                    const session=p.sessionTimeout ?? p['session-timeout'] ?? '';
+                    const keepalive=p.keepaliveTimeout ?? p['keepalive-timeout'] ?? '';
+                    return '<tr>'+
+                        '<td class="text-muted fw-semibold">'+(index+1)+'</td>'+
+                        '<td><div class="d-flex align-items-center gap-2"><span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-success-subtle text-success" style="width:34px;height:34px"><i class="bi bi-wifi"></i></span><div><div class="fw-bold text-dark">'+escapeHtml(name)+'</div><div class="small text-muted">MikroTik Hotspot Profile</div></div></div></td>'+
+                        '<td>'+rateBadge(rate)+'</td>'+
+                        '<td><span class="badge bg-light text-dark border"><i class="bi bi-device-ssd me-1"></i>'+escapeHtml(String(shared || 1))+'</span></td>'+
+                        '<td><div class="fw-semibold">'+escapeHtml(session || 'Unlimited')+'</div><div class="small text-muted">'+(keepalive ? 'Keepalive: '+escapeHtml(keepalive) : 'Keepalive: Default')+'</div></td>'+
+                        '<td><div class="d-flex flex-wrap gap-1">'+
+                            '<button type="button" class="btn btn-sm btn-outline-success" title="Edit profile" onclick="openHotspotProfileModal('+JSON.stringify(name)+')"><i class="bi bi-pencil-square"></i><span class="d-none d-lg-inline ms-1">Edit</span></button>'+
+                            '<button type="button" class="btn btn-sm btn-outline-danger" title="Delete profile" onclick="deleteHotspotProfile('+JSON.stringify(name)+')"><i class="bi bi-trash3"></i><span class="d-none d-lg-inline ms-1">Delete</span></button>'+
+                        '</div></td>'+
+                    '</tr>';
+                }).join('');
+                const empty= '<tr><td colspan="6" class="text-center py-5"><div class="text-muted"><i class="bi bi-wifi-off fs-2 d-block mb-2"></i>No MikroTik Hotspot bandwidth profiles found.</div><button type="button" class="btn btn-theme btn-sm mt-3" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create First Profile</button></td></tr>';
+                container.innerHTML='<section class="hotspot-dynamic-view admin-view">'+
+                    '<div class="card card-custom shadow-sm border-0 overflow-hidden">'+
+                        '<div class="card-header bg-white border-bottom p-3 p-md-4">'+
+                            '<div class="d-flex flex-column flex-md-row align-items-md-center gap-3">'+
+                                '<div class="d-flex align-items-center gap-3">'+
+                                    '<span class="d-inline-flex align-items-center justify-content-center rounded-3" style="width:46px;height:46px;background:#0a3d2e;color:#fff"><i class="bi bi-speedometer2 fs-5"></i></span>'+
+                                    '<div><div class="d-flex align-items-center gap-2"><h5 class="mb-0 fw-bold">Hotspot Bandwidth Profiles</h5><span class="badge rounded-pill bg-success">'+currentHotspotProfiles.length+'</span></div><div class="small text-muted mt-1">Manage MikroTik speed limits, device sharing and session policies</div></div>'+
+                                '</div>'+
+                                '<div class="ms-md-auto"><button type="button" class="btn btn-theme px-3" onclick="openHotspotProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create New Profile</button></div>'+
+                            '</div>'+
+                        '</div>'+
+                        '<div class="table-responsive">'+
+                            '<table class="table table-hover align-middle mb-0 hotspot-profile-table">'+
+                                '<thead class="table-light"><tr><th class="ps-3 ps-md-4">#</th><th>Profile Name</th><th>Bandwidth Rate-Limit</th><th>Shared Users</th><th>Session Timeout / Validity</th><th class="text-end pe-3 pe-md-4">Actions</th></tr></thead>'+
+                                '<tbody>'+ (rows || empty) +'</tbody>'+
+                            '</table>'+
+                        '</div>'+
+                    '</div>'+
+                '</section>';
+                updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
+            };
+
+            renderLoading();
+            try {
+                const response=await fetch('/api/hotspot/profiles');
+                const data=await response.json().catch(()=>({}));
+                if(!response.ok || data.success===false) throw new Error(data.error || data.message || 'Failed to load MikroTik Hotspot profiles.');
+                renderTable(data.profiles || []);
+            } catch(error) {
+                console.error('[HOTSPOT UI] Profile load failed',error);
+                renderError(error.message);
+            }
             return false;
         };
-
         window.loadHotspotServerProfiles = function(titleKey) {
             console.log('[HOTSPOT UI] loadHotspotServerProfiles triggered');
             if (document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display = 'none';
