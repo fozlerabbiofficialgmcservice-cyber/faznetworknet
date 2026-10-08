@@ -2693,8 +2693,9 @@ async function deletePlan(id,name){
             }
             const initials = metadata.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'CU';
             const sessionMeta = networkStatus.online ? '<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ' + escapeHtml(t.uptime) + ': ' + escapeHtml(user.session_uptime || '-') + '</div>' : '';
-            const statusLabel = billingStatus === 'paid' ? 'Paid / Active' : (billingStatus === 'expired' ? 'Expired' : billingLabel);
-            const statusClass = billingStatus === 'paid' ? 'status-paid' : (billingStatus === 'expired' ? 'status-expired' : 'status-unpaid');
+            const isExpired = billingStatus === 'expired' || networkStatus.key === 'expired_status';
+            const statusLabel = isExpired ? 'Expired' : 'Active';
+            const statusClass = isExpired ? 'status-expired' : 'status-paid';
             const customerId = user.customer_id || user.id || '';
             return '<tr data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
                 '<td class="ps-3"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
