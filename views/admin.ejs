@@ -415,7 +415,6 @@
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('all', 'all_user'); return false;"><span data-key="hotspot_all_users">All Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="window.loadHotspotServerProfiles('server_profile'); return false;"><span data-key="hotspot_server_profile">Server Profile</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
                 </ul>
             </li>
@@ -1002,109 +1001,6 @@
             } catch(error) { console.error('[HOTSPOT UI] Profile load failed',error); renderError(error.message); }
             return false;
         };
-        window.loadHotspotServerProfiles = async function(titleKey) {
-            purgeStuckBackdrops();
-            currentHotspotMode='server-profiles';
-            currentHotspotTitleKey=titleKey || 'server_profile';
-            setPageTitleSafe('Hotspot Server Profiles');
-            const container=document.getElementById('dynamicPageContent');
-            if(!container) return false;
-            container.style.display='block';
-            if(typeof closeSidebarMobile==='function') closeSidebarMobile();
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div><div class="small text-muted mt-2">Loading MikroTik Server Profiles...</div></div></div></section>');
-            try {
-                const data=await jsonFetch('/api/hotspot/server-profiles');
-                renderHotspotServerProfiles(data.profiles||[]);
-                updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
-            } catch(error) {
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>'+escapeHtml(error.message)+'</div></section>');
-            }
-            return false;
-        };
-
-        function serverProfileLoginBadges(loginBy){
-            const flags=String(loginBy||'').split(',').map(function(v){return v.trim().toLowerCase();}).filter(Boolean);
-            if(!flags.length) return '<span class="badge bg-light text-secondary border">Not set</span>';
-            return flags.map(function(flag){
-                const labels={'http-chap':'HTTP-CHAP','http-pap':'HTTP-PAP','cookie':'Cookie','mac':'MAC','mac-cookie':'MAC-Cookie','trial':'Trial'};
-                return '<span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1">'+escapeHtml(labels[flag]||flag)+'</span>';
-            }).join('');
-        }
-
-        function openHotspotServerProfileModal(profile){
-            purgeStuckBackdrops();
-            const existing=document.getElementById('hotspotServerProfileModal');
-            if(existing) existing.remove();
-            const p=profile||{};
-            const loginFlags=String(p.loginBy||'http-chap').split(',').map(function(v){return v.trim().toLowerCase();}).filter(Boolean);
-            const checked=function(flag){return loginFlags.indexOf(flag)>=0?' checked':'';};
-            const modal=document.createElement('div');
-            modal.id='hotspotServerProfileModal';
-            modal.className='modal fade';
-            modal.tabIndex=-1;
-            modal.innerHTML='<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content border-0 shadow-lg">'+
-              '<div class="modal-header"><div><h5 class="modal-title fw-bold"><i class="bi bi-hdd-network text-success me-2"></i>'+(p.id?'Edit':'Create')+' Server Profile</h5><div class="small text-muted">Synchronize directly with MikroTik /ip/hotspot/profile</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>'+
-              '<form id="hotspotServerProfileForm"><div class="modal-body"><input type="hidden" id="hotspotServerProfileId" value=""><div class="row g-3">'+
-              '<div class="col-md-6"><label class="form-label">Profile Name *</label><input id="hsServerProfileName" class="form-control" maxlength="100" required value="'+escapeHtml(p.name||'')+'"></div>'+
-              '<div class="col-md-6"><label class="form-label">Hotspot Address</label><input id="hsServerHotspotAddress" class="form-control font-monospace" placeholder="192.168.88.1" value="'+escapeHtml(p.hotspotAddress||'')+'"></div>'+
-              '<div class="col-md-6"><label class="form-label">DNS Name</label><input id="hsServerDnsName" class="form-control" placeholder="login.faznetwork.net" value="'+escapeHtml(p.dnsName||'')+'"></div>'+
-              '<div class="col-md-6"><label class="form-label">HTML Directory</label><input id="hsServerHtmlDirectory" class="form-control" value="'+escapeHtml(p.htmlDirectory||'hotspot')+'"></div>'+
-              '<div class="col-12"><label class="form-label d-block">Login By / Authentication Methods</label><div class="row g-2">'+
-              ['http-chap','http-pap','mac-cookie','cookie','mac'].map(function(flag){const label={'http-chap':'HTTP CHAP','http-pap':'HTTP PAP','mac-cookie':'MAC Cookie','cookie':'Cookie','mac':'MAC'}[flag];return '<div class="col-6 col-md-4"><label class="border rounded p-2 d-flex align-items-center gap-2 h-100"><input class="form-check-input mt-0 hs-server-login" type="checkbox" value="'+flag+'"'+checked(flag)+'><span>'+label+'</span></label></div>';}).join('')+
-              '</div></div>'+
-              '<div class="col-md-6"><label class="form-label">Rate Limit</label><input id="hsServerRateLimit" class="form-control font-monospace" placeholder="5M/10M" value="'+escapeHtml(p.rateLimit||'')+'"></div>'+
-              '<div class="col-md-6"><label class="form-label">Status Autorefresh</label><input id="hsServerAutorefresh" class="form-control" placeholder="1m" value="'+escapeHtml(p.statusAutorefresh||'1m')+'"></div>'+
-              '</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" id="hsServerSaveBtn" class="btn btn-theme"><span class="hs-server-save-label"><i class="bi bi-cloud-arrow-up me-1"></i>Save to MikroTik Router</span><span class="hs-server-save-loading d-none"><span class="spinner-border spinner-border-sm me-1"></span>Saving...</span></button></div></form></div></div>';
-            document.body.appendChild(modal);
-            const instance=bootstrap.Modal.getOrCreateInstance(modal,{backdrop:true});
-            modal.addEventListener('hidden.bs.modal',function(){instance.dispose();modal.remove();purgeStuckBackdrops();},{once:true});
-            modal.querySelector('#hotspotServerProfileForm').addEventListener('submit',async function(event){
-                event.preventDefault();
-                const btn=modal.querySelector('#hsServerSaveBtn');
-                const label=modal.querySelector('.hs-server-save-label');
-                const loading=modal.querySelector('.hs-server-save-loading');
-                const loginBy=Array.from(modal.querySelectorAll('.hs-server-login:checked')).map(function(el){return el.value;}).join(',');
-                const payload={name:modal.querySelector('#hsServerProfileName').value.trim(),hotspotAddress:modal.querySelector('#hsServerHotspotAddress').value.trim(),dnsName:modal.querySelector('#hsServerDnsName').value.trim(),htmlDirectory:modal.querySelector('#hsServerHtmlDirectory').value.trim()||'hotspot',loginBy:loginBy||'http-chap',rateLimit:modal.querySelector('#hsServerRateLimit').value.trim(),statusAutorefresh:modal.querySelector('#hsServerAutorefresh').value.trim()};
-                if(!payload.name){alert('Profile Name is required.');return;}
-                btn.disabled=true; label.classList.add('d-none'); loading.classList.remove('d-none');
-                try{
-                    const url=p.id?'/api/hotspot/server-profiles/'+encodeURIComponent(p.id):'/api/hotspot/server-profiles';
-                    const response=await jsonFetch(url,{method:p.id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-                    instance.hide();
-                    await loadHotspotServerProfiles('server_profile');
-                    if(response.message) console.info(response.message);
-                }catch(error){alert(error.message);}
-                finally{btn.disabled=false;label.classList.remove('d-none');loading.classList.add('d-none');}
-            });
-            instance.show();
-            return false;
-        }
-
-        function deleteHotspotServerProfile(id,name){
-            if(!id) return;
-            if(!confirm('Delete server profile "'+name+'" from MikroTik?')) return;
-            purgeStuckBackdrops();
-            jsonFetch('/api/hotspot/server-profiles/'+encodeURIComponent(id),{method:'DELETE'})
-                .then(function(){return loadHotspotServerProfiles('server_profile');})
-                .catch(function(error){alert(error.message);});
-        }
-
-        function renderHotspotServerProfiles(profiles){
-            const safeProfiles=(profiles||[]).filter(function(p){return String(p.name||'').toLowerCase()!=='default';});
-            const rows=safeProfiles.map(function(p,i){
-                return '<tr>'+
-                  '<td class="text-muted">'+(i+1)+'</td>'+
-                  '<td><div class="d-flex align-items-center gap-2"><span class="hotspot-server-icon"><i class="bi bi-hdd-network"></i></span><div><div class="fw-bold">'+escapeHtml(p.name||'-')+'</div><div class="small text-muted">RouterOS profile</div></div></div></td>'+
-                  '<td><span class="badge bg-light text-dark border font-monospace">'+escapeHtml(p.hotspotAddress||'—')+'</span></td>'+
-                  '<td><span class="font-monospace">'+escapeHtml(p.dnsName||'—')+'</span></td>'+
-                  '<td><span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-folder2 me-1"></i>'+escapeHtml(p.htmlDirectory||'hotspot')+'</span></td>'+
-                  '<td>'+serverProfileLoginBadges(p.loginBy)+'</td>'+
-                  '<td class="text-end"><div class="btn-group btn-group-sm"><button type="button" class="btn btn-outline-success" title="Edit" onclick="openHotspotServerProfileModal('+JSON.stringify(p).replace(/</g,'\\u003c')+')"><i class="bi bi-pencil-square"></i></button><button type="button" class="btn btn-outline-danger" title="Delete" onclick="deleteHotspotServerProfile('+JSON.stringify(p.id)+','+JSON.stringify(p.name)+')"><i class="bi bi-trash3"></i></button></div></td>'+
-                '</tr>';
-            }).join('');
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3"><div><div class="d-flex align-items-center gap-2"><h5 class="mb-0 fw-bold">Hotspot Server Profiles</h5><span class="badge rounded-pill bg-success">'+safeProfiles.length+'</span></div><div class="small text-muted mt-1">RouterOS <span class="font-monospace">/ip/hotspot/profile</span> management</div></div><div class="ms-lg-auto d-flex flex-wrap gap-2"><button type="button" class="btn btn-theme" onclick="openHotspotServerProfileModal()"><i class="bi bi-plus-lg me-1"></i>Create Server Profile</button><button type="button" class="btn btn-outline-success" onclick="loadHotspotServerProfiles(\'server_profile\')"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div></div></div><div class="table-responsive"><table class="table table-hover align-middle mb-0 hotspot-server-profile-table"><thead class="table-light"><tr><th>#</th><th>Profile Name</th><th>Hotspot IP / Address</th><th>DNS Name</th><th>HTML Directory</th><th>Login Methods</th><th class="text-end">Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="7" class="text-center py-5 text-muted"><div class="hotspot-empty-icon mx-auto mb-2"><i class="bi bi-hdd-network"></i></div>No custom server profiles found on MikroTik.</td></tr>')+'</tbody></table></div></div></section>');
-        }
-
         window.loadVoucherGeneratorSection = function() {
             console.log('[HOTSPOT UI] loadVoucherGeneratorSection triggered');
             if(document.getElementById('view-dashboard')) document.getElementById('view-dashboard').style.display='none';
@@ -1490,18 +1386,6 @@
             catch(error){alert(error.message);}
         }
 
-                async function loadHotspotServerProfiles(titleKey) {
-            purgeStuckBackdrops();
-            currentHotspotMode='server-profiles'; currentHotspotTitleKey=titleKey; setHotspotTitle(titleKey);
-            appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div></section>');
-            try {
-                const data=await jsonFetch('/api/hotspot/server-profiles');
-                const rows=(data.profiles||[]).map(function(p,i){return '<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(p.name)+'</strong></td><td>'+escapeHtml(p.hotspotAddress||'-')+'</td><td>'+escapeHtml(p.dnsName||'-')+'</td><td>'+escapeHtml(p.htmlDirectory||'-')+'</td><td>'+escapeHtml(p.rateLimit||'-')+'</td><td>'+escapeHtml(p.loginBy||'-')+'</td><td>'+escapeHtml(p.useRadius?'Yes':'No')+'</td></tr>';}).join('');
-                appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hdd-network text-success fs-5"></i> <span data-key="hotspot_server_profiles">Hotspot Server Profiles</span> <span class="badge bg-success ms-2">'+(data.profiles||[]).length+'</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>#</th><th>Name</th><th data-key="hotspot_address">Hotspot Address</th><th data-key="dns_name">DNS Name</th><th data-key="html_directory">HTML Directory</th><th data-key="rate_limit">Rate Limit</th><th data-key="login_by">Login By</th><th data-key="radius">RADIUS</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="8" class="text-center py-5 text-muted">No server profiles found.</td></tr>') +'</tbody></table></div></div></section>');
-                updateLanguage(localStorage.getItem('faz_preferred_lang')||'en');
-            } catch(error){ appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="alert alert-danger">'+escapeHtml(error.message)+'</div></section>'); }
-        }
-
         function voucherCardHtml(v) {
             return '<div class="voucher-card"><div class="voucher-brand">FAZ NETWORK Wi-Fi Hotspot</div><div class="voucher-cut"></div><div class="small text-muted" data-key="username_label">Username</div><div class="voucher-credential">'+escapeHtml(v.username)+'</div><div class="small text-muted mt-1" data-key="password_pin">Password / PIN</div><div class="voucher-credential">'+escapeHtml(v.password)+'</div><div class="d-flex justify-content-between mt-2 small"><span>Profile: <strong>'+escapeHtml(v.profile||'-')+'</strong></span><span>Validity: <strong>'+escapeHtml(v.validity||'-')+'</strong></span></div><div class="fw-bold mt-1">Price: ৳ '+Number(v.price||0).toFixed(2)+'</div><div class="voucher-cut"></div><div class="voucher-instruction"><span data-key="instructions">Connect to Wi-Fi → Open Portal → Enter PIN</span></div></div>';
         }
@@ -1566,7 +1450,7 @@
                 'expire_customer':'Expire Customer','expire_today_yesterday':'Expire Today & Yesterday','expire_7_days':'Expire in 7 Days','new_customer':'New Customer','due_collection':'Due Collection',
                 'report':'Report','monthly_collection_due':'Monthly Collection & Due','monthly_sales':'Monthly Sales','invoice_report':'Invoice Report',
                 'payments':'Payments','pending_invoice':'Pending Invoice','all_payments':'All Payments','payment_request':'Payment Request','bkash_payments':'bKash Payments','nagad_payments':'Nagad Payments','rocket_payments':'Rocket Payments',
-                'hotspot':'Hotspot','hotspot_dashboard':'Dashboard','hotspot_all_users':'All Users','hotspot_active_users':'Active Users','hotspot_profile':'Profile','hotspot_server_profile':'Server Profile','gen_print_vouchers':'Generate & Print Vouchers','add_hotspot_user':'Add Hotspot User','create_single_hotspot_customer':'Create Single Hotspot Customer / Voucher','select_profile_plan':'Select Profile / Plan','hotspot_server':'Hotspot Server','customer_mobile':'Customer Mobile / Phone','time_limit':'Time Limit','data_limit':'Data Limit','package_price':'Package Price (৳ BDT)','customer_note':'Customer Note / Comment','clear_form':'Clear Form','save_enable_mikrotik':'Save & Enable in MikroTik','hotspot_sales_today':"Today's Hotspot Sales",'active_bandwidth_usage':'Total Active Bandwidth Usage','add_single_user':'Add Single User','batch_generator':'Batch Generator','live_connected_clients':'Real-Time Connected Clients','hotspot_bandwidth_profiles':'MikroTik Hotspot Bandwidth Profiles','create_new_profile':'Create New Profile','session_timeout':'Session Timeout','actions':'Actions',
+                'hotspot':'Hotspot','hotspot_dashboard':'Dashboard','hotspot_all_users':'All Users','hotspot_active_users':'Active Users','hotspot_profile':'Profile','gen_print_vouchers':'Generate & Print Vouchers','add_hotspot_user':'Add Hotspot User','create_single_hotspot_customer':'Create Single Hotspot Customer / Voucher','select_profile_plan':'Select Profile / Plan','hotspot_server':'Hotspot Server','customer_mobile':'Customer Mobile / Phone','time_limit':'Time Limit','data_limit':'Data Limit','package_price':'Package Price (৳ BDT)','customer_note':'Customer Note / Comment','clear_form':'Clear Form','save_enable_mikrotik':'Save & Enable in MikroTik','hotspot_sales_today':"Today's Hotspot Sales",'active_bandwidth_usage':'Total Active Bandwidth Usage','add_single_user':'Add Single User','batch_generator':'Batch Generator','live_connected_clients':'Real-Time Connected Clients','hotspot_bandwidth_profiles':'MikroTik Hotspot Bandwidth Profiles','create_new_profile':'Create New Profile','session_timeout':'Session Timeout','actions':'Actions',
                 'core_system':'Core System','pppoe':'PPPoE','devices':'Devices','plan_packages':'Plan & Packages','ip_pools':'IP Pools','olt_management':'OLT Management','monitor':'Monitor','usage':'Usage','online':'Online','network_diagram':'Network Diagram',
                 'general_setting':'General Setting','website_setting':'Website Setting','sms_setting':'SMS Setting','backup_restore':'Backup & Restore',
                 'vpn_server':'VPN Server','vpn':'VPN','vpn_port_forwarding':'VPN Port Forwarding',
@@ -1574,7 +1458,7 @@
                 'expenses':'Expenses','add_expenses':'Add Expenses','all_expenses':'All Expenses','expenses_report':'Expenses Report',
                 'human_resource':'Human Resource','department':'Department','all_employees':'All Employees','added_employees':'Added Employees',
                 'live_tracking':'Live Tracking','google_map':'Google Map','user_reseller':'User & Reseller','sub_staff':'Sub-Staff',
-                'hotspot_dashboard_title':'Hotspot Dashboard','total_hotspot_accounts':'Total Hotspot Accounts','currently_online_clients':'Currently Online Clients','total_vouchers_generated':'Total Vouchers Generated','hotspot_revenue':'Hotspot Revenue','live_hotspot_overview':'Live Hotspot Overview','hotspot_accounts':'Hotspot Accounts','search_hotspot':'Search username, profile, IP or MAC...','hotspot_user_profiles':'Hotspot User Profiles','hotspot_server_profiles':'Hotspot Server Profiles','rate_limit':'Rate Limit','shared_users':'Shared Users','idle_timeout':'Idle Timeout','keepalive':'Keepalive','hotspot_address':'Hotspot Address','dns_name':'DNS Name','html_directory':'HTML Directory','login_by':'Login By','radius':'RADIUS','yes':'Yes','no':'No','quantity':'Quantity','user_prefix':'User Prefix','character_length':'Character Length','profile':'Profile','price':'Price','validity':'Validity','generate_batch_vouchers':'Generate Batch Vouchers','print_voucher_cards':'Print Voucher Cards','printable_voucher_cards':'Printable Voucher Cards','username_label':'Username','password_pin':'Password / PIN','package_speed':'Package Speed / Profile','instructions':'<span data-key="instructions">Connect to Wi-Fi → Open Portal → Enter PIN</span>','remove_user_confirm':'Remove Hotspot user','generate_first':'Generate a voucher batch first.','generating':'Generating...','loading_profiles':'Loading profiles...','no_profiles':'No MikroTik profiles found','no_hotspot_users':'No Hotspot users found.','bytes_in_out':'Bytes In/Out', 'customer_management':'Customer Management','add_new_customer':'Add New Customer','label_fullname':'Full Name *','label_phone':'Phone Number *','label_username':'Username *','label_password':'Password *','label_package':'Package Selection *','label_billing_duration':'Billing Duration *','opt_1_month':'1 Month (30 Days)','btn_reset':'Reset','btn_save_customer':'Save Customer',
+                'hotspot_dashboard_title':'Hotspot Dashboard','total_hotspot_accounts':'Total Hotspot Accounts','currently_online_clients':'Currently Online Clients','total_vouchers_generated':'Total Vouchers Generated','hotspot_revenue':'Hotspot Revenue','live_hotspot_overview':'Live Hotspot Overview','hotspot_accounts':'Hotspot Accounts','search_hotspot':'Search username, profile, IP or MAC...','hotspot_user_profiles':'Hotspot User Profiles','rate_limit':'Rate Limit','shared_users':'Shared Users','idle_timeout':'Idle Timeout','keepalive':'Keepalive','hotspot_address':'Hotspot Address','dns_name':'DNS Name','html_directory':'HTML Directory','login_by':'Login By','radius':'RADIUS','yes':'Yes','no':'No','quantity':'Quantity','user_prefix':'User Prefix','character_length':'Character Length','profile':'Profile','price':'Price','validity':'Validity','generate_batch_vouchers':'Generate Batch Vouchers','print_voucher_cards':'Print Voucher Cards','printable_voucher_cards':'Printable Voucher Cards','username_label':'Username','password_pin':'Password / PIN','package_speed':'Package Speed / Profile','instructions':'<span data-key="instructions">Connect to Wi-Fi → Open Portal → Enter PIN</span>','remove_user_confirm':'Remove Hotspot user','generate_first':'Generate a voucher batch first.','generating':'Generating...','loading_profiles':'Loading profiles...','no_profiles':'No MikroTik profiles found','no_hotspot_users':'No Hotspot users found.','bytes_in_out':'Bytes In/Out', 'customer_management':'Customer Management','add_new_customer':'Add New Customer','label_fullname':'Full Name *','label_phone':'Phone Number *','label_username':'Username *','label_password':'Password *','label_package':'Package Selection *','label_billing_duration':'Billing Duration *','opt_1_month':'1 Month (30 Days)','btn_reset':'Reset','btn_save_customer':'Save Customer',
                 'ph_fullname':'e.g. John Doe','ph_phone':'e.g. 01700000000','ph_username':'pppoe_user','ph_password':'••••••••',
                 'customer_table':'Customer Records','search_customers':'Search customers...','full_name_phone':'Full Name / Phone','username':'Username','package_profile':'Package / Profile','ip_caller_id':'IP / Caller-ID','status_badge':'Status','expiry_date':'Expiry Date','actions':'Actions','online_status':'Online','offline_status':'Offline','expired_status':'Expired','kick':'Kick','enable':'Enable','disable':'Disable','view':'View','no_customers':'No customers found for this filter.','loading_customers':'Loading customers...','router_live':'Live MikroTik','uptime':'Uptime','view_customer':'Customer Details',
                 'payment_ledger':'Financial Payment Ledger','search_payments':'Search TrxID, phone or username...','total_received':'Total Received Amount','total_transactions':'Total Transactions','unmatched_count':'Unmatched Count','trx_txnid':'TrxID / TxnID','gateway':'Gateway','amount':'Amount (৳)','sender_phone':'Sender Phone','matched_customer':'Matched Customer / Username','date_time':'Date & Time','manual_match':'Manual Match','processed':'Processed','unmatched':'Unmatched','duplicate':'Duplicate','no_payments':'No transactions found for this filter.','previous':'Previous','next':'Next','page':'Page','of':'of','enter_username':'Enter PPPoE username','match_payment':'Match Payment','cancel':'Cancel','matching':'Matching...','match_success':'Payment matched and customer renewed for 30 days.'
@@ -1585,7 +1469,7 @@
                 'expire_customer':'এক্সপায়ার কাস্টমার','expire_today_yesterday':'আজ ও গতকাল এক্সপায়ার','expire_7_days':'৭ দিনে এক্সপায়ার','new_customer':'নতুন কাস্টমার','due_collection':'বকেয়া কালেকশন',
                 'report':'রিপোর্ট','monthly_collection_due':'মাসিক কালেকশন ও বকেয়া','monthly_sales':'মাসিক বিক্রয়','invoice_report':'ইনভয়েস রিপোর্ট',
                 'payments':'পেমেন্টস','pending_invoice':'পেন্ডিং ইনভয়েস','all_payments':'অল পেমেন্টস','payment_request':'পেমেন্ট রিকোয়েস্ট','bkash_payments':'বিকাশ পেমেন্টস','nagad_payments':'নগদ পেমেন্টস','rocket_payments':'রকেট পেমেন্টস',
-                'hotspot':'হটস্পট','hotspot_dashboard':'ড্যাশবোর্ড','hotspot_all_users':'অল ইউজার','hotspot_active_users':'অ্যাক্টিভ ইউজার','hotspot_profile':'প্রোফাইল','hotspot_server_profile':'সার্ভার প্রোফাইল','gen_print_vouchers':'ভাউচার তৈরি ও প্রিন্ট','add_hotspot_user':'হটস্পট ইউজার যুক্ত করুন','create_single_hotspot_customer':'একক হটস্পট কাস্টমার / ভাউচার তৈরি করুন','select_profile_plan':'প্রোফাইল / প্ল্যান নির্বাচন করুন','hotspot_server':'হটস্পট সার্ভার','customer_mobile':'কাস্টমার মোবাইল / ফোন','time_limit':'টাইম লিমিট','data_limit':'ডাটা লিমিট','package_price':'প্যাকেজ মূল্য (৳ BDT)','customer_note':'কাস্টমার নোট / মন্তব্য','clear_form':'ফর্ম পরিষ্কার করুন','save_enable_mikrotik':'MikroTik-এ সেভ ও এনাবল','hotspot_sales_today':'আজকের হটস্পট বিক্রয়','active_bandwidth_usage':'মোট অ্যাক্টিভ ব্যান্ডউইথ ব্যবহার','add_single_user':'একক ইউজার যুক্ত করুন','batch_generator':'ব্যাচ জেনারেটর','live_connected_clients':'রিয়েল-টাইম কানেক্টেড ক্লায়েন্ট',
+                'hotspot':'হটস্পট','hotspot_dashboard':'ড্যাশবোর্ড','hotspot_all_users':'অল ইউজার','hotspot_active_users':'অ্যাক্টিভ ইউজার','hotspot_profile':'প্রোফাইল','gen_print_vouchers':'ভাউচার তৈরি ও প্রিন্ট','add_hotspot_user':'হটস্পট ইউজার যুক্ত করুন','create_single_hotspot_customer':'একক হটস্পট কাস্টমার / ভাউচার তৈরি করুন','select_profile_plan':'প্রোফাইল / প্ল্যান নির্বাচন করুন','hotspot_server':'হটস্পট সার্ভার','customer_mobile':'কাস্টমার মোবাইল / ফোন','time_limit':'টাইম লিমিট','data_limit':'ডাটা লিমিট','package_price':'প্যাকেজ মূল্য (৳ BDT)','customer_note':'কাস্টমার নোট / মন্তব্য','clear_form':'ফর্ম পরিষ্কার করুন','save_enable_mikrotik':'MikroTik-এ সেভ ও এনাবল','hotspot_sales_today':'আজকের হটস্পট বিক্রয়','active_bandwidth_usage':'মোট অ্যাক্টিভ ব্যান্ডউইথ ব্যবহার','add_single_user':'একক ইউজার যুক্ত করুন','batch_generator':'ব্যাচ জেনারেটর','live_connected_clients':'রিয়েল-টাইম কানেক্টেড ক্লায়েন্ট',
                 'core_system':'কোর সিস্টেম','pppoe':'PPPoE','devices':'ডিভাইস','plan_packages':'প্ল্যান ও প্যাকেজ','ip_pools':'IP পুলস','olt_management':'OLT ম্যানেজমেন্ট','monitor':'মনিটর','usage':'ইউসেজ','online':'অনলাইন','network_diagram':'নেটওয়ার্ক ডায়াগ্রাম',
                 'general_setting':'জেনারেল সেটিং','website_setting':'ওয়েবসাইট সেটিং','sms_setting':'SMS সেটিং','backup_restore':'ব্যাকআপ ও রিস্টোর',
                 'vpn_server':'VPN সার্ভার','vpn':'VPN','vpn_port_forwarding':'VPN পোর্ট ফরওয়ার্ডিং',
@@ -1593,7 +1477,7 @@
                 'expenses':'খরচ','add_expenses':'খরচ যোগ করুন','all_expenses':'সব খরচ','expenses_report':'খরচের রিপোর্ট',
                 'human_resource':'হিউম্যান রিসোর্স','department':'ডিপার্টমেন্ট','all_employees':'সব কর্মচারী','added_employees':'যুক্ত কর্মচারী',
                 'live_tracking':'লাইভ ট্র্যাকিং','google_map':'গুগল ম্যাপ','user_reseller':'ইউজার ও রিসেলার','sub_staff':'সাব-স্টাফ',
-                'hotspot_dashboard_title':'হটস্পট ড্যাশবোর্ড','total_hotspot_accounts':'মোট হটস্পট অ্যাকাউন্ট','currently_online_clients':'বর্তমানে অনলাইন ক্লায়েন্ট','total_vouchers_generated':'মোট তৈরি ভাউচার','hotspot_revenue':'হটস্পট আয়','live_hotspot_overview':'লাইভ হটস্পট ওভারভিউ','hotspot_accounts':'হটস্পট অ্যাকাউন্ট','search_hotspot':'ইউজারনেম, প্রোফাইল, IP বা MAC খুঁজুন...','hotspot_user_profiles':'হটস্পট ইউজার প্রোফাইল','hotspot_server_profiles':'হটস্পট সার্ভার প্রোফাইল','rate_limit':'রেট লিমিট','shared_users':'শেয়ার্ড ইউজার','idle_timeout':'আইডল টাইমআউট','keepalive':'কিপঅ্যালাইভ','hotspot_address':'হটস্পট অ্যাড্রেস','dns_name':'DNS নাম','html_directory':'HTML ডিরেক্টরি','login_by':'লগইন পদ্ধতি','radius':'RADIUS','yes':'হ্যাঁ','no':'না','quantity':'পরিমাণ','user_prefix':'ইউজার প্রিফিক্স','character_length':'ক্যারেক্টার দৈর্ঘ্য','profile':'প্রোফাইল','price':'মূল্য','validity':'মেয়াদ','generate_batch_vouchers':'ব্যাচ ভাউচার তৈরি করুন','print_voucher_cards':'ভাউচার কার্ড প্রিন্ট','printable_voucher_cards':'প্রিন্টযোগ্য ভাউচার কার্ড','username_label':'ইউজারনেম','password_pin':'পাসওয়ার্ড / PIN','package_speed':'প্যাকেজ স্পিড / প্রোফাইল','instructions':'Wi-Fi-তে কানেক্ট করুন → পোর্টাল খুলুন → PIN দিন','remove_user_confirm':'হটস্পট ইউজারটি মুছে ফেলবেন?','generate_first':'আগে একটি ভাউচার ব্যাচ তৈরি করুন।','generating':'তৈরি হচ্ছে...','loading_profiles':'প্রোফাইল লোড হচ্ছে...','no_profiles':'কোনো MikroTik প্রোফাইল পাওয়া যায়নি','no_hotspot_users':'কোনো হটস্পট ইউজার পাওয়া যায়নি।','bytes_in_out':'বাইট ইন/আউট', 'customer_management':'কাস্টমার ম্যানেজমেন্ট','add_new_customer':'নতুন কাস্টমার যুক্ত করুন','label_fullname':'পূর্ণ নাম *','label_phone':'ফোন নম্বর *','label_username':'ইউজারনেম *','label_password':'পাসওয়ার্ড *','label_package':'প্যাকেজ নির্বাচন *','label_billing_duration':'বিলিং মেয়াদ *','opt_1_month':'১ মাস (৩০ দিন)','btn_reset':'রিসেট','btn_save_customer':'সংরক্ষণ করুন',
+                'hotspot_dashboard_title':'হটস্পট ড্যাশবোর্ড','total_hotspot_accounts':'মোট হটস্পট অ্যাকাউন্ট','currently_online_clients':'বর্তমানে অনলাইন ক্লায়েন্ট','total_vouchers_generated':'মোট তৈরি ভাউচার','hotspot_revenue':'হটস্পট আয়','live_hotspot_overview':'লাইভ হটস্পট ওভারভিউ','hotspot_accounts':'হটস্পট অ্যাকাউন্ট','search_hotspot':'ইউজারনেম, প্রোফাইল, IP বা MAC খুঁজুন...','hotspot_user_profiles':'হটস্পট ইউজার প্রোফাইল','rate_limit':'রেট লিমিট','shared_users':'শেয়ার্ড ইউজার','idle_timeout':'আইডল টাইমআউট','keepalive':'কিপঅ্যালাইভ','hotspot_address':'হটস্পট অ্যাড্রেস','dns_name':'DNS নাম','html_directory':'HTML ডিরেক্টরি','login_by':'লগইন পদ্ধতি','radius':'RADIUS','yes':'হ্যাঁ','no':'না','quantity':'পরিমাণ','user_prefix':'ইউজার প্রিফিক্স','character_length':'ক্যারেক্টার দৈর্ঘ্য','profile':'প্রোফাইল','price':'মূল্য','validity':'মেয়াদ','generate_batch_vouchers':'ব্যাচ ভাউচার তৈরি করুন','print_voucher_cards':'ভাউচার কার্ড প্রিন্ট','printable_voucher_cards':'প্রিন্টযোগ্য ভাউচার কার্ড','username_label':'ইউজারনেম','password_pin':'পাসওয়ার্ড / PIN','package_speed':'প্যাকেজ স্পিড / প্রোফাইল','instructions':'Wi-Fi-তে কানেক্ট করুন → পোর্টাল খুলুন → PIN দিন','remove_user_confirm':'হটস্পট ইউজারটি মুছে ফেলবেন?','generate_first':'আগে একটি ভাউচার ব্যাচ তৈরি করুন।','generating':'তৈরি হচ্ছে...','loading_profiles':'প্রোফাইল লোড হচ্ছে...','no_profiles':'কোনো MikroTik প্রোফাইল পাওয়া যায়নি','no_hotspot_users':'কোনো হটস্পট ইউজার পাওয়া যায়নি।','bytes_in_out':'বাইট ইন/আউট', 'customer_management':'কাস্টমার ম্যানেজমেন্ট','add_new_customer':'নতুন কাস্টমার যুক্ত করুন','label_fullname':'পূর্ণ নাম *','label_phone':'ফোন নম্বর *','label_username':'ইউজারনেম *','label_password':'পাসওয়ার্ড *','label_package':'প্যাকেজ নির্বাচন *','label_billing_duration':'বিলিং মেয়াদ *','opt_1_month':'১ মাস (৩০ দিন)','btn_reset':'রিসেট','btn_save_customer':'সংরক্ষণ করুন',
                 'ph_fullname':'যেমন: জন ডো','ph_phone':'যেমন: ০১৭০০০০০০০০','ph_username':'pppoe_user','ph_password':'••••••••',
                 'customer_table':'কাস্টমার রেকর্ড','search_customers':'কাস্টমার খুঁজুন...','full_name_phone':'পূর্ণ নাম / ফোন','username':'ইউজারনেম','package_profile':'প্যাকেজ / প্রোফাইল','ip_caller_id':'IP / Caller-ID','status_badge':'স্ট্যাটাস','expiry_date':'মেয়াদ শেষ','actions':'অ্যাকশন','online_status':'অনলাইন','offline_status':'অফলাইন','expired_status':'এক্সপায়ার','kick':'কিক','enable':'চালু','disable':'বন্ধ','view':'দেখুন','no_customers':'এই ফিল্টারে কোনো কাস্টমার পাওয়া যায়নি।','loading_customers':'কাস্টমার লোড হচ্ছে...','router_live':'লাইভ MikroTik','uptime':'আপটাইম','view_customer':'কাস্টমার তথ্য',
                 'payment_ledger':'ফাইন্যান্সিয়াল পেমেন্ট লেজার','search_payments':'TrxID, ফোন বা ইউজারনেম খুঁজুন...','total_received':'মোট প্রাপ্ত অর্থ','total_transactions':'মোট লেনদেন','unmatched_count':'ম্যাচ না হওয়া','trx_txnid':'TrxID / TxnID','gateway':'গেটওয়ে','amount':'পরিমাণ (৳)','sender_phone':'প্রেরকের ফোন','matched_customer':'ম্যাচড কাস্টমার / ইউজারনেম','date_time':'তারিখ ও সময়','manual_match':'ম্যানুয়াল ম্যাচ','processed':'প্রসেসড','unmatched':'আনম্যাচড','duplicate':'ডুপ্লিকেট','no_payments':'এই ফিল্টারে কোনো লেনদেন পাওয়া যায়নি।','previous':'আগের','next':'পরের','page':'পৃষ্ঠা','of':'এর','enter_username':'PPPoE ইউজারনেম লিখুন','match_payment':'পেমেন্ট ম্যাচ করুন','cancel':'বাতিল','matching':'ম্যাচ করা হচ্ছে...','match_success':'পেমেন্ট ম্যাচ হয়েছে এবং কাস্টমার ৩০ দিনের জন্য রিনিউ হয়েছে।'
