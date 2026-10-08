@@ -2604,14 +2604,15 @@ async function deletePlan(id,name){
             filterCustomerRows(document.getElementById('customerLiveSearch')?.value||'');
         }
         function renderCustomerTable(users) {
-            const sourceUsers = (Array.isArray(users) ? users : []).slice().sort(function(a, b) {
-                const dateA = new Date(a?.created_at || a?.customer_created_at || 0).getTime();
-                const dateB = new Date(b?.created_at || b?.customer_created_at || 0).getTime();
-                return dateB - dateA || (Number(b?.id || b?.customer_id || 0) - Number(a?.id || a?.customer_id || 0));
+            const sortedCustomers = (Array.isArray(users) ? users : []).slice().sort(function(a, b) {
+                const timeA = new Date(a?.created_at || a?.createdAt || a?.customer_created_at || 0).getTime();
+                const timeB = new Date(b?.created_at || b?.createdAt || b?.customer_created_at || 0).getTime();
+                if (timeB !== timeA) return timeB - timeA;
+                return (Number(b?.id || b?.customer_id || 0) || 0) - (Number(a?.id || a?.customer_id || 0) || 0);
             });
             const deletedIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
             const deletedUsernames = window.__deletedCustomerUsernames instanceof Set ? window.__deletedCustomerUsernames : new Set();
-            const visibleUsers = sourceUsers.filter(function(user) {
+            const visibleUsers = sortedCustomers.filter(function(user) {
                 const id = String(user?.customer_id || user?.id || '').trim();
                 const username = String(user?.username || '').trim().toLowerCase();
                 return !deletedIds.has(id) && !deletedUsernames.has(username);
@@ -2662,7 +2663,7 @@ async function deletePlan(id,name){
                                     </tr>
                                 </thead>
                                 <tbody id="customerFilterBody">
-                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
+                                    ${visibleUsers.length ? visibleUsers.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
@@ -2672,7 +2673,7 @@ async function deletePlan(id,name){
         }
 
         function customerRowHtml(user, index, t) {
-            const serial = Number(index) || 1;
+            const serial = String(Number(index) || 1).padStart(2, '0');
             const networkStatus = customerStatus(user);
             const metadata = parseCustomerMetadata(user);
             const billingStatus = String(user?.billing_status || 'unpaid').toLowerCase();
