@@ -8,7 +8,31 @@ app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",data
 app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
 app.get("/portal",(req,res)=>res.render("portal",{title:"FAZ NETWORK Hotspot Portal"}));
 app.get("/admin",(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected}));
-app.get("/",(req,res)=>res.render("index",{title:"Dashboard",page:"dashboard"}));
+app.get("/",async (req,res)=>{
+  try{
+    const officeAddress=String(process.env.OFFICE_ADDRESS||"FAZ NETWORK, Bangladesh");
+    const helpline=String(process.env.HELPLINE_PHONE||"01339932887");
+    let packages=[];
+    try{
+      const pkgResult=await db.query("SELECT * FROM packages ORDER BY price ASC");
+      packages=Array.isArray(pkgResult.rows)?pkgResult.rows:[];
+    }catch(dbErr){
+      console.warn("[Home Route] DB package query warning:",dbErr.message);
+    }
+    return res.render("index",{
+      title:"Dashboard",
+      page:"dashboard",
+      officeAddress,
+      helpline,
+      packages,
+      error:null,
+      success:null
+    });
+  }catch(err){
+    console.error("[CRITICAL] Error rendering homepage index:",err);
+    return res.status(500).send("Service is initializing. Please refresh in a moment.");
+  }
+});
 app.get("/router",(req,res)=>res.render("settings",{title:"Router Settings",page:"router",routerHost:String(process.env.ROUTER_HOST||""),routerPort:Number.parseInt(process.env.ROUTER_PORT||"8728",10)}));
 app.use("/api/router",routerRoutes);app.use("/api/pppoe",pppoeRoutes);app.use("/api",paymentRoutes);app.use("/api/customers",customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",packageRoutes);app.use("/api/packages",packageRoutes);app.use("/api/ip-pools",ipPoolRoutes);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",hotspotRoutes);
 app.get("/pppoe",(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
