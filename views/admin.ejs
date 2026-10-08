@@ -2505,7 +2505,9 @@ async function deletePlan(id,name){
             updateCustomerValidityStatus();
         }
 
-        if(!window.__customerHubBound){
+        function initializeCustomerHub(){
+            if(window.__customerHubBound)return;
+            window.__customerHubBound=true;
             window.__customerHubBound=true;
             const hub=()=>document.getElementById('customerProfileModal');
             const hubSetText=(id,v)=>{const e=hub()?.querySelector('#'+id);if(e)e.textContent=v??'—';};
@@ -2518,6 +2520,8 @@ async function deletePlan(id,name){
             hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for one calendar month?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
+        }
+        if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initializeCustomerHub,{once:true});else initializeCustomerHub();
         window.openCustomerProfile=openCustomerProfile;
 
         async function editCustomer(encodedUsername) {
