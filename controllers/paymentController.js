@@ -131,10 +131,8 @@ async function verifyTrx(req,res){
    return Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
   });
   if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
-  const legacyMapResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_price_profile_map' LIMIT 1");
-  let legacyMap={};try{legacyMap=JSON.parse(legacyMapResult.rows[0]?.value||"{}");}catch(_){}
-  const preferredName=String(legacyMap?.[amount.toFixed(2)]||legacyMap?.[String(amount)]||"").trim().toLowerCase();
-  const hotspotProfile=matchingProfiles.find(item=>String(item.name||"").trim().toLowerCase()===preferredName)||matchingProfiles[0];
+  // If several profiles share a price, use the first active MikroTik profile consistently.
+  const hotspotProfile=matchingProfiles[0];
   const metadata=profileMetadata[String(hotspotProfile.name||"")]||{};
   const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
   let validityConfig;
