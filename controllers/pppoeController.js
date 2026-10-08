@@ -95,7 +95,7 @@ async function users(req, res) {
   try {
     const filter = clean(req.query.filter || "all", 40).toLowerCase();
     const allowedFilters = new Set([
-      "all", "online", "offline", "active", "left", "expire",
+      "all", "online", "offline", "active", "expire",
       "expire_today_yesterday", "expire_7_days", "new", "due"
     ]);
     if (!allowedFilters.has(filter)) {
@@ -113,8 +113,6 @@ async function users(req, res) {
       conditions.push("u.status = 'active'");
       conditions.push("(u.expiry_date IS NULL OR u.expiry_date >= CURRENT_DATE)");
       conditions.push("u.disabled = FALSE");
-    } else if (filter === "left") {
-      conditions.push("(LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE)");
     } else if (filter === "expire") {
       conditions.push("u.expiry_date IS NOT NULL");
       conditions.push("u.expiry_date IS NOT NULL");
