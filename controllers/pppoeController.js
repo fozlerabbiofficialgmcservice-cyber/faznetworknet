@@ -302,78 +302,12 @@ async function createProfile(req, res) {
 }
 
 async function removeUser(req,res){
-  const identifier=clean(req.params?.id,100);
-  if(!identifier)return res.status(400).json({success:false,message:"Username or customer ID is required."});
-
-  try{
-    const lookup=await db.query(
-      `SELECT c.id AS customer_id,c.username AS customer_username,u.username AS pppoe_username
-       FROM pppoe_users u
-       LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username)
-       WHERE c.id::text=$1 OR LOWER(u.username)=LOWER($1) OR LOWER(c.username)=LOWER($1)
-       LIMIT 1`,
-      [identifier]
-    );
-    if(!lookup.rows.length)return res.status(404).json({success:false,message:"PPPoE user not found."});
-
-    const row=lookup.rows[0];
-    const customerId=row.customer_id||null;
-    const username=clean(row.pppoe_username||row.customer_username||identifier,100);
-    if(!username)return res.status(404).json({success:false,message:"PPPoE username not found."});
-
-    // Best-effort RouterOS cleanup. A missing secret/session is already the
-    // desired router state and must never prevent local deletion.
-    let routerCleanup={terminatedSessions:0,removed:false};
-    try{
-      routerCleanup=await mikrotikService.removeCustomer(username);
-    }catch(routerErr){
-      console.warn(
-        `[MikroTik Safe Delete] Could not remove ${username} from router (maybe already deleted):`,
-        routerErr?.message||routerErr
-      );
-    }
-
-    await db.withTransaction(async(client)=>{
-      await client.query(
-        "DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",
-        [username]
-      );
-      if(customerId) await client.query("DELETE FROM audit_logs WHERE customer_id=$1",[customerId]);
-
-      const invoiceTable=await client.query(
-        "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='invoices' LIMIT 1"
-      );
-      if(invoiceTable.rows.length && customerId){
-        const invoiceCustomerColumn=await client.query(
-          "SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name='customer_id' LIMIT 1"
-        );
-        if(invoiceCustomerColumn.rows.length) await client.query("DELETE FROM invoices WHERE customer_id=$1",[customerId]);
-      }
-
-      await client.query(
-        "DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",
-        [username]
-      );
-
-      await client.query(
-        "INSERT INTO customer_deletion_tombstones(username,customer_id,deleted_at) VALUES(LOWER($1),$2,NOW()) ON CONFLICT(username) DO UPDATE SET customer_id=EXCLUDED.customer_id,deleted_at=NOW()",
-        [username,customerId]
-      );
-
-      if(customerId) await client.query("DELETE FROM customers WHERE id=$1",[customerId]);
-    });
-
-    return res.json({
-      success:true,
-      message:"PPPoE user deleted successfully from system",
-      username,
-      terminatedSessions:routerCleanup?.terminatedSessions||0
-    });
-  }catch(error){
-    return errorResponse(res,error);
-  }
+  // Keep PPPoE deletion on the exact same unconditional deletion path used
+  // by /api/customers/:id so either endpoint handles customer IDs, PPPoE
+  // usernames, router-synced users, and already-partially-deleted records.
+  const customerController=require("./customerController");
+  return customerController.removeCustomer(req,res);
 }
-
 async function page(req, res) {
   res.render("pppoe", { title: "PPPoE Management", page: "pppoe" });
 }
