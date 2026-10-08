@@ -123,6 +123,23 @@ async function createCustomer(req, res) {
           `UPDATE customers SET provisioning_status='provisioned', router_id=$1, updated_at=NOW() WHERE id=$2`,
           [String(process.env.ROUTER_HOST || ""), customerId]
         );
+        await db.query(
+          `INSERT INTO pppoe_users
+           (username,password,profile,service,disabled,comment,phone,router_id,synced_at,updated_at)
+           VALUES ($1,$2,$3,'pppoe',FALSE,$4,$5,$6,NOW(),NOW())
+           ON CONFLICT (username) DO UPDATE SET
+             password=EXCLUDED.password, profile=EXCLUDED.profile, disabled=FALSE,
+             comment=EXCLUDED.comment, phone=EXCLUDED.phone, router_id=EXCLUDED.router_id,
+             synced_at=NOW(), updated_at=NOW()`,
+          [
+            customer.username,
+            customer.password,
+            customer.profile,
+            "Customer: " + customer.fullName,
+            customer.phone,
+            String(process.env.ROUTER_HOST || "")
+          ]
+        );
       }
     } catch (routerError) {
       provisioning = "failed";
