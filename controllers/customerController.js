@@ -557,7 +557,6 @@ async function updateCustomer(req,res){
     const packageDefinition=await resolvePackageDefinition(requestedProfile,packageName);
     if(!packageDefinition)return res.status(400).json({success:false,message:"Selected package/profile is not configured in the billing package table."});
     const profileName=packageDefinition.profileName||requestedProfile,password=clean(body.password||row.password,255);
-    const remoteAddress=clean(body.remoteAddress||body.remote_address||row.remote_address||"",100);
     const disabled=body.disabled===undefined?false:["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
     const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
@@ -568,16 +567,16 @@ async function updateCustomer(req,res){
     if(duplicate.rows.length)return res.status(409).json({success:false,message:"Another customer already uses this username or phone number."});
     const comment=buildExpirationComment(fullName,phone,expirationDate,remarks),expired=dateStatus(expirationDate)==="expired",effectiveDisabled=expired||disabled,previousUsername=clean(row.username,100);
     if(await mikrotikService.testConnection()){
-      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,allowStaticRemoteAddress:Boolean(explicitRemoteAddress),comment,disabled:effectiveDisabled});
-      else await mikrotikService.updateSecret(username,{password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,allowStaticRemoteAddress:Boolean(explicitRemoteAddress),comment,disabled:effectiveDisabled});
+      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:effectiveProfile(profileName,expirationDate),comment,disabled:effectiveDisabled});
+      else await mikrotikService.updateSecret(username,{password,profile:effectiveProfile(profileName,expirationDate),comment,disabled:effectiveDisabled});
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,provisioning_status='provisioned',status=$20,updated_at=NOW() WHERE id=$21 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,billingStatus,expired?"expired":effectiveDisabled?"inactive":"active",row.id]);
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
-    await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,remote_address,router_id,expiry_date,status,billing_status,paid_until,synced_at,updated_at)
-      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN $11='paid' THEN $9 ELSE NULL END,NOW(),NOW())
-      ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,remote_address=EXCLUDED.remote_address,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,synced_at=NOW(),updated_at=NOW()`,
-      [username,password,effectiveProfile(profileName,expirationDate),effectiveDisabled,comment,phone,remoteAddress,String(process.env.ROUTER_HOST||""),expirationDate,expired?"expired":effectiveDisabled?"inactive":"active",billingStatus]);
+    await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,synced_at,updated_at)
+      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN $10='paid' THEN $8 ELSE NULL END,NOW(),NOW())
+      ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,synced_at=NOW(),updated_at=NOW()`,
+      [username,password,effectiveProfile(profileName,expirationDate),effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,expired?"expired":effectiveDisabled?"inactive":"active",billingStatus]);
     await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"UPDATE_INFO",details:{message:"Updated customer profile details",previous:{name:row.full_name,phone:row.phone,username:row.username,package:row.package_name,profile:row.profile,area:row.area_zone,expirationDate:row.expiration_date},next:{name:fullName,phone,username,package:packageDefinition.name,profile:profileName,area:areaZone,expirationDate}},ipAddress:getIpAddress(req)});
     if(packageChanged) await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"CHANGE_PACKAGE",details:{message:`Package changed from ${row.package_name||row.profile} to ${packageDefinition.name}`,previousPackage:row.package_name,previousProfile:row.profile,newPackage:packageDefinition.name,newProfile:profileName},ipAddress:getIpAddress(req)});
     return res.json({success:true,message:"Customer profile saved and synchronized with MikroTik.",customer:result.rows[0],kicked:packageChanged});
