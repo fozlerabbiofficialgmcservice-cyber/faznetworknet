@@ -229,7 +229,7 @@ async function createCustomer(req, res) {
     return res.status(201).json({
       success: true,
       message: provisioning === "provisioned"
-        ? "Customer created successfully"
+        ? "Customer provisioned successfully"
         : "Customer created successfully; MikroTik provisioning is pending.",
       customer: {
         id: customerId,
