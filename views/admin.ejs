@@ -2605,10 +2605,21 @@ async function deletePlan(id,name){
         }
         function renderCustomerTable(users) {
             const sortedCustomers = (Array.isArray(users) ? users : []).slice().sort(function(a, b) {
-                const timeA = new Date(a?.created_at || a?.createdAt || a?.customer_created_at || 0).getTime();
-                const timeB = new Date(b?.created_at || b?.createdAt || b?.customer_created_at || 0).getTime();
-                if (timeB !== timeA) return timeB - timeA;
-                return (Number(b?.id || b?.customer_id || 0) || 0) - (Number(a?.id || a?.customer_id || 0) || 0);
+                const timeA = new Date(a?.created_at || a?.createdAt || 0).getTime();
+                const timeB = new Date(b?.created_at || b?.createdAt || 0).getTime();
+
+                // Primary: oldest customer creation time first.
+                if (timeA !== timeB && timeA > 0 && timeB > 0) {
+                    return timeA - timeB;
+                }
+
+                // Secondary: sequential username for existing records with tied/skewed timestamps.
+                const userA = String(a?.username || '');
+                const userB = String(b?.username || '');
+                const userDiff = userA.localeCompare(userB, undefined, { numeric: true });
+                if (userDiff !== 0) return userDiff;
+
+                return (Number(a?.id) || 0) - (Number(b?.id) || 0);
             });
             const deletedIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
             const deletedUsernames = window.__deletedCustomerUsernames instanceof Set ? window.__deletedCustomerUsernames : new Set();
