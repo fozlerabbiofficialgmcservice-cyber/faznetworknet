@@ -228,7 +228,7 @@ class MikroTikService {
   async rechargeHotspotUser(data) {
     const username=this._str(data.username).trim(),password=this._str(data.password),profile=this._str(data.profile).trim(),validity=this._str(data.validity).trim(),limitBytesTotal=Math.max(0,Number(data.limitBytesTotal)||0);
     if(!username||!password||!profile||(!validity&&!limitBytesTotal))throw new Error("Hotspot recharge requires username, password, profile, and time validity or a data quota.");
-    const limits={"limit-uptime":validity||undefined,"limit-bytes-total":limitBytesTotal?String(Math.floor(limitBytesTotal)):undefined};
+    const limits={"limit-uptime":validity||undefined,"limit-bytes-total":String(Math.floor(limitBytesTotal))};
     return this._withConnection("Hotspot user recharge",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/print");
       const matches=(Array.isArray(rows)?rows:[]).filter(item=>this._str(item.name)===username&&item[".id"]);
