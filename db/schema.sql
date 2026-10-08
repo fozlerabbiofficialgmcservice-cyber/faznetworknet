@@ -200,3 +200,12 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_customer ON audit_logs(customer_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_customer_created ON audit_logs(customer_id, created_at DESC);
+
+-- Prevent deleted customer usernames from being resurrected by RouterOS auto-sync.
+CREATE TABLE IF NOT EXISTS customer_deletion_tombstones (
+  username VARCHAR(100) PRIMARY KEY,
+  customer_id BIGINT,
+  deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_customer_deletion_tombstones_deleted_at
+  ON customer_deletion_tombstones(deleted_at DESC);
