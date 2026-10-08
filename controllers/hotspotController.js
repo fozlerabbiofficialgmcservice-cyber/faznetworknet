@@ -7,6 +7,9 @@ function validityMs(value){const m=String(value||"").trim().match(/^(\\d+(?:\\.\
 function voucherValidUntil(createdAt,validity){const ms=validityMs(validity);return ms?new Date(new Date(createdAt).getTime()+ms):null;}
 async function page(req,res){res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"});}
 async function profiles(req,res){try{const data=await mikrotikService.getHotspotProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
+async function createProfile(req,res){try{const name=clean(req.body.name,100),rateLimit=clean(req.body.rateLimit,100),sharedUsers=Math.max(1,Number(req.body.sharedUsers)||1),sessionTimeout=clean(req.body.sessionTimeout,50),keepaliveTimeout=clean(req.body.keepaliveTimeout,50);if(!name)return res.status(400).json({success:false,message:"Profile name is required."});const result=await mikrotikService.createHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout,keepaliveTimeout});res.json({success:true,message:"Hotspot profile created successfully in MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
+async function updateProfile(req,res){try{const name=clean(req.body.name,100),rateLimit=clean(req.body.rateLimit,100),sharedUsers=Math.max(1,Number(req.body.sharedUsers)||1);if(!name)return res.status(400).json({success:false,message:"Profile name is required."});const result=await mikrotikService.updateHotspotProfile({name,rateLimit,sharedUsers});res.json({success:true,message:"Hotspot profile updated successfully in MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
+async function deleteProfile(req,res){try{const name=clean(req.body.name,100);if(!name)return res.status(400).json({success:false,message:"Profile name is required."});const result=await mikrotikService.deleteHotspotProfile(name);res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
 async function serverProfiles(req,res){try{const data=await mikrotikService.getHotspotServerProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
 async function list(req,res){try{
  const filter=normalizeFilter(req.query.filter);
@@ -33,7 +36,7 @@ async function list(req,res){try{
    return {id:v.id||null,username,password:v.password||mt?.password||"",profile:v.profile||mt?.profile||"",validity:v.validity||mt?.validity||"",price:Number(v.price||mt?.price||0),status:v.status||((mt&&!mt.disabled)?"active":"unused"),comment:v.comment||mt?.comment||"",created_at:v.created_at||null,mikrotik:mt,online,valid_until:validUntil?validUntil.toISOString():null,active:(v.status!=="expired"&&(dbValid||mtValid))};
  });
  if(filter==="active") vouchers=vouchers.filter(v=>v.active);
- if(filter==="online") vouchers=customerSessions.map(s=>({id:null,username:s.username,password:mtMap.get(s.username)?.password||"",profile:s.profile||mtMap.get(s.username)?.profile||"",validity:mtMap.get(s.username)?.validity||"",price:Number(mtMap.get(s.username)?.price||0),status:"active",comment:"Live MikroTik session",created_at:null,online:s,active:true}));
+ if(filter==="online") vouchers=customerSessions.map(s=>({id:s.id,username:s.username,password:mtMap.get(s.username)?.password||"",profile:s.profile||mtMap.get(s.username)?.profile||"",validity:mtMap.get(s.username)?.validity||"",price:Number(mtMap.get(s.username)?.price||0),status:"active",comment:"Live MikroTik session",created_at:null,online:s,active:true,address:s.address,mac_address:s.macAddress,uptime:s.uptime,bytes_in:s.bytesIn,bytes_out:s.bytesOut,session_time_left:s.sessionTimeLeft}));
  res.json({success:true,filter,count:vouchers.length,users:vouchers,sessions:customerSessions});
 }catch(e){return errorResponse(res,e);}}async function active(req,res){req.query.filter="online";return list(req,res);}
 async function generate(req,res){try{
@@ -102,11 +105,11 @@ async function dashboardMetrics(req,res){
     return res.json({success:true,totalUsers:explicit.length,onlineUsers:live.length,todayRevenue:Number(revenue.rows?.[0]?.total||0),totalActiveBandwidthUsage:totalBytes,recentActiveSessions});
   }catch(e){return errorResponse(res,e);}
 }
-async function kick(req,res){try{const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});const result=await mikrotikService.kickActiveHotspotUser(username);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
+async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
 async function remove(req,res){try{
  const username=clean(req.body.username,100);if(!username)return res.status(400).json({success:false,error:"Username is required."});
  await mikrotikService.removeHotspotUser(username);
  await db.query("UPDATE hotspot_vouchers SET status='expired' WHERE username=$1",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
-module.exports={page,profiles,serverProfiles,list,active,generate,createUser,dashboardMetrics,kick,remove};
+module.exports={page,profiles,createProfile,updateProfile,deleteProfile,serverProfiles,list,active,generate,createUser,dashboardMetrics,kick,remove};
