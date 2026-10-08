@@ -83,7 +83,7 @@ const dashboardBody = `
       <button type="button" id="closeSupportBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
     </div>
     <div class="p-5 space-y-3">
-      <a href="https://wa.me/88013399328887" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100">
+      <a href="https://wa.me/8801339932887" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100">
         <span class="text-xl">💬</span><span><strong class="block text-slate-900">WhatsApp</strong><span class="text-sm text-slate-600">Chat with FAZ NETWORK support</span></span>
       </a>
       <a href="tel:01339932887" class="flex items-center gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100">
@@ -168,7 +168,7 @@ const dashboardBody = `
         '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Remaining Days</p><p class="mt-1 font-bold text-slate-800">'+esc(c.remainingDays==null?'—':c.remainingDays)+'</p></div>'+
         '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Billing Status</p><p class="mt-1 font-bold '+(paid?'text-emerald-600':'text-red-600')+'">'+(paid?'Paid':'Unpaid')+'</p></div>'+
         '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Live Connection</p><p class="mt-1 font-bold text-slate-800">'+(online?'Online · '+esc(c.liveIp||'Connected'):'Offline')+'</p>'+(c.uptime?'<p class="text-xs text-slate-500 mt-1">Uptime: '+esc(c.uptime)+'</p>':'')+'</div>'+
-        '</div><div class="mt-5 space-y-3">'+recharge+'<div class="flex gap-2"><a href="'+esc(c.whatsappUrl||'https://wa.me/88013399328887')+'" target="_blank" rel="noopener" class="flex-1 rounded-xl border border-emerald-300 px-4 py-3 text-center text-sm font-bold text-emerald-700 hover:bg-emerald-50">WhatsApp Support</a><a href="tel:01339932887" class="flex-1 rounded-xl border border-cyan-300 px-4 py-3 text-center text-sm font-bold text-cyan-700 hover:bg-cyan-50">Call Helpline</a></div><p class="text-xs text-slate-400 text-center">Office: '+esc(c.officeAddress||'Contact support for office address')+'</p></div>';
+        '</div><div class="mt-5 space-y-3">'+recharge+'<div class="flex gap-2"><a href="'+esc(c.whatsappUrl||'https://wa.me/8801339932887')+'" target="_blank" rel="noopener" class="flex-1 rounded-xl border border-emerald-300 px-4 py-3 text-center text-sm font-bold text-emerald-700 hover:bg-emerald-50">WhatsApp Support</a><a href="tel:01339932887" class="flex-1 rounded-xl border border-cyan-300 px-4 py-3 text-center text-sm font-bold text-cyan-700 hover:bg-cyan-50">Call Helpline</a></div><p class="text-xs text-slate-400 text-center">Office: '+esc(c.officeAddress||'Contact support for office address')+'</p></div>';
       }
     }catch(error){
       if(loginError){loginError.textContent=error.message||'Invalid Username/Phone or Password';loginError.classList.remove('hidden');}
