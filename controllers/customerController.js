@@ -1,4 +1,5 @@
 const db = require("../db");
+const mikrotikService = require("../services/mikrotikService");
 
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
@@ -21,7 +22,33 @@ function normalizeDate(value) {
   return Number.isNaN(date.getTime()) ? "" : raw;
 }
 
-function dateStatus(expirationDate) {\n  const today = new Date();\n  today.setUTCHours(0, 0, 0, 0);\n  const expDate = new Date(String(expirationDate || "") + "T00:00:00Z");\n  expDate.setUTCHours(0, 0, 0, 0);\n  return expDate.getTime() < today.getTime() ? "expired" : "active";\n}\n\nfunction effectiveProfile(profile, expirationDate) {\n  return dateStatus(expirationDate) === "expired" ? clean(process.env.EXPIRED_PROFILE_NAME || "EXPIRED", 100) : clean(profile, 100);\n}\n\nfunction buildExpirationComment(fullName, phone, expirationDate, remarks) {\n  const parts = [];\n  if (fullName) parts.push("Customer: " + fullName);\n  if (phone) parts.push("Phone: " + phone);\n  parts.push("EXP: " + expirationDate);\n  if (remarks) parts.push("Note: " + remarks);\n  return parts.join(" | ").slice(0, 500);\n}\n\nfunction extractExpirationDate(comment) {\n  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2})/i);\n  return match ? normalizeDate(match[1]) : "";\n}\n\nfunction normalizeBill(value) {
+function dateStatus(expirationDate) {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const expDate = new Date(String(expirationDate || "") + "T00:00:00Z");
+  expDate.setUTCHours(0, 0, 0, 0);
+  return expDate.getTime() < today.getTime() ? "expired" : "active";
+}
+
+function effectiveProfile(profile, expirationDate) {
+  return dateStatus(expirationDate) === "expired" ? clean(process.env.EXPIRED_PROFILE_NAME || "EXPIRED", 100) : clean(profile, 100);
+}
+
+function buildExpirationComment(fullName, phone, expirationDate, remarks) {
+  const parts = [];
+  if (fullName) parts.push("Customer: " + fullName);
+  if (phone) parts.push("Phone: " + phone);
+  parts.push("EXP: " + expirationDate);
+  if (remarks) parts.push("Note: " + remarks);
+  return parts.join(" | ").slice(0, 500);
+}
+
+function extractExpirationDate(comment) {
+  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2})/i);
+  return match ? normalizeDate(match[1]) : "";
+}
+
+function normalizeBill(value) {
   const bill = Number(value);
   if (!Number.isFinite(bill) || bill < 0 || bill > 10000000) return null;
   return Number(bill.toFixed(2));
