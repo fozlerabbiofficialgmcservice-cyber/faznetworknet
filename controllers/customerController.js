@@ -32,12 +32,16 @@ function addBangladeshCalendarMonth(dateString) {
   const lastDay=new Date(Date.UTC(targetYear,targetMonth+1,0)).getUTCDate();
   return [targetYear,String(targetMonth+1).padStart(2,"0"),String(Math.min(day,lastDay)).padStart(2,"0")].join("-");
 }
+function expirationEndOfDay(expirationDate) {
+  const raw = normalizeDate(expirationDate);
+  if (!raw) return null;
+  const expDateObj = new Date(raw + "T23:59:59.999+06:00");
+  return Number.isNaN(expDateObj.getTime()) ? null : expDateObj;
+}
 function dateStatus(expirationDate) {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const expDate = new Date(String(expirationDate || "") + "T00:00:00Z");
-  expDate.setUTCHours(0, 0, 0, 0);
-  return expDate.getTime() < today.getTime() ? "expired" : "active";
+  const expDateObj = expirationEndOfDay(expirationDate);
+  if (!expDateObj) return "active";
+  return new Date().getTime() > expDateObj.getTime() ? "expired" : "active";
 }
 
 function effectiveProfile(profile, expirationDate) {
@@ -299,7 +303,9 @@ async function publicCustomerCheck(req,res){
       online=Boolean(session);liveIp=session?.address||"";
     }catch(error){console.warn("[Public Customer session warning]:",error.message);}
 
-    const billing=String(dbUser?.billing_status||"").toLowerCase()==="paid"?"Paid":(expiration&&expiration>=today?"Due":"Expired");
+    const paidUntil=normalizeDate(dbUser?.paid_until);
+    const paidCurrentCycle=String(dbUser?.billing_status||"").toLowerCase()==="paid" && Boolean(paidUntil && paidUntil>=today) && !Boolean(mtSecret?.disabled);
+    const billing=paidCurrentCycle?"Paid":"Unpaid";
     const profile=clean(mtSecret?.profile||dbUser?.profile||dbUser?.linked_profile_name||dbUser?.package_name||"-",100);
     const packageName=clean(dbUser?.linked_plan_name||dbUser?.package_name||profile,100);
     const supportPhone=clean(process.env.SUPPORT_PHONE||process.env.CONTACT_PHONE||"",40);
@@ -318,6 +324,7 @@ async function publicCustomerCheck(req,res){
         connectionStatus:online?"Online":"Offline",
         liveIp:liveIp||null,
         billingStatus:billing,
+        paidUntil:paidUntil||null,
         supportPhone:supportPhone||null,
         rechargeUrl:process.env.RECHARGE_URL||"/",
         disabled:Boolean(mtSecret?.disabled),
