@@ -273,6 +273,8 @@ async function listCustomers(req,res){
       const expiration=row.expiration_date||row.pppoe_expiry_date||null;
       return {
         ...row,
+        phone:formatBdPhoneNumber(row.phone),
+        alternative_phone:formatBdPhoneNumber(row.alternative_phone),
         expiration_date:expiration,
         expiry_date:expiration,
         billing_status:billing.status,
@@ -620,9 +622,7 @@ async function removeCustomer(req,res){
   if(!username&&!id)return res.status(400).json({success:false,message:"Username or customer ID is required."});
   try{
     const current=await db.query(
-      id
-        ? "SELECT id,username FROM customers WHERE id::text=$1 LIMIT 1"
-        : "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
+      id ? "SELECT id,username FROM customers WHERE id::text=$1 LIMIT 1" : "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
       [id||username]
     );
     if(!current.rows.length)return res.status(404).json({success:false,message:"Customer not found."});
@@ -630,33 +630,26 @@ async function removeCustomer(req,res){
     const resolvedUsername=clean(current.rows[0].username||username,100);
     if(!resolvedUsername)return res.status(404).json({success:false,message:"Customer not found."});
 
-    // Remove the live MikroTik state first: active PPPoE sessions, then the secret.
+    // Remove the live RouterOS account/session first. If MikroTik rejects the
+    // operation, PostgreSQL is left intact so the account can be retried safely.
     const result=await mikrotikService.removeCustomer(resolvedUsername);
 
-    // Clean application-side records before deleting the parent customer.
-    await db.query("DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",[resolvedUsername]);
-    await db.query("DELETE FROM audit_logs WHERE customer_id=$1",[customerId]);
-    const invoiceTable=await db.query(
-      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='invoices') AS exists"
-    );
-    if(invoiceTable.rows[0]?.exists){
-      const invoiceColumns=await db.query(
-        "SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name IN ('customer_id','username','customer_username')"
-      );
-      const columns=new Set(invoiceColumns.rows.map(row=>row.column_name));
-      if(columns.has("customer_id"))await db.query("DELETE FROM invoices WHERE customer_id=$1",[customerId]);
-      else if(columns.has("username"))await db.query("DELETE FROM invoices WHERE LOWER(username)=LOWER($1)",[resolvedUsername]);
-      else if(columns.has("customer_username"))await db.query("DELETE FROM invoices WHERE LOWER(customer_username)=LOWER($1)",[resolvedUsername]);
-    }
-    await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[resolvedUsername]);
-    await db.query("DELETE FROM customers WHERE id=$1",[customerId]);
+    await db.withTransaction(async(client)=>{
+      await client.query("DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",[resolvedUsername]);
+      await client.query("DELETE FROM audit_logs WHERE customer_id=$1",[customerId]);
 
-    return res.json({
-      success:true,
-      message:"Customer deleted successfully",
-      username:resolvedUsername,
-      terminatedSessions:Number(result.terminatedSessions||0)
+      // invoices is optional in some deployments; clean it only when present.
+      const invoiceTable=await client.query("SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='invoices' LIMIT 1");
+      if(invoiceTable.rows.length){
+        const invoiceCustomerColumn=await client.query("SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name='customer_id' LIMIT 1");
+        if(invoiceCustomerColumn.rows.length) await client.query("DELETE FROM invoices WHERE customer_id=$1",[customerId]);
+      }
+
+      await client.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[resolvedUsername]);
+      await client.query("DELETE FROM customers WHERE id=$1",[customerId]);
     });
+
+    return res.json({success:true,message:"Customer deleted successfully",username:resolvedUsername,terminatedSessions:result.terminatedSessions});
   }catch(error){return errorResponse(res,error);}
 }
 async function updateCustomer(req,res){
