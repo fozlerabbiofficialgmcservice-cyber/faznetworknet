@@ -1,4 +1,5 @@
 const db=require("../db");
+const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
 function errorResponse(res,error,status=400){const message=String(error?.message||"Settings operation failed.");return res.status(status).json({success:false,error:message,message});}
 function parseBool(value){return value===true||String(value||"").toLowerCase()==="true"||String(value||"")==="1";}
 function validateUrl(value){
@@ -12,7 +13,20 @@ function validateUrl(value){
 }
 async function readSettings(){const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_url','personal_payment_webhook_secret','personal_payment_webhook_enabled')");const map=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));return {webhookUrl:String(map.personal_payment_webhook_url||""),webhookEnabled:parseBool(map.personal_payment_webhook_enabled),secretConfigured:Boolean(String(map.personal_payment_webhook_secret||""))};}
 async function hotspotWebhookSettings(req,res){try{return res.json({success:true,settings:await readSettings()});}catch(error){return errorResponse(res,error,503);}}
-async function hotspotProfiles(req,res){try{const profiles=await require("../services/mikrotikService").getHotspotProfiles();return res.json({success:true,profiles:profiles.map(({name,rateLimit,sessionTimeout,sharedUsers})=>({name,rateLimit,sessionTimeout,sharedUsers}))});}catch(error){return errorResponse(res,error,503);}}
+async function hotspotProfiles(req,res){try{
+ const [profilesResult,metadataResult]=await Promise.all([
+  require("../services/mikrotikService").getHotspotProfiles(),
+  db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1")
+ ]);
+ let metadata={};try{metadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
+ if(!metadata||typeof metadata!=="object"||Array.isArray(metadata))metadata={};
+ const profiles=profilesResult.map(profile=>{
+  const saved=metadata[String(profile.name||"")]||{};
+  let validity;try{validity=saved.validityValue?normalizeProfileValidity(saved.validityValue,saved.validityUnit):parseStoredValidity(profile);}catch(_){validity=parseStoredValidity(profile);}
+  return {name:profile.name,rateLimit:profile.rateLimit,sessionTimeout:profile.sessionTimeout,sharedUsers:profile.sharedUsers,price:Number(saved.price||0),validityValue:validity.value,validityUnit:validity.unit,validityLabel:saved.validityLabel||validity.validityLabel,limitBytesTotal:Number(saved.limitBytesTotal||validity.limitBytesTotal||0),updatedAt:saved.updatedAt||null};
+ });
+ return res.set("Cache-Control","no-store").json({success:true,profiles});
+ }catch(error){return errorResponse(res,error,503);}}
 async function readHotspotProfileSettings(){const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('hotspot_price_profile_map','hotspot_default_profile')");const values=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));let mapping={};try{mapping=JSON.parse(values.hotspot_price_profile_map||"{}");}catch(_){}if(!mapping||typeof mapping!=="object"||Array.isArray(mapping))mapping={};return {mapping,defaultProfile:String(values.hotspot_default_profile||"")};}
 async function getHotspotProfileSettings(req,res){try{return res.json({success:true,settings:await readHotspotProfileSettings()});}catch(error){return errorResponse(res,error,503);}}
 async function saveHotspotProfileSettings(req,res){try{const body=req.body||{},mapping=body.mapping&&typeof body.mapping==="object"&&!Array.isArray(body.mapping)?body.mapping:{},defaultProfile=String(body.defaultProfile||"").trim();const normalized={};for(const [rawAmount,rawProfile] of Object.entries(mapping)){const amount=Number(rawAmount),profile=String(rawProfile||"").trim();if(!profile)continue;if(!Number.isFinite(amount)||amount<0||amount>1000000)throw new Error("Each mapping must use a valid payment amount.");normalized[amount.toFixed(2)]=profile;}const profiles=await require("../services/mikrotikService").getHotspotProfiles(),available=new Set(profiles.map(p=>String(p.name||"").toLowerCase()));for(const profile of [...Object.values(normalized),...(defaultProfile?[defaultProfile]:[])])if(!available.has(profile.toLowerCase()))throw new Error("Hotspot profile is not available on MikroTik: "+profile);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_price_profile_map',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(normalized)]);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_default_profile',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[defaultProfile]);return res.json({success:true,message:"Hotspot package/profile settings saved successfully.",settings:{mapping:normalized,defaultProfile}});}catch(error){return errorResponse(res,error,400);}}
