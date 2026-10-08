@@ -709,6 +709,7 @@
                     <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>TrxID</th><th>Gateway</th><th>Amount</th><th>Sender Phone</th><th>Status</th><th>Date</th></tr></thead><tbody id="paymentsBody"><tr><td colspan="6" class="text-center py-3 text-muted">Loading payments...</td></tr></tbody></table></div>
                 </div>
             </section>
+        <section id="view-customer-filter" class="admin-view" style="display:none"></section>
         </div>
     </div>
 
@@ -2260,8 +2261,9 @@ async function deletePlan(id,name){
                             <span class="small text-muted"><span data-key="page">${escapeHtml(t.page)}</span> ${data.page||1} <span data-key="of">${escapeHtml(t.of)}</span> ${data.total_pages||1}</span>
                             <button class="btn btn-sm btn-outline-success" onclick="changePaymentsPage(1)" ${(data.page||1)>=(data.total_pages||1)?'disabled':''}><span data-key="next">${escapeHtml(t.next)}</span> <i class="bi bi-chevron-right"></i></button>
                         </div>
-                    </div>
-                </section>`;
+                    </div>`;
+            content.style.display = 'block';
+            content.hidden = false;
             updateLanguage(lang);
         }
 
@@ -2617,10 +2619,9 @@ async function deletePlan(id,name){
             const lang = localStorage.getItem('faz_preferred_lang') || 'en';
             const t = translations[lang] || translations.en;
             const counts=customerBillingCounts(visibleUsers);
-            const content = document.getElementById('dynamicPageContent');
+            const content = document.getElementById('view-customer-filter');
             if (!content) return;
             content.innerHTML = `
-                <section id="view-customer-filter" class="admin-view">
                     <div class="card card-custom">
                         <div class="card-custom-header flex-wrap">
                             <div class="d-flex align-items-center gap-2">
@@ -2819,44 +2820,62 @@ async function deletePlan(id,name){
             purgeStuckBackdrops();
             currentCustomerFilter = filterType;
             currentCustomerTitleKey = titleKey;
+
             const dynamic = document.getElementById('dynamicPageContent');
-            if (!dynamic) return;
+            const customerView = document.getElementById('view-customer-filter');
+            if (!dynamic || !customerView) return;
+
             dynamic.style.display = 'block';
             dynamic.hidden = false;
-            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
+
+            // Hide every view, then show only the dedicated customer host.
+            document.querySelectorAll('.admin-view').forEach(function(view) {
+                view.style.display = 'none';
+                view.hidden = false;
+            });
+            customerView.style.display = 'block';
+            customerView.hidden = false;
+
             setPageTitleSafe(customerTitle(titleKey));
-            dynamic.innerHTML = `
-                <section id="view-customer-filter" class="admin-view" style="display:block">
-                    <div class="card card-custom">
-                        <div class="card-custom-header"><i class="bi bi-hourglass-split text-success fs-5"></i><span data-key="loading_customers">Loading customers...</span></div>
-                        <div class="card-body text-center py-5"><div class="spinner-border text-success" role="status"></div></div>
+            customerView.innerHTML = `
+                <div class="card card-custom">
+                    <div class="card-custom-header">
+                        <i class="bi bi-hourglass-split text-success fs-5"></i>
+                        <span data-key="loading_customers">Loading customers...</span>
                     </div>
-                </section>`;
+                    <div class="card-body text-center py-5">
+                        <div class="spinner-border text-success" role="status"></div>
+                    </div>
+                </div>`;
+
             try {
                 const endpoint = (filterType === 'all' || filterType === 'paid' || filterType === 'due' || filterType === 'unpaid')
                     ? '/api/customers?status=' + encodeURIComponent(filterType === 'all' ? 'all' : filterType)
                     : '/api/pppoe/users?filter=' + encodeURIComponent(filterType);
+
                 const data = await jsonFetch(endpoint);
                 if (data && data.success === false && !Array.isArray(data.users) && !Array.isArray(data.customers)) {
                     throw new Error(data.message || 'Unable to load customer records.');
                 }
-                const users = Array.isArray(data?.users) ? data.users : (Array.isArray(data?.customers) ? data.customers : []);
+
+                const users = Array.isArray(data?.users)
+                    ? data.users
+                    : (Array.isArray(data?.customers) ? data.customers : []);
+
                 renderCustomerTable(users);
-                dynamic.style.display = 'block';
-                dynamic.hidden = false;
-                const rendered = document.getElementById('view-customer-filter');
-                if (rendered) {
-                    rendered.style.display = 'block';
-                    rendered.hidden = false;
-                }
             } catch (error) {
-                dynamic.style.display = 'block';
-                dynamic.hidden = false;
-                dynamic.innerHTML = '<section class="admin-view" style="display:block"><div class="alert alert-danger m-3"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error?.message || 'Unable to load customer records.') + '</div></section>';
+                customerView.style.display = 'block';
+                customerView.hidden = false;
+                customerView.innerHTML =
+                    '<div class="alert alert-danger m-3"><i class="bi bi-exclamation-triangle me-2"></i>' +
+                    escapeHtml(error?.message || 'Unable to load customer records.') +
+                    '</div>';
                 console.error('[Customer Section] render/fetch failed:', error);
             } finally {
                 dynamic.style.display = 'block';
                 dynamic.hidden = false;
+                customerView.style.display = 'block';
+                customerView.hidden = false;
                 if (window.innerWidth <= 768) document.getElementById('sidebar')?.classList.remove('show');
             }
         }
