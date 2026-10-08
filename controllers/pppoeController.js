@@ -41,6 +41,10 @@ async function syncFromRouter() {
   const routerId = String(process.env.ROUTER_HOST || "");
 
   const result = await db.withTransaction(async (client) => {
+    // Never resurrect a username explicitly deleted by an admin.
+    const tombstoneResult = await client.query("SELECT LOWER(username) AS username FROM customer_deletion_tombstones");
+    const deletedUsernames = new Set(tombstoneResult.rows.map(row => String(row.username || "").toLowerCase()));
+
     for (const profile of profiles) {
       await client.query(
         `INSERT INTO pppoe_profiles
@@ -59,6 +63,11 @@ async function syncFromRouter() {
     }
 
     for (const user of secrets) {
+      const usernameKey = String(user.name || "").trim().toLowerCase();
+      if (!usernameKey || deletedUsernames.has(usernameKey)) {
+        if (usernameKey) console.log("[PPPoE SYNC] Skipping admin-deleted username:", user.name);
+        continue;
+      }
       const comment = user.comment || "";
       await client.query(
         `INSERT INTO pppoe_users
