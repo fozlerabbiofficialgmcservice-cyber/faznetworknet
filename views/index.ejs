@@ -1,4 +1,21 @@
 <%
+const escapeHtml = value => String(value ?? "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#39;");
+const safeOfficeAddress = escapeHtml(
+  typeof officeAddress !== "undefined"
+    ? officeAddress
+    : (process.env.OFFICE_ADDRESS || "FAZ NETWORK, Bangladesh")
+);
+const safeHelpline = escapeHtml(
+  typeof helpline !== "undefined"
+    ? helpline
+    : (process.env.HELPLINE_PHONE || "01339932887")
+);
+const safePackages = typeof packages !== "undefined" && Array.isArray(packages) ? packages : [];
 const dashboardBody = `
 <section class="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
   <div>
@@ -91,7 +108,7 @@ const dashboardBody = `
       </a>
       <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <p class="text-xs font-black uppercase tracking-wide text-slate-400">Office Address</p>
-        <p class="mt-1 text-sm font-semibold text-slate-800"><%= process.env.OFFICE_ADDRESS || "FAZ NETWORK Office — Please contact the helpline for the current office address." %></p>
+        <p class="mt-1 text-sm font-semibold text-slate-800">${safeOfficeAddress}</p>
       </div>
     </div>
   </div>
