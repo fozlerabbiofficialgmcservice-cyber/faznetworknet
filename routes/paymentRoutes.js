@@ -1,5 +1,6 @@
 const express=require("express");
-const controller=require("../controllers/paymentController");\nconst {requireAdmin}=require("../middleware/adminAuth");
+const controller=require("../controllers/paymentController");
+const {requireAdmin}=require("../middleware/adminAuth");
 const router=express.Router();
 router.post("/webhooks/macrodroid-sms",controller.webhook);
 router.post("/forward",controller.webhook);
