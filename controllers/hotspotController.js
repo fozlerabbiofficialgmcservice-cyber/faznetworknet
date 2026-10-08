@@ -128,30 +128,29 @@ async function generate(req,res){try{
 async function createUser(req,res){
   try{
     const username=clean(req.body.username,100);
-    const password=clean(req.body.password,100);
     const profile=clean(req.body.profile,100);
+    const password=clean(req.body.password,100)||username;
     const server=clean(req.body.server||"all",100)||"all";
     const timeLimit=clean(req.body.timeLimit,50);
     const dataLimit=clean(req.body.dataLimit,50);
     const comment=clean(req.body.comment,500);
-    const phone=clean(req.body.phone,40);
-    const price=Number(req.body.price||0);
-    if(!username||!password||!profile)return res.status(400).json({success:false,message:"Username, password, and profile are required."});
-    if(!/^[A-Za-z0-9._@-]{2,100}$/.test(username))return res.status(400).json({success:false,message:"Username contains unsupported characters."});
-    if(!Number.isFinite(price)||price<0)return res.status(400).json({success:false,message:"Price must be a valid non-negative amount."});
+    if(!username||!profile)return res.status(400).json({success:false,message:"Username / phone number and profile are required."});
+    if(!/^[A-Za-z0-9._@+-]{2,100}$/.test(username))return res.status(400).json({success:false,message:"Username / phone number contains unsupported characters."});
     const existingDb=await db.query("SELECT 1 FROM hotspot_vouchers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
     if(existingDb.rows.length)return res.status(409).json({success:false,message:"Hotspot username already exists in database."});
     const mtUsers=await mikrotikService.getHotspotUsers();
     if(mtUsers.some(u=>String(u.username||"").toLowerCase()===username.toLowerCase()))return res.status(409).json({success:false,message:"Hotspot username already exists in MikroTik."});
     await mikrotikService.createHotspotUser({username,password,profile,server,"limit-uptime":timeLimit,"limit-bytes-total":dataLimit,comment});
     try{
+      const profilePriceRows=await db.query("SELECT price FROM hotspot_vouchers WHERE LOWER(profile)=LOWER($1) AND price IS NOT NULL ORDER BY created_at DESC LIMIT 1",[profile]);
+      const profilePrice=Number(profilePriceRows?.rows?.[0]?.price||0);
       await db.query("INSERT INTO hotspot_vouchers(username,password,profile,validity,price,status,comment,phone,server,time_limit,data_limit) VALUES($1,$2,$3,$4,$5,'active',$6,$7,$8,$9,$10)",
-        [username,password,profile,timeLimit||"custom",price,comment,phone,server,timeLimit||null,dataLimit||null]);
+        [username,password,profile,timeLimit||"custom",profilePrice,comment,username,server,timeLimit||null,dataLimit||null]);
     }catch(dbError){
       try{await mikrotikService.removeHotspotUser(username);}catch(_){}
       throw dbError;
     }
-    return res.json({success:true,message:"Hotspot user created successfully in MikroTik & DB",user:{username,profile,server,timeLimit,dataLimit,price,phone,comment}});
+    return res.json({success:true,message:"Hotspot user created successfully in MikroTik & DB",user:{username,password,profile,server,timeLimit,dataLimit,phone:username,comment}});
   }catch(e){return errorResponse(res,e);}
 }
 async function dashboardMetrics(req,res){
