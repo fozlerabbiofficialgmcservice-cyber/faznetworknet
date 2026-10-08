@@ -113,6 +113,7 @@ async function createCustomer(req, res) {
     nid: clean(body.nid, 100),
     installationAddress: clean(body.installationAddress || body.address, 500),
     fiberBox: clean(body.fiberBox, 150),
+    areaZone: clean(body.areaZone || body.area_zone, 150),
     onuMac: clean(body.onuMac, 100),
     remarks: clean(body.remarks || body.note, 1000)
   };
@@ -150,14 +151,14 @@ async function createCustomer(req, res) {
     const inserted = await db.query(
       `INSERT INTO customers
        (full_name, phone, connection_date, username, password, package_name, profile,
-        monthly_bill, nid, installation_address, fiber_box, onu_mac, remarks, expiration_date,
+        monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         provisioning_status, status, created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending',$15,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
         customer.password, customer.packageName, customer.profile, customer.monthlyBill,
-        customer.nid || null, customer.installationAddress || null, customer.fiberBox || null,
+        customer.nid || null, customer.installationAddress || null, customer.areaZone || null, customer.fiberBox || null,
         customer.onuMac || null, customer.remarks || null, customer.expirationDate, dateStatus(customer.expirationDate)
       ]
     );
@@ -547,7 +548,7 @@ async function updateCustomer(req,res){
     const remoteAddress=clean(body.remoteAddress||body.remote_address||row.remote_address||"",100);
     const disabled=body.disabled===undefined?false:["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
-    const address=clean(body.installationAddress||body.address||row.installation_address,1000),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
+    const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
     const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),onuMac=clean(body.onuMac||body.onu_mac||row.onu_mac,100);
     const onuSerial=clean(body.onuSerial||body.onu_serial||row.onu_serial,150),fiberDropCore=clean(body.fiberDropCore||body.fiber_drop_core||row.fiber_drop_core,80),remarks=clean(body.remarks||body.note||row.remarks,1000);
     const usernameChanged=String(row.username).toLowerCase()!==username.toLowerCase(),packageChanged=String(row.profile||"").toLowerCase()!==profileName.toLowerCase();
@@ -559,7 +560,7 @@ async function updateCustomer(req,res){
       else await mikrotikService.updateSecret(username,{password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,comment,disabled:effectiveDisabled});
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
-    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,fiber_box=$9,onu_mac=$10,remarks=$11,expiration_date=$12,alternative_phone=$13,olt_pon_port=$14,distribution_box=$15,onu_serial=$16,fiber_drop_core=$17,billing_status=$18,paid_until=CASE WHEN $18='paid' THEN $12 ELSE paid_until END,provisioning_status='provisioned',status=$19,updated_at=NOW() WHERE id=$20 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,billingStatus,expired?"expired":effectiveDisabled?"inactive":"active",row.id]);
+    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,provisioning_status='provisioned',status=$20,updated_at=NOW() WHERE id=$21 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,billingStatus,expired?"expired":effectiveDisabled?"inactive":"active",row.id]);
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,remote_address,router_id,expiry_date,status,billing_status,paid_until,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN $11='paid' THEN $9 ELSE NULL END,NOW(),NOW())
@@ -569,4 +570,42 @@ async function updateCustomer(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer };
+
+async function resolveCustomer360(idValue){
+  const key=clean(idValue,100);
+  const customerResult=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
+  const customer=customerResult.rows[0]||null;
+  if(!customer)return null;
+  const username=clean(customer.username,100);
+  const [routerResult,sessionResult,packageResult,paymentResult]=await Promise.allSettled([
+    mikrotikService.getPppoeSecret(username),
+    mikrotikService.getActiveSessions(),
+    db.query("SELECT id,plan_name AS name,profile_name AS profileName,pool_name AS poolName,price,duration_months AS durationMonths,rate_limit AS rateLimit,remote_address AS remoteAddress FROM packages ORDER BY price ASC,plan_name ASC"),
+    db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)])
+  ]);
+  const secret=routerResult.status==="fulfilled"?routerResult.value:null;
+  const sessions=sessionResult.status==="fulfilled"&&Array.isArray(sessionResult.value)?sessionResult.value:[];
+  const session=sessions.find(x=>String(x.username||"").toLowerCase()===username.toLowerCase())||null;
+  const plans=packageResult.status==="fulfilled"?packageResult.value.rows:[];
+  const payments=paymentResult.status==="fulfilled"?paymentResult.value.rows:[];
+  const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
+  const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
+  const today=bangladeshToday();
+  const remainingDays=expiration?Math.ceil((Date.parse(expiration+"T00:00:00Z")-Date.parse(today+"T00:00:00Z"))/86400000):null;
+  const disabled=Boolean(secret?.disabled)||String(customer.status||"").toLowerCase()==="inactive"||String(customer.status||"").toLowerCase()==="suspended";
+  const status=disabled?(String(customer.status||"").toLowerCase()==="suspended"?"suspended":"inactive"):(expiration&&dateStatus(expiration)==="expired"?"expired":"active");
+  return {
+    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:clean(customer.phone,40),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remoteAddress||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays},
+    live:{isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||"",100),uptime:clean(session?.uptime||"",100),bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||"0",lastDisconnectReason:clean(customer.last_disconnect_reason,255)},
+    package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
+    plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
+    payments:payments.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),method:clean(x.method,30),date:x.created_at,status:clean(x.status,30),packageName:clean(customer.package_name||customer.profile,120)}))
+  };
+}
+async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){return errorResponse(res,error);}}
+async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const result=await mikrotikService.kickActiveUser(payload.customer.username);if(result.kicked)await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
+async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);await mikrotikService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await mikrotikService.kickActiveUser(row.username);return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
+async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),today=bangladeshToday(),base=currentExp&&currentExp>=today?currentExp:today,newExpDate=addBangladeshCalendarMonth(base);const comment=buildExpirationComment(payload.customer.name,payload.customer.phone,newExpDate,"Renewed via "+method);await mikrotikService.updateSecret(payload.customer.username,{password:payload.customer.password,profile:payload.customer.profile,remoteAddress:payload.customer.remoteAddress,comment,disabled:false});await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE id=$2",[newExpDate,payload.customer.id]);await db.query("UPDATE pppoe_users SET expiry_date=$1,status='active',disabled=FALSE,comment=$2,billing_status='paid',last_paid_at=NOW(),paid_until=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[newExpDate,comment,payload.customer.username]);await db.query("INSERT INTO transactions(channel,trx_id,amount,status,matched_username,sender_phone,used) VALUES($1,$2,$3,'processed',$4,$5,TRUE)",[method,trxId,amount,payload.customer.username,payload.customer.phone]);return res.json({success:true,newExpDate,trxId,amount,method,message:"Payment recorded and customer renewed for 1 month."});}catch(error){return errorResponse(res,error);}}
+async function changeCustomerPackage(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const packageId=clean(req.body?.packageId,50);const p=await db.query("SELECT id,plan_name,profile_name,pool_name,price,duration_months,rate_limit,remote_address FROM packages WHERE id::text=$1 LIMIT 1",[packageId]);if(!p.rows.length)return res.status(404).json({success:false,message:"Package not found."});const plan=p.rows[0],expired=payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired",effective=expired?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(plan.profile_name||plan.plan_name,120);await mikrotikService.updateSecret(payload.customer.username,{password:payload.customer.password,profile:effective,remoteAddress:plan.remote_address||plan.pool_name,comment:buildExpirationComment(payload.customer.name,payload.customer.phone,payload.customer.expirationDate||bangladeshToday(),payload.customer.remarks),disabled:expired});await db.query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,status=$4,updated_at=NOW() WHERE id=$5",[plan.plan_name,plan.profile_name,plan.price,expired?"expired":"active",payload.customer.id]);await db.query("UPDATE pppoe_users SET profile=$1,remote_address=$2,status=$3,disabled=$4,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($5)",[effective,plan.remote_address||plan.pool_name,expired?"expired":"active",expired,payload.customer.username]);return res.json({success:true,package:{id:plan.id,name:plan.plan_name,profileName:plan.profile_name,price:Number(plan.price||0),rateLimit:plan.rate_limit,poolName:plan.pool_name},message:"Customer package changed successfully."});}catch(error){return errorResponse(res,error);}}
+
+module.exports = { packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage };

@@ -172,3 +172,11 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS distribution_box VARCHAR(150);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_serial VARCHAR(150);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS fiber_drop_core VARCHAR(80);
 CREATE INDEX IF NOT EXISTS idx_transactions_matched_username_created ON transactions(matched_username, created_at DESC);
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS area_zone VARCHAR(150);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_disconnect_reason VARCHAR(255);
+ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_status_check;
+ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK(status IN ('active','inactive','left','expired','suspended'));
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_channel_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_channel_check CHECK(channel IN ('bkash','nagad','rocket','cash'));
+CREATE INDEX IF NOT EXISTS idx_customers_area_zone ON customers(area_zone);
