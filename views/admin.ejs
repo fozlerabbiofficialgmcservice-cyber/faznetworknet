@@ -938,7 +938,7 @@
             modal.tabIndex=-1;
             modal.innerHTML='<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content border-0 shadow-lg">'+
               '<div class="modal-header"><div><h5 class="modal-title fw-bold"><i class="bi bi-hdd-network text-success me-2"></i>'+(p.id?'Edit':'Create')+' Server Profile</h5><div class="small text-muted">Synchronize directly with MikroTik /ip/hotspot/profile</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>'+
-              '<form id="hotspotServerProfileForm"><div class="modal-body"><div class="row g-3">'+
+              '<form id="hotspotServerProfileForm"><div class="modal-body"><input type="hidden" id="planId" value=""><div class="row g-3">'+
               '<div class="col-md-6"><label class="form-label">Profile Name *</label><input id="hsServerProfileName" class="form-control" maxlength="100" required value="'+escapeHtml(p.name||'')+'"></div>'+
               '<div class="col-md-6"><label class="form-label">Hotspot Address</label><input id="hsServerHotspotAddress" class="form-control font-monospace" placeholder="192.168.88.1" value="'+escapeHtml(p.hotspotAddress||'')+'"></div>'+
               '<div class="col-md-6"><label class="form-label">DNS Name</label><input id="hsServerDnsName" class="form-control" placeholder="login.faznetwork.net" value="'+escapeHtml(p.dnsName||'')+'"></div>'+
@@ -1607,7 +1607,7 @@
                 '<div class="col-md-6"><label class="form-label">Remote Address / IP Pool</label><select id="planRemoteAddress" class="form-select"><option value="">No pool / direct address</option></select></div>' +
                 '<div class="col-md-6"><label class="form-label">DNS Servers</label><input id="planDnsServer" class="form-control" placeholder="8.8.8.8, 1.1.1.1"></div>' +
                 '<div class="col-md-6"><label class="form-label">Change TCP MSS</label><select id="planChangeTcpMss" class="form-select"><option value="yes">yes</option><option value="no">no</option><option value="default">default</option></select></div>' +
-                '</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button id="planSaveBtn" class="btn btn-theme">Save Plan</button></div>' +
+                '</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button id="planSaveBtn" class="btn btn-theme">Save &amp; Sync to MikroTik</button></div>' +
                 '</form></div></div></div>'
             );
             el=document.getElementById('planModal');
@@ -1635,6 +1635,7 @@
         async function openPlanModal(plan=null){
             purgeStuckBackdrops();
             currentPackageEdit=plan||null;
+            document.getElementById('planId').value=plan?.id??'';
             const el=ensurePlanModal();
             document.getElementById('planModalTitle').textContent=plan?'Edit Plan':'Create Plan';
             document.getElementById('planName').value=plan?.plan_name||plan?.name||'';
@@ -1653,29 +1654,43 @@
             const button=document.getElementById('planSaveBtn');
             const old=button.innerHTML;
             button.disabled=true;
-            button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+            button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving & Syncing...';
             try{
-                const body={
+                const rawId=document.getElementById('planId')?.value ?? currentPackageEdit?.id ?? null;
+                const cleanId=(rawId && rawId!=='undefined' && rawId!=='null' && String(rawId).trim()!=='') ? String(rawId).trim() : null;
+                const payload={
+                    id:cleanId,
                     planName:document.getElementById('planName').value.trim(),
-                    price:document.getElementById('planPrice').value,
-                    durationMonths:document.getElementById('planDuration').value,
-                    rateLimit:document.getElementById('planRateLimit').value.trim(),
-                    localAddress:document.getElementById('planLocalAddress').value.trim(),
-                    remoteAddress:document.getElementById('planRemoteAddress').value,
-                    dnsServer:document.getElementById('planDnsServer').value.trim(),
-                    changeTcpMss:document.getElementById('planChangeTcpMss').value
+                    price:document.getElementById('planPrice').value.trim(),
+                    durationMonths:document.getElementById('planDuration')?.value || 1,
+                    rateLimit:document.getElementById('planRateLimit')?.value?.trim() || null,
+                    localAddress:document.getElementById('planLocalAddress')?.value?.trim() || null,
+                    remoteAddress:document.getElementById('planRemoteAddress')?.value?.trim() || null,
+                    dnsServer:document.getElementById('planDnsServer')?.value?.trim() || null,
+                    changeTcpMss:document.getElementById('planChangeTcpMss')?.value || 'yes'
                 };
-                const url=currentPackageEdit?'/api/packages/'+encodeURIComponent(currentPackageEdit.id):'/api/packages';
-                const response=await fetch(url,{method:currentPackageEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+                const response=await fetch('/api/packages/save',{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                });
                 const data=await response.json().catch(()=>({}));
-                if(!response.ok||data.success===false)throw new Error(data.message||'Failed to save plan.');
+                if(!response.ok||data.success===false)throw new Error(data.message||'Failed to save and synchronize plan.');
                 bootstrap.Modal.getInstance(document.getElementById('planModal'))?.hide();
                 purgeStuckBackdrops();
+                currentPackageEdit=null;
                 await loadPlanPackages();
-            }catch(error){alert(error.message);}finally{button.disabled=false;button.innerHTML=old;}
+                alert(data.message||'Plan saved and synchronized with MikroTik.');
+            }catch(error){
+                console.error('[PLAN UI] Save & Sync error:',error);
+                alert(error.message||'Failed to save plan.');
+            }finally{
+                button.disabled=false;
+                button.innerHTML=old;
+            }
         }
 
-        async function deletePlan(id,name){
+async function deletePlan(id,name){
             if(!id)return;
             if(!confirm('Delete plan "'+(name||'')+'"? This will also remove the matching MikroTik PPP profile.'))return;
             try{
