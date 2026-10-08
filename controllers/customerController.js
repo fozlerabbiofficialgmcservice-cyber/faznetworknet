@@ -263,7 +263,11 @@ async function listCustomers(req,res){
     `);
 
     let sessions=[];
-    try{sessions=await mikrotikService.getActiveSessions();}catch(error){console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable:",error.message);}
+    try{
+      sessions=await withTimeout(()=>mikrotikService.getActiveSessions(),2500);
+    }catch(error){
+      console.warn("[CUSTOMER LIST] MikroTik live session lookup unavailable:",error.message);
+    }
     const sessionMap=new Map();
     for(const session of Array.isArray(sessions)?sessions:[]){
       const key=String(session.username||"").trim().toLowerCase();
