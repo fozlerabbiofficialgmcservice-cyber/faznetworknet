@@ -1,6 +1,7 @@
 const { RouterOSAPI } = require("node-routeros");
 
-const CONNECTION_TIMEOUT_MS = 5000;
+const CONNECTION_TIMEOUT_MS = 4000;
+const OPERATION_TIMEOUT_MS = 4000;
 const DEFAULT_PORT = 8728;
 
 class MikroTikService {
@@ -16,11 +17,18 @@ class MikroTikService {
   }
   _createConnection(config) { return new RouterOSAPI({ host: config.host, port: config.port, user: config.user, password: config.password, timeout: CONNECTION_TIMEOUT_MS / 1000 }); }
   async _withConnection(operationName, operation) {
-    const connection = this._createConnection(this._getConfig()); let timer;
+    const connection = this._createConnection(this._getConfig());
+    let connectTimer;
     try {
       const connectPromise = connection.connect();
-      await Promise.race([connectPromise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Connection timed out after 5 seconds.")), CONNECTION_TIMEOUT_MS); })]);
-      return await operation(connection);
+      await Promise.race([
+        connectPromise,
+        new Promise((_, reject) => {
+          connectTimer = setTimeout(() => reject(new Error("MikroTik connection timed out after 4 seconds.")), CONNECTION_TIMEOUT_MS);
+        })
+      ]);
+      if (connectTimer) clearTimeout(connectTimer);
+      return await this._executeWithTimeout(operation(connection), OPERATION_TIMEOUT_MS, operationName);
     } catch (error) {
       const details=this._extractRouterError(error);
       const wrapped=new Error(details.message);
@@ -29,7 +37,26 @@ class MikroTikService {
       wrapped.code=error&&error.code?error.code:"MIKROTIK_ERROR";
       wrapped.operation=operationName;
       throw wrapped;
-    } finally { if (timer) clearTimeout(timer); await this._safeClose(connection); }
+    } finally {
+      if (connectTimer) clearTimeout(connectTimer);
+      await this._safeClose(connection);
+    }
+  }
+  async _executeWithTimeout(promise, ms = OPERATION_TIMEOUT_MS, operationName = "MikroTik call") {
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve(promise),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("MikroTik socket timeout: " + operationName)), ms);
+        })
+      ]);
+    } catch (error) {
+      console.warn("[MikroTik Warning]: Call timed out or failed:", error.message);
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
   async _safeClose(connection) {
     if (!connection) return;
