@@ -171,13 +171,7 @@ async function dashboardMetrics(req,res){
     const totalUsers=customerUsers.length;
     const activeUsers=liveSessions.length;
     const offlineUsers=Math.max(0,totalUsers-activeUsers);
-    return res.json({
-      success:true,
-      totalUsers,
-      activeUsers,
-      offlineUsers,
-      todayRevenue:0.00
-    });
+    return res.json({success:true,totalUsers,activeUsers,offlineUsers,todayRevenue:0.00});
   }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
