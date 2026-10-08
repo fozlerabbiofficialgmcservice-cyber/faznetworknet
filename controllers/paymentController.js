@@ -1,32 +1,7 @@
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 
-function normalizePhone(value){let p=String(value||"").replace(/[^\d+]/g,"");if(p.startsWith("+880"))p="0"+p.slice(4);if(p.startsWith("880"))p="0"+p.slice(3);return p;}
-const VERIFIED_SMS_SENDERS={bkash:new Set(["bkash"]),nagad:new Set(["nagad"]),rocket:new Set(["16216","01190016216","096667"]),upay:new Set(["upay"])};
-function normalizeSmsSender(value){return String(value||"").trim().replace(/\s+/g,"").toLowerCase();}
-function channelFromSender(sender){const s=normalizeSmsSender(sender);for(const [channel,senders] of Object.entries(VERIFIED_SMS_SENDERS)){if(senders.has(s))return channel;}return null;}
-function channelFrom(text){const t=String(text||"").toLowerCase();if(/bkash|b-kash|বিকাশ/.test(t))return"bkash";if(/nagad|নগদ/.test(t))return"nagad";if(/rocket|রকেট|dutch.?bangla/.test(t))return"rocket";if(/upay|উপায়|উপায়/.test(t))return"upay";return null;}
-function isPersonalSmsSender(sender){return /^\+?88?01\d{9}$/.test(String(sender||"").replace(/\s+/g,""));}
-function parseSms(body,headers){
- const raw=typeof body==="string"?body:JSON.stringify(body||{});
- const sender=String(headers["x-sms-sender"]||headers["x-sender"]||(typeof body==="object"&&(body.sender||body.smsSender||body.from)||"")).trim();
- if(!sender)throw new Error("SMS sender ID is required.");
- if(isPersonalSmsSender(sender))throw new Error("Personal 11-digit SMS sender numbers are not accepted.");
- const senderChannel=channelFromSender(sender);
- if(!senderChannel)throw new Error("Unverified SMS sender ID.");
- const text=raw+" "+sender;
- const channel=senderChannel||channelFrom(text);
- if(!channel)throw new Error("Unsupported payment channel.");
- const trx=(text.match(/(?:trx(?:id)?|transaction(?:\\s*id)?|txn(?:id)?)[\\s:#=-]*([A-Z0-9]{6,30})/i)||[])[1]||(text.match(/\\b([A-Z]{2,5}\\d{6,20})\\b/)||[])[1];
- const amountMatch=text.match(/(?:amount|received|payment|tk|taka|৳)[\\s:=\\-]*([0-9]{2,8}(?:[,.][0-9]{1,2})?)/i);
- const amount=amountMatch?Number(String(amountMatch[1]).replace(/,/g,"")):NaN;
- const phones=text.match(/(?:01\\d{9}|(?:\\+?88)?01\\d{9})/g)||[];
- const senderPhone=normalizePhone(phones[0]||"");
- const refMatch=text.match(/(?:Ref|Reference)\\s*[:]?[\\s]*([A-Za-z0-9_-]+)/i);
- const customerRef=refMatch?String(refMatch[1]).trim().replace(/[^A-Za-z0-9_-]/g,""):"";
- if(!trx||!Number.isFinite(amount)||amount<=0)throw new Error("Could not parse transaction ID or amount from SMS.");
- return{channel,trxId:trx.toUpperCase(),amount,senderPhone,customerRef,rawSms:raw};
-}
+const {parseSms}=require("../services/paymentWebhookParser");
 function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
 function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
@@ -34,16 +9,14 @@ function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z"
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
 async function renewCustomer(c){const expiration=addCalendarMonths(new Date().toISOString().slice(0,10),Math.max(1,Number(c.duration_months||1))),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});await mikrotikService.kickActiveUser(c.username);await db.query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,profile,c.price,expiration,c.id]);await db.query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[profile,pool,expiration,comment,c.username]);return expiration;}
 async function webhook(req,res){
- let expected=String(process.env.MACRODROID_WEBHOOK_KEY||"");
  try{
   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret')");
   const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
-  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()==="true" && settings.personal_payment_webhook_secret) expected=String(settings.personal_payment_webhook_secret);
- }catch(_){ /* preserve existing environment-based webhook authentication if settings storage is unavailable */ }
- const provided=String(req.get("x-webhook-token")||req.get("x-macrodroid-token")||"");
- if(!expected||provided!==expected)return res.status(401).json({success:false,error:"Unauthorized webhook."});
- try{
-  const payment=parseSms(req.body,req.headers);
+  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Website Settings."});
+  const expected=String(settings.personal_payment_webhook_secret||"").trim();
+  const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
+  if(!expected||provided!==expected)return res.status(401).json({success:false,error:"Unauthorized webhook."});
+  const payment=parseSms(req.body,req.query,req.headers);
   const existing=await db.query("SELECT id FROM transactions WHERE trx_id=$1",[payment.trxId]);
   if(existing.rows.length){await db.query("UPDATE transactions SET status='duplicate' WHERE id=$1",[existing.rows[0].id]);return res.json({success:true,status:"duplicate",trx_id:payment.trxId});}
   let user=null;
@@ -56,10 +29,32 @@ async function webhook(req,res){
    user=found.rows[0]||null;
   }
   let status="unmatched";
-  if(user){const customer=await getCustomerPackage(user.username);if(customer&&customer.plan_name){const expected=Number(customer.price||0);if(moneyCents(payment.amount)!==moneyCents(expected)){await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'unmatched',$5,$6,false)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expected.toFixed(2)} is required to activate or renew service.`,expectedAmount:expected,paidAmount:payment.amount});}await renewCustomer(customer);status="PAID";} }
+  if(user){
+   const customer=await getCustomerPackage(user.username);
+   if(customer&&customer.plan_name){
+    const expectedAmount=Number(customer.price||0);
+    if(moneyCents(payment.amount)!==moneyCents(expectedAmount)){
+     await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'unmatched',$5,$6,false)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
+     return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expectedAmount.toFixed(2)} is required to activate or renew service.`,expectedAmount,paidAmount:payment.amount});
+    }
+    await renewCustomer(customer);status="PAID";
+   }
+  }
   await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,user?user.username:null,payment.rawSms,Boolean(user)]);
-  return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount});
+  return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
  }catch(error){return errorResponse(res,error,400);}
+}
+async function dynamicWebhook(req,res,next){
+ try{
+  const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_url')");
+  const url=String(configured.rows.find(row=>row.key==="personal_payment_webhook_url")?.value||"").trim();
+  if(!url)return next();
+  let configuredPath=url;
+  try{configuredPath=new URL(url, "http://faznetwork.local").pathname;}catch(_){return next();}
+  if(!configuredPath.startsWith("/"))configuredPath="/"+configuredPath;
+  if(req.path!==configuredPath)return next();
+  return webhook(req,res);
+ }catch(error){return errorResponse(res,error,503);}
 }
 async function list(req,res){
  try{
@@ -139,4 +134,4 @@ async function verifyTrx(req,res){
  }catch(e){return errorResponse(res,e,503);}
 }
 
-module.exports={webhook,list,manualMatch,summary,verifyTrx};
+module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx};
