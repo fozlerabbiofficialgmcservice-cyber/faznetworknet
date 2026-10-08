@@ -2164,15 +2164,22 @@ async function deletePlan(id,name){
         function customerStatus(user) {
             const expiry = String(user?.expiry_date || '').trim();
             let expired = false;
-            if (expiry) {
-                try {
-                    const source = /^\d{4}-\d{2}-\d{2}$/.test(expiry) ? expiry + 'T00:00:00+06:00' : expiry;
-                    expired = new Date(source).getTime() <= Date.now();
-                } catch (_) {}
+            if (/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+                const expDateObj = new Date(expiry + 'T23:59:59.999+06:00');
+                expired = !Number.isNaN(expDateObj.getTime()) && Date.now() > expDateObj.getTime();
             }
-            if (user.computed_status === 'expired' || expired) return { key: 'expired_status', cls: 'bg-danger', online: false };
-            if (user.online) return { key: 'online_status', cls: 'bg-success', online: true };
+            if (expired || String(user?.computed_status || '').toLowerCase() === 'expired') return { key: 'expired_status', cls: 'bg-danger', online: false };
+            if (user?.online) return { key: 'online_status', cls: 'bg-success', online: true };
             return { key: 'offline_status', cls: 'bg-secondary', online: false };
+        }
+
+        function isCustomerPaidCurrentCycle(user) {
+            const billingStatus = String(user?.billing_status || '').trim().toLowerCase();
+            const paidUntil = String(user?.paid_until || '').slice(0, 10);
+            const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            const expiryRaw = String(user?.expiry_date || '').slice(0, 10);
+            const expired = /^\d{4}-\d{2}-\d{2}$/.test(expiryRaw) && Date.now() > new Date(expiryRaw + 'T23:59:59.999+06:00').getTime();
+            return billingStatus === 'paid' && /^\d{4}-\d{2}-\d{2}$/.test(paidUntil) && paidUntil >= today && !Boolean(user?.disabled) && !expired;
         }
 
         function filterCustomerRows(query) {
@@ -2206,17 +2213,19 @@ async function deletePlan(id,name){
                 }
                 if(paidBtn){
                     event.preventDefault();
+                    if(String(paidBtn.dataset.status||'').toLowerCase()==='paid')return;
+                    if(!confirm('Mark "'+username+'" as paid for the current billing cycle?'))return;
                     if(paidBtn.disabled)return;
                     paidBtn.disabled=true;
                     const old=paidBtn.innerHTML;
                     try{
                         const data=await jsonFetch('/api/customers/mark-paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
-                        paidBtn.innerHTML='Paid ✓';
-                        paidBtn.classList.remove('btn-success');paidBtn.classList.add('btn-outline-success');
-                        const cell=paidBtn.closest('tr')?.querySelector('.customer-status');
-                        if(cell&&!cell.parentElement.querySelector('.customer-billing-badge')){
-                            cell.insertAdjacentHTML('afterend','<span class="badge bg-success-subtle text-success border customer-billing-badge ms-1">Paid</span>');
-                        }
+                        paidBtn.innerHTML='Paid';
+                        paidBtn.dataset.status='Paid';
+                        paidBtn.title='Already paid for current cycle';
+                        paidBtn.classList.remove('btn-danger','btn-outline-success');paidBtn.classList.add('btn-success','text-white');
+                        const billingBadge=paidBtn.closest('tr')?.querySelector('.customer-billing-badge');
+                        if(billingBadge){billingBadge.className='badge bg-success-subtle text-success border customer-billing-badge ms-1';billingBadge.textContent='Paid';}
                         if(data.message)console.info(data.message);
                     }catch(error){alert(error.message||'Unable to mark bill as paid.');}
                     finally{paidBtn.disabled=false;}
@@ -2310,7 +2319,8 @@ async function deletePlan(id,name){
             const caller=user.session_caller_id||user.caller_id||'-';
             const displayExp=formatDhakaExpiration(user.expiry_date||user.expiration_date,metadata.rawComment);
             const sessionMeta=status.online?`<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ${escapeHtml(t.uptime)}: ${escapeHtml(user.session_uptime||'-')}</div>`:'';
-            const billingBadge=String(user.billing_status||'').toLowerCase()==='paid'?'<span class="badge bg-success-subtle text-success border customer-billing-badge ms-1">Paid</span>':'';
+            const isPaid = isCustomerPaidCurrentCycle(user);
+            const billingBadge=isPaid?'<span class="badge bg-success-subtle text-success border customer-billing-badge ms-1">Paid</span>':'<span class="badge bg-danger-subtle text-danger border customer-billing-badge ms-1">Unpaid</span>';
             const statusBadge=`<span class="badge ${status.cls} customer-status" data-key="${status.key}">${escapeHtml(t[status.key])}</span>${billingBadge}${sessionMeta}`;
             const customerId=user.customer_id||user.id||'';
             return `<tr data-customer-row data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}">
@@ -2323,7 +2333,7 @@ async function deletePlan(id,name){
                 <td>${statusBadge}</td>
                 <td><span class="badge bg-light text-dark border font-monospace px-2 py-1 customer-expiry-badge"><i class="bi bi-calendar-event me-1 text-primary"></i>${escapeHtml(displayExp)}</span></td>
                 <td class="text-end pe-3 text-nowrap"><div class="d-inline-flex gap-1 align-items-center">
-                    <button type="button" class="btn btn-sm btn-success px-2 py-1 action-paid-btn" data-username="${escapeHtml(user.username||'')}" title="Mark as Paid">Paid</button>
+                    <button type="button" class="btn btn-sm ${isPaid ? 'btn-success text-white' : 'btn-danger text-white'} px-2 py-1 action-paid-btn" data-username="${escapeHtml(user.username||'')}" data-status="${isPaid ? 'Paid' : 'Unpaid'}" title="${isPaid ? 'Already paid for current cycle' : 'Mark as Paid'}">${isPaid ? 'Paid' : 'Unpaid'}</button>
                     <button type="button" class="btn btn-sm btn-success px-2 py-1 action-renew-btn" data-username="${escapeHtml(user.username||'')}" data-exp="${escapeHtml(user.expiry_date||'')}" title="Renew +1 Month">Renew</button>
                     <button type="button" class="btn btn-sm btn-info text-white px-2 py-1 action-view-btn" data-username="${escapeHtml(user.username||'')}" title="View Summary"><i class="bi bi-eye"></i></button>
                     <button type="button" class="btn btn-sm btn-primary px-2 py-1 action-edit-btn" data-username="${escapeHtml(user.username||'')}" title="Edit Customer"><i class="bi bi-pencil-square"></i></button>
@@ -2336,25 +2346,66 @@ async function deletePlan(id,name){
             const name=String(username||'').trim();
             if(!name)return;
             try{
-                purgeStuckBackdrops();
                 const data=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
                 const customer=data.customer||{};
-                switchView('add-customer');
-                const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value??'';};
-                set('customerEditId',customer.id||name);
-                const usernameEl=document.getElementById('username'); if(usernameEl){usernameEl.readOnly=false;usernameEl.value=customer.username||name;}
-                set('fullName',customer.full_name||'');
-                set('phoneNumber',customer.phone||'');
-                const activation=customer.connection_date?String(customer.connection_date).slice(0,10):localDateValue();
-                set('connectionDate',activation);set('activationDate',activation);
-                set('expirationDate',customer.expiration_date?String(customer.expiration_date).slice(0,10):addCalendarMonths(activation,1));
-                set('password',customer.password||'');
-                set('nidNumber',customer.nid||'');set('installationAddress',customer.installation_address||'');set('fiberBox',customer.fiber_box||'');set('onuMac',customer.onu_mac||'');set('customerRemarks',customer.remarks||'');
-                await loadCustomerPackages(customer.profile||'');
-                const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-save me-1"></i><span>Update & Provision Customer</span>';
-                updateCustomerValidityStatus();
-            }catch(error){alert(error.message);}
+                let modalEl=document.getElementById('customerProfileModal');
+                if(!modalEl){
+                    modalEl=document.createElement('div');
+                    modalEl.id='customerProfileModal';
+                    modalEl.className='modal fade';
+                    modalEl.tabIndex=-1;
+                    modalEl.innerHTML='<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">'+
+                        '<div class="modal-header"><h5 class="modal-title"><i class="bi bi-person-circle text-success me-2"></i>Customer Profile</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>'+
+                        '<div class="modal-body"><div class="row g-3">'+
+                        '<div class="col-md-6"><label class="form-label">Username</label><input id="editCustomerUsername" class="form-control" readonly></div>'+
+                        '<div class="col-md-6"><label class="form-label">Full Name</label><input id="editCustomerFullName" class="form-control" readonly></div>'+
+                        '<div class="col-md-6"><label class="form-label">Phone</label><input id="editCustomerPhone" class="form-control" readonly></div>'+
+                        '<div class="col-md-6"><label class="form-label">Package</label><input id="editCustomerPackage" class="form-control" readonly></div>'+
+                        '<div class="col-md-6"><label class="form-label">Expiry Date</label><input id="editCustomerExpDate" class="form-control" readonly></div>'+
+                        '<div class="col-md-6"><label class="form-label">Billing</label><input id="editCustomerBillingStatus" class="form-control" readonly></div>'+
+                        '</div></div>'+
+                        '<div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" id="customerProfileEditBtn">Edit Customer</button></div>'+
+                        '</div></div>';
+                    document.body.appendChild(modalEl);
+                }
+                const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+                setVal('editCustomerUsername',customer.username||name);
+                setVal('editCustomerFullName',customer.fullName||customer.full_name||'');
+                setVal('editCustomerPhone',customer.phone||'');
+                setVal('editCustomerPackage',customer.package_name||customer.package||customer.profile||'');
+                setVal('editCustomerExpDate',customer.expirationDate?String(customer.expirationDate).split('T')[0]:customer.expiration_date?String(customer.expiration_date).split('T')[0]:'');
+                setVal('editCustomerBillingStatus',String(customer.billing_status||'unpaid').toLowerCase()==='paid'?'Paid':'Unpaid');
+                const editBtn=document.getElementById('customerProfileEditBtn');
+                if(editBtn){
+                    editBtn.onclick=async()=>{
+                        const instance=window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+                        instance?.hide();
+                        await populateCustomerEditForm(customer,name);
+                    };
+                }
+                if(modalEl && window.bootstrap?.Modal){
+                    window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            }catch(error){console.error('Failed to open profile:',error);alert(error.message||'Could not load customer profile');}
         }
+
+        async function populateCustomerEditForm(customer,name){
+            switchView('add-customer');
+            const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value??'';};
+            set('customerEditId',customer.id||name);
+            set('username',customer.username||name);
+            set('fullName',customer.full_name||customer.fullName||'');
+            set('phoneNumber',customer.phone||'');
+            const activation=customer.connection_date?String(customer.connection_date).slice(0,10):localDateValue();
+            set('connectionDate',activation);set('activationDate',activation);
+            set('expirationDate',customer.expiration_date?String(customer.expiration_date).slice(0,10):addCalendarMonths(activation,1));
+            set('password',customer.password||'');
+            set('nidNumber',customer.nid||'');set('installationAddress',customer.installation_address||'');set('fiberBox',customer.fiber_box||'');set('onuMac',customer.onu_mac||'');set('customerRemarks',customer.remarks||'');
+            await loadCustomerPackages(customer.profile||'');
+            const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-save me-1"></i><span>Update & Provision Customer</span>';
+            updateCustomerValidityStatus();
+        }
+
         window.openCustomerProfile=openCustomerProfile;
 
         async function editCustomer(encodedUsername) {
