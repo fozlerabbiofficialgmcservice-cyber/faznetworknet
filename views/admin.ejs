@@ -934,7 +934,20 @@
                 const macLock=sharedUsers===1?':local mac $"mac-address"; :if ([:len $mac] > 0) do={ /ip hotspot user set [find name=$user] mac-address=$mac; }':'';
                 scriptEl.value=':local validity "'+v+u+'"; :local userName $user; '+macLock+' /system scheduler add name=("hs-exp-"+$userName) interval=$validity start-time=([/system clock get time]) on-event="/ip hotspot user disable [find name=\\\"$userName\\\"]; /ip hotspot active remove [find user=\\\"$userName\\\"]; /system scheduler remove [find name=\\\"hs-exp-$userName\\\"];";';
             }
-            bootstrap.Modal.getOrCreateInstance(modal).show();
+            // Always mount Hotspot modals at body root and purge stale Bootstrap backdrops first.
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+            document.querySelectorAll('.modal-backdrop').forEach(function(el){ el.remove(); });
+            document.body.classList.remove('modal-open');
+            const editModalEl = modal;
+            const editModal = bootstrap.Modal.getOrCreateInstance(editModalEl, { backdrop: 'static', keyboard: true });
+            editModal.show();
+            editModalEl.addEventListener('hidden.bs.modal', function(){
+                document.body.classList.remove('modal-open');
+                document.querySelectorAll('.modal-backdrop').forEach(function(el){ el.remove(); });
+                editModalEl.classList.remove('show');
+                editModalEl.setAttribute('aria-hidden', 'true');
+                editModalEl.style.display = 'none';
+            }, { once: true });
         }
         function editHotspotProfile(name){ if(!name)return; openHotspotProfileModal(name); }
         async function deleteHotspotProfile(name){
