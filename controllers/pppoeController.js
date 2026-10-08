@@ -138,7 +138,7 @@ async function users(req, res) {
       FROM pppoe_users u
       LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username)
       ${whereClause}
-      ORDER BY c.created_at DESC NULLS LAST, c.id DESC NULLS LAST, u.created_at DESC NULLS LAST, u.id DESC
+      ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
     `, params);
 
     let sessions = [];
