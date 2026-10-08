@@ -11,5 +11,14 @@ router.post("/update",(req,res)=>{req.params.id=String(req.body?.id||req.body?.u
 router.post("/renew",controller.renew);
 router.post("/mark-paid",controller.markPaid);
 router.post("/delete",controller.removeCustomer);
+router.post("/kick",async(req,res)=>{
+  const username=String(req.body?.username||"").trim();
+  if(!username)return res.status(400).json({success:false,message:"Username is required."});
+  try{
+    const result=await require("../services/mikrotikService").kickActiveUser(username);
+    return res.json({success:true,message:result.kicked?"Active session disconnected. Client will re-dial.":"User is not currently online.",...result});
+  }catch(error){return res.status(503).json({success:false,message:error.message||"Unable to disconnect active session."});}
+});
+
 
 module.exports=router;
