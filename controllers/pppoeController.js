@@ -328,7 +328,7 @@ async function removeUser(req,res){
       routerCleanup=await mikrotikService.removeCustomer(username);
     }catch(routerErr){
       console.warn(
-        \`[MikroTik Safe Delete] Could not remove \${username} from router (maybe already deleted):\`,
+        `[MikroTik Safe Delete] Could not remove ${username} from router (maybe already deleted):`,
         routerErr?.message||routerErr
       );
     }
@@ -378,4 +378,4 @@ async function page(req, res) {
   res.render("pppoe", { title: "PPPoE Management", page: "pppoe" });
 }
 
-module.exports = { page, sync, users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile };
+module.exports = { page, sync, users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile, removeUser };
