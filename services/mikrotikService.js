@@ -359,6 +359,15 @@ class MikroTikService {
     });
   }
 
+  async isProfileInUse(profileName){
+    const name=this._str(profileName).trim();
+    if(!name)return false;
+    return this._withConnection("PPPoE profile usage check",async(connection)=>{
+      const rows=await connection.write("/ppp/secret/print");
+      return (Array.isArray(rows)?rows:[]).some(item=>this._str(item.profile).trim().toLowerCase()===name.toLowerCase());
+    });
+  }
+
   async removeProfile(identifier){
     const key=this._str(identifier).trim();
     return this._withConnection("PPPoE profile removal",async(connection)=>{

@@ -49,9 +49,7 @@ async function saveOrUpdateIpPool(req,res){
     const pools=await mikrotikService.getIpPools();
     const existing=originalName?pools.find(x=>String(x.name).toLowerCase()===originalName.toLowerCase()):null;
     const targetNext=nextPool&&!/^none$/i.test(nextPool)?nextPool:"none";
-    const result=existing
-      ? await mikrotikService.updateIpPool(existing.id,{name,ranges,nextPool:targetNext})
-      : await mikrotikService.createIpPool({name,ranges,nextPool:targetNext});
+    const result=existing?await mikrotikService.updateIpPool(existing.id,{name,ranges,nextPool:targetNext}):await mikrotikService.createIpPool({name,ranges,nextPool:targetNext});
     try{
       const device=await mikrotikService.getRouterIdentity();
       await db.query("INSERT INTO ip_pools(name,ranges,local_address,subnet,device_name,next_pool,updated_at) VALUES($1,$2,$3,$4,$5,$6,NOW()) ON CONFLICT(device_name,name) DO UPDATE SET ranges=EXCLUDED.ranges,local_address=EXCLUDED.local_address,subnet=EXCLUDED.subnet,next_pool=EXCLUDED.next_pool,updated_at=NOW()",[name,ranges,localAddress||null,subnet||null,device,targetNext]);
