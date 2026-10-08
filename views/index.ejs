@@ -1,244 +1,164 @@
 <%
-const escapeHtml = value => String(value ?? "")
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;")
-  .replace(/'/g, "&#39;");
-const safeOfficeAddress = escapeHtml(
-  typeof officeAddress !== "undefined"
-    ? officeAddress
-    : (process.env.OFFICE_ADDRESS || "FAZ NETWORK, Bangladesh")
-);
-const safeHelpline = escapeHtml(
-  typeof helpline !== "undefined"
-    ? helpline
-    : (process.env.HELPLINE_PHONE || "01339932887")
-);
-const safePackages = typeof packages !== "undefined" && Array.isArray(packages) ? packages : [];
-const dashboardBody = `
-<section class="bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-  <div>
-    <p class="text-xs font-black uppercase tracking-widest text-cyan-600">FAZ NETWORK</p>
-    <p class="text-sm text-slate-500">Customer Service Portal</p>
+const safeOfficeAddress=String(typeof officeAddress!=="undefined"?officeAddress:"FAZ NETWORK, Bangladesh");
+const safeHelpline=String(typeof helpline!=="undefined"?helpline:"01339932887");
+const safePackages=Array.isArray(typeof packages!=="undefined"?packages:[]) ? packages : [];
+const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="FAZ NETWORK — fast fiber internet and smart hotspot services for home and business.">
+<title>FAZ NETWORK | Fiber Internet & Smart Hotspot</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+<header class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+  <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-8">
+    <a href="/" class="text-2xl font-black tracking-tight">FAZ <span class="text-cyan-600">NETWORK</span></a>
+    <nav class="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
+      <a href="#packages" class="hover:text-cyan-600">Packages</a>
+      <a href="#coverage" class="hover:text-cyan-600">Coverage</a>
+      <a href="#account" class="hover:text-cyan-600">Quick Pay / Check Status</a>
+      <a href="#support" class="hover:text-cyan-600">Support</a>
+    </nav>
+    <div class="flex items-center gap-2">
+      <button id="supportBtn" class="hidden rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:border-cyan-500 md:block">Support</button>
+      <button id="customerLoginBtn" class="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-bold text-white hover:bg-cyan-700">Customer Login</button>
+      <a href="/login" class="hidden rounded-xl bg-slate-950 px-3 py-2 text-sm font-bold text-white hover:bg-slate-800 sm:block">Admin Login</a>
+    </div>
   </div>
-  <div class="flex items-center gap-2 justify-end">
-    <button type="button" id="openSupportBtn" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-cyan-400 hover:text-cyan-700">
-      <span>💬</span> Support
-    </button>
-    <button type="button" id="openCustomerLoginBtn" class="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-cyan-700">
-      <span>👤</span> Customer Login
-    </button>
+</header>
+
+<main>
+<section class="overflow-hidden bg-slate-950 text-white">
+  <div class="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 lg:grid-cols-2 lg:px-8 lg:py-28">
+    <div>
+      <span class="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-cyan-300">FAZ NETWORK Broadband</span>
+      <h1 class="mt-6 text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">Ultra-Fast Fiber Internet &amp; Smart Hotspot for Home &amp; Business</h1>
+      <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">Reliable connectivity, flexible packages and responsive customer support for your everyday internet needs.</p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href="#packages" class="rounded-xl bg-cyan-500 px-6 py-3 font-black text-slate-950 hover:bg-cyan-400">Check Packages</a>
+        <a href="#account" class="rounded-xl border border-white/20 bg-white/10 px-6 py-3 font-black text-white hover:bg-white/15">Check Account Validity</a>
+      </div>
+      <div class="mt-8 flex flex-wrap gap-6 text-sm text-slate-300"><span>✓ Fiber connectivity</span><span>✓ 24/7 support</span><span>✓ Home &amp; business plans</span></div>
+    </div>
+    <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl">
+      <p class="text-xs font-black uppercase tracking-widest text-cyan-300">Why FAZ NETWORK</p>
+      <div class="mt-5 space-y-4">
+        <div class="rounded-2xl bg-white/10 p-5"><p class="font-black">Stable performance</p><p class="mt-1 text-sm text-slate-300">Packages designed for streaming, work, study and business.</p></div>
+        <div class="rounded-2xl bg-white/10 p-5"><p class="font-black">Easy self-care</p><p class="mt-1 text-sm text-slate-300">Check validity and connection status without exposing private network information.</p></div>
+        <div class="rounded-2xl bg-white/10 p-5"><p class="font-black">Local support</p><p class="mt-1 text-sm text-slate-300">Call or WhatsApp the FAZ NETWORK support team when you need help.</p></div>
+      </div>
+    </div>
   </div>
 </section>
 
-  <section class="space-y-7">
-  <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-    <div><p class="text-sm font-medium text-cyan-600">FAZ NETWORK</p><h2 class="text-3xl font-black">Network Overview</h2><p class="text-slate-500">Live MikroTik resources and interface traffic monitoring.</p></div>
-    <div id="current-time" class="text-sm text-slate-500"></div>
-  </div>
-
-  <div class="bg-white rounded-2xl border border-cyan-100 shadow-sm overflow-hidden">
-    <div class="p-6 md:p-8 bg-gradient-to-br from-cyan-50 via-white to-emerald-50">
-      <div class="max-w-3xl">
-        <p class="text-xs font-black uppercase tracking-widest text-cyan-700">Customer Self-Care</p>
-        <h3 class="mt-1 text-2xl md:text-3xl font-black text-slate-900">Check Your Internet Account / Validity</h3>
-        <p class="mt-2 text-sm text-slate-500">Enter your PPPoE username, phone number, or Customer ID to see your live account status.</p>
-        <form id="publicCustomerCheckForm" class="mt-5 flex flex-col sm:flex-row gap-2">
-          <input id="publicCustomerQuery" type="text" maxlength="120" autocomplete="off" class="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Username, phone number, or Customer ID" required>
-          <button id="publicCustomerCheckBtn" type="submit" class="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-700 disabled:opacity-60">Check Account</button>
-        </form>
-        <div id="publicCustomerResult" class="mt-5 hidden"></div>
-      </div>
+<section id="account" class="mx-auto max-w-7xl px-4 py-16 lg:px-8">
+  <div class="grid gap-8 lg:grid-cols-[1.1fr_.9fr]">
+    <div class="rounded-3xl border border-cyan-100 bg-white p-6 shadow-sm sm:p-8">
+      <p class="text-xs font-black uppercase tracking-widest text-cyan-600">Customer Self-Care</p>
+      <h2 class="mt-2 text-3xl font-black">Check Account / Bill Validity</h2>
+      <p class="mt-2 text-slate-500">Enter your PPPoE username or registered phone number.</p>
+      <form id="accountCheckForm" class="mt-6 flex flex-col gap-3 sm:flex-row">
+        <input id="accountQuery" required maxlength="120" class="flex-1 rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Username or phone number">
+        <button class="rounded-xl bg-cyan-600 px-5 py-3 font-bold text-white hover:bg-cyan-700">Check Status</button>
+      </form>
+      <div id="accountResult" class="mt-5 hidden"></div>
+    </div>
+    <div class="rounded-3xl bg-cyan-600 p-7 text-white shadow-sm">
+      <p class="text-xs font-black uppercase tracking-widest text-cyan-100">Need help?</p>
+      <h3 class="mt-2 text-2xl font-black">Talk to FAZ NETWORK Support</h3>
+      <p class="mt-3 text-cyan-50">For billing, connection or package assistance, contact our helpline or WhatsApp support.</p>
+      <div class="mt-6 space-y-2 text-sm font-bold"><p>☎ <%= esc(safeHelpline) %></p><p>⌂ <%= esc(safeOfficeAddress) %></p></div>
+      <button id="supportBtnHero" class="mt-6 rounded-xl bg-white px-5 py-3 font-black text-cyan-700">Open Support</button>
     </div>
   </div>
+</section>
 
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
-    <div class="summary-card"><p class="label">Today Collection</p><p id="today-collection-dashboard" class="metric">৳0.00</p><p class="hint">Processed payments</p></div>
-    <div class="summary-card"><p class="label">CPU Load</p><p id="cpu-value" class="metric">0.0%</p><div class="gauge-track"><div id="cpu-bar" class="gauge-fill" style="width:0%"></div></div></div>
-    <div class="summary-card"><p class="label">RAM Usage</p><p id="memory-value" class="metric">0.0%</p><div class="gauge-track"><div id="memory-bar" class="gauge-fill" style="width:0%"></div></div></div>
-    <div class="summary-card"><p class="label">System Uptime</p><p id="uptime-value" class="metric metric-small">Waiting...</p><p class="hint">RouterOS system uptime</p></div>
+<section id="packages" class="bg-white py-16">
+  <div class="mx-auto max-w-7xl px-4 lg:px-8">
+    <div class="text-center"><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Pricing</p><h2 class="mt-2 text-3xl font-black sm:text-4xl">Choose Your Internet Package</h2><p class="mx-auto mt-3 max-w-2xl text-slate-500">Simple monthly packages with fiber connectivity and customer support.</p></div>
+    <div class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <% if(!safePackages.length){ %>
+        <div class="sm:col-span-2 lg:col-span-3 rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-slate-500">Packages are temporarily unavailable. Please call <%= esc(safeHelpline) %>.</div>
+      <% } %>
+      <% safePackages.forEach(pkg=>{ const speed=String(pkg.rate_limit||"Flexible speed").trim()||"Flexible speed"; const price=Number(pkg.price||0); const duration=Math.max(1,Number(pkg.duration_months||1)); %>
+        <article class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+          <div class="flex items-start justify-between gap-4"><div><h3 class="text-xl font-black"><%= esc(pkg.plan_name||"Internet Plan") %></h3><p class="mt-1 text-sm text-slate-500"><%= esc(speed) %></p></div><span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black text-cyan-700">Fiber</span></div>
+          <div class="mt-6"><span class="text-4xl font-black">৳<%= price.toFixed(0) %></span><span class="text-sm text-slate-500"> / <%= duration %> month<%= duration>1?"s":"" %></span></div>
+          <ul class="mt-6 space-y-3 text-sm text-slate-600"><li>✓ Optical fiber connection</li><li>✓ Customer support</li><li>✓ Home &amp; business ready</li></ul>
+          <button class="mt-7 w-full rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 font-black text-cyan-700 hover:bg-cyan-100" onclick="document.getElementById('supportBtn').click()">Get This Package</button>
+        </article>
+      <% }) %>
+    </div>
   </div>
+</section>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-    <div class="px-6 py-5 border-b border-slate-200"><div class="flex items-center justify-between"><div><h3 class="font-bold text-lg">Recent Payments</h3><p class="text-sm text-slate-500">Latest bKash, Nagad and Rocket collections.</p></div><a href="/transactions" class="text-sm font-bold text-cyan-700">View all →</a></div><div id="dashboard-payments" class="mt-4 space-y-2"><p class="text-sm text-slate-400">Loading payments...</p></div></div>
+<section id="coverage" class="mx-auto max-w-7xl px-4 py-16 lg:px-8">
+  <div class="rounded-3xl bg-slate-900 p-8 text-white sm:p-12">
+    <p class="text-xs font-black uppercase tracking-widest text-cyan-300">Coverage &amp; Service</p>
+    <div class="mt-3 grid gap-8 lg:grid-cols-2">
+      <div><h2 class="text-3xl font-black">Connected where FAZ NETWORK serves.</h2><p class="mt-4 leading-7 text-slate-300">Coverage depends on local fiber infrastructure and availability. Contact support to confirm serviceability at your address.</p></div>
+      <div class="grid gap-3 sm:grid-cols-2"><div class="rounded-2xl bg-white/10 p-5"><p class="font-black">Fiber Internet</p><p class="mt-1 text-sm text-slate-300">Reliable broadband connectivity.</p></div><div class="rounded-2xl bg-white/10 p-5"><p class="font-black">Smart Hotspot</p><p class="mt-1 text-sm text-slate-300">Flexible hotspot services.</p></div></div>
+    </div>
   </div>
+</section>
+</main>
 
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-    <div class="px-6 py-5 border-b border-slate-200">
-      <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div><h3 class="font-bold text-lg">Live MikroTik Traffic</h3><p class="text-sm text-slate-500">Real-time interface throughput, sampled every 2.5 seconds.</p></div>
-        <div class="w-full sm:w-72"><label for="interface-select" class="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Interface</label><select id="interface-select" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-cyan-500"><option value="">Loading interfaces...</option></select></div>
-      </div>
-    </div>
-    <div class="p-6"><div class="h-80"><canvas id="traffic-chart"></canvas></div></div>
+<footer id="support" class="border-t border-slate-200 bg-white">
+  <div class="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
+    <div><div class="text-xl font-black">FAZ <span class="text-cyan-600">NETWORK</span></div><p class="mt-3 text-sm text-slate-500">Fiber Internet &amp; Smart Hotspot services.</p></div>
+    <div><h3 class="font-black">Support</h3><p class="mt-3 text-sm text-slate-500">24/7 Helpline: <%= esc(safeHelpline) %></p><button id="supportBtnFooter" class="mt-3 text-sm font-bold text-cyan-600">WhatsApp Support</button></div>
+    <div><h3 class="font-black">Office</h3><p class="mt-3 text-sm text-slate-500"><%= esc(safeOfficeAddress) %></p></div>
+    <div><h3 class="font-black">Terms</h3><p class="mt-3 text-sm text-slate-500">Service terms, fair-use policies and applicable BTRC regulatory requirements apply.</p></div>
   </div>
-<div id="customerLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="customerLoginTitle">
-  <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-    <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-      <div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Self-Care</p><h3 id="customerLoginTitle" class="text-xl font-black text-slate-900">Customer Login</h3><p class="mt-1 text-xs text-slate-500">Use your PPPoE username or registered phone number.</p></div>
-      <button type="button" id="closeCustomerLoginBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
-    </div>
-    <div class="p-5">
-      <div id="customerLoginPanel">
-        <form id="customerLoginForm" class="space-y-4">
-          <div><label for="customerLoginIdentifier" class="mb-1 block text-sm font-bold text-slate-700">Username / Phone Number</label><input id="customerLoginIdentifier" type="text" maxlength="120" autocomplete="username" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="PPPoE username or phone number"></div>
-          <div><label for="customerLoginPassword" class="mb-1 block text-sm font-bold text-slate-700">Password</label><input id="customerLoginPassword" type="password" maxlength="255" autocomplete="current-password" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-cyan-500" placeholder="PPPoE password"></div>
-          <div id="customerLoginError" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></div>
-          <button id="customerLoginSubmit" type="submit" class="w-full rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-700 disabled:opacity-60">Login to Account</button>
-        </form>
-      </div>
-      <div id="customerDashboardPanel" class="hidden"></div>
-    </div>
+  <div class="border-t border-slate-100 py-5 text-center text-xs text-slate-400">© <%= new Date().getFullYear() %> FAZ NETWORK. All rights reserved.</div>
+</footer>
+
+<div id="customerLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4">
+  <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+    <div class="flex items-start justify-between"><div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Self-Care</p><h2 class="mt-1 text-2xl font-black">Customer Login</h2></div><button id="closeCustomerLogin" class="text-2xl text-slate-400">×</button></div>
+    <form id="customerLoginForm" class="mt-6 space-y-4"><input id="loginIdentifier" required class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Username or phone number"><input id="loginPassword" required type="password" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Password"><div id="loginError" class="hidden rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></div><button id="loginSubmit" class="w-full rounded-xl bg-cyan-600 px-5 py-3 font-bold text-white">Login to Account</button></form>
+    <div id="customerDashboard" class="mt-6 hidden"></div>
   </div>
 </div>
 
-<div id="supportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
-  <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-    <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-      <div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Helpdesk</p><h3 id="supportTitle" class="text-xl font-black text-slate-900">FAZ NETWORK Support</h3></div>
-      <button type="button" id="closeSupportBtn" class="rounded-lg px-3 py-1 text-2xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">×</button>
-    </div>
-    <div class="p-5 space-y-3">
-      <a href="https://wa.me/8801339932887" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:bg-emerald-100">
-        <span class="text-xl">💬</span><span><strong class="block text-slate-900">WhatsApp</strong><span class="text-sm text-slate-600">Chat with FAZ NETWORK support</span></span>
-      </a>
-      <a href="tel:01339932887" class="flex items-center gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100">
-        <span class="text-xl">☎</span><span><strong class="block text-slate-900">Helpline</strong><span class="text-sm text-slate-600">01339932887</span></span>
-      </a>
-      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p class="text-xs font-black uppercase tracking-wide text-slate-400">Office Address</p>
-        <p class="mt-1 text-sm font-semibold text-slate-800">${safeOfficeAddress}</p>
-      </div>
-    </div>
-  </div>
+<div id="supportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4">
+  <div class="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl"><div class="flex justify-between"><h2 class="text-2xl font-black">FAZ NETWORK Support</h2><button id="closeSupport" class="text-2xl text-slate-400">×</button></div><p class="mt-4 text-slate-500">24/7 customer assistance</p><div class="mt-5 space-y-3"><a class="block rounded-xl bg-cyan-50 p-4 font-bold text-cyan-700" href="tel:<%= esc(safeHelpline) %>">☎ Call <%= esc(safeHelpline) %></a><a class="block rounded-xl bg-emerald-50 p-4 font-bold text-emerald-700" href="https://wa.me/8801339932887" target="_blank" rel="noopener">💬 WhatsApp Support</a><div class="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">⌂ <%= esc(safeOfficeAddress) %></div></div></div>
 </div>
 
-</section>`;
-%>
 <script>
-(() => {
-  const form=document.getElementById('publicCustomerCheckForm');
-  const result=document.getElementById('publicCustomerResult');
-  const button=document.getElementById('publicCustomerCheckBtn');
-  const input=document.getElementById('publicCustomerQuery');
-  const loginModal=document.getElementById('customerLoginModal');
-  const supportModal=document.getElementById('supportModal');
-  const loginForm=document.getElementById('customerLoginForm');
-  const loginIdentifier=document.getElementById('customerLoginIdentifier');
-  const loginPassword=document.getElementById('customerLoginPassword');
-  const loginSubmit=document.getElementById('customerLoginSubmit');
-  const loginError=document.getElementById('customerLoginError');
-  const dashboardPanel=document.getElementById('customerDashboardPanel');
-  const loginPanel=document.getElementById('customerLoginPanel');
-  const openLogin=document.getElementById('openCustomerLoginBtn');
-  const openSupport=document.getElementById('openSupportBtn');
-  const closeLogin=document.getElementById('closeCustomerLoginBtn');
-  const closeSupport=document.getElementById('closeSupportBtn');
-  if(!form||!result||!button||!input)return;
+(()=> {
+  const $=id=>document.getElementById(id);
+  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const modal=(id,open)=>{const el=$(id);if(!el)return;el.classList.toggle("hidden",!open);el.classList.toggle("flex",open);document.body.classList.toggle("overflow-hidden",open);};
+  [$("supportBtn"),$("supportBtnHero"),$("supportBtnFooter")].forEach(b=>b&&b.addEventListener("click",()=>modal("supportModal",true)));
+  $("closeSupport")?.addEventListener("click",()=>modal("supportModal",false));
+  $("supportModal")?.addEventListener("click",e=>{if(e.target.id==="supportModal")modal("supportModal",false)});
+  $("customerLoginBtn")?.addEventListener("click",()=>modal("customerLoginModal",true));
+  $("closeCustomerLogin")?.addEventListener("click",()=>modal("customerLoginModal",false));
+  $("customerLoginModal")?.addEventListener("click",e=>{if(e.target.id==="customerLoginModal")modal("customerLoginModal",false)});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){modal("supportModal",false);modal("customerLoginModal",false)}});
 
-  const setModal=(el,show)=>{
-    if(!el)return;
-    el.classList.toggle('hidden',!show);
-    el.classList.toggle('flex',show);
-    if(show) document.body.classList.add('overflow-hidden');
-    else if(!document.querySelector('[role="dialog"].flex')) document.body.classList.remove('overflow-hidden');
-  };
-  const resetLogin=()=>{
-    if(loginPanel){loginPanel.classList.remove('hidden','opacity-0','translate-y-1');loginPanel.classList.add('opacity-100');}
-    if(dashboardPanel){dashboardPanel.classList.add('hidden');dashboardPanel.classList.remove('opacity-100');dashboardPanel.innerHTML='';}
-    if(loginError){loginError.classList.add('hidden');loginError.textContent='';}
-    if(loginForm)loginForm.reset();
-  };
-  openLogin?.addEventListener('click',()=>{resetLogin();setModal(loginModal,true);setTimeout(()=>loginIdentifier?.focus(),50);});
-  closeLogin?.addEventListener('click',()=>setModal(loginModal,false));
-  openSupport?.addEventListener('click',()=>setModal(supportModal,true));
-  closeSupport?.addEventListener('click',()=>setModal(supportModal,false));
-  [loginModal,supportModal].forEach(modal=>modal?.addEventListener('click',e=>{if(e.target===modal)setModal(modal,false);}));
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){setModal(loginModal,false);setModal(supportModal,false);}});
-
-  loginForm?.addEventListener('submit',async event=>{
-    event.preventDefault();
-    const identifier=loginIdentifier?.value.trim()||'';
-    const password=loginPassword?.value||'';
-    if(!identifier||!password)return;
-    loginSubmit.disabled=true;loginSubmit.innerHTML='<span class="inline-flex items-center justify-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span> Verifying...</span>';
-    loginError?.classList.add('hidden');
+  $("accountCheckForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();const result=$("accountResult");result.classList.remove("hidden");result.innerHTML='<div class="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Checking account...</div>';
     try{
-      const response=await fetch('/api/public/customer-login',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({identifier,password})});
-      const data=await response.json().catch(()=>({success:false,message:'Invalid server response.'}));
-      if(!response.ok||!data.success){
-        const message=String(data.message||'Login failed. Please try again.');
-        throw new Error(message);
-      }
-      const c=data.customer||{};
-      const paid=String(c.billingStatus||'').toLowerCase()==='paid';
-      const online=c.connectionStatus==='Online';
-      const recharge=c.rechargeUrl
-        ? '<a href="'+esc(c.rechargeUrl)+'" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700">Pay / Recharge Bill</a>'
-        : '<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Recharge:</strong> Contact Helpline 01339932887 or use WhatsApp support for bKash/Nagad payment instructions.</div>';
-      if(loginPanel){
-        loginPanel.classList.add('opacity-0','translate-y-1','transition','duration-200');
-        setTimeout(()=>loginPanel.classList.add('hidden'),180);
-      }
-      if(dashboardPanel){
-        dashboardPanel.classList.remove('hidden','opacity-0');
-        dashboardPanel.classList.add('opacity-100','transition','duration-300');
-        dashboardPanel.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-cyan-600">My Account</p><h4 class="mt-1 text-2xl font-black text-slate-900">'+esc(c.name||c.username)+'</h4><p class="text-sm font-mono text-slate-500">'+esc(c.username||'')+'</p></div><span class="rounded-full px-3 py-1 text-xs font-bold '+(online?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-600')+'">'+(online?'● Online':'● Offline')+'</span></div>'+
-        '<div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">'+
-        '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Registered Phone</p><p class="mt-1 font-bold text-slate-800">'+esc(c.phone||'-')+'</p></div>'+
-        '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Package / Bandwidth</p><p class="mt-1 font-bold text-slate-800">'+esc(c.package||c.profile||'-')+'</p></div>'+
-        '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Expiration Date</p><p class="mt-1 font-bold text-slate-800">'+esc(c.expirationDate||'-')+'</p></div>'+
-        '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Remaining Days</p><p class="mt-1 font-bold text-slate-800">'+esc(c.remainingDays==null?'—':c.remainingDays)+'</p></div>'+
-        '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Billing Status</p><p class="mt-1 font-bold '+(paid?'text-emerald-600':'text-red-600')+'">'+(paid?'Paid':'Unpaid')+'</p></div>'+
-        '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Live Connection</p><p class="mt-1 font-bold text-slate-800">'+(online?'Online · '+esc(c.liveIp||'Connected'):'Offline')+'</p>'+(c.uptime?'<p class="text-xs text-slate-500 mt-1">Uptime: '+esc(c.uptime)+'</p>':'')+'</div>'+
-        '</div><div class="mt-5 space-y-3">'+recharge+'<div class="flex gap-2"><a href="'+esc(c.whatsappUrl||'https://wa.me/8801339932887')+'" target="_blank" rel="noopener" class="flex-1 rounded-xl border border-emerald-300 px-4 py-3 text-center text-sm font-bold text-emerald-700 hover:bg-emerald-50">WhatsApp Support</a><a href="tel:01339932887" class="flex-1 rounded-xl border border-cyan-300 px-4 py-3 text-center text-sm font-bold text-cyan-700 hover:bg-cyan-50">Call Helpline</a></div><p class="text-xs text-slate-400 text-center">Office: '+esc(c.officeAddress||'Contact support for office address')+'</p></div>';
-      }
-    }catch(error){
-      if(loginError){loginError.textContent=error.message||'Invalid Username/Phone or Password';loginError.classList.remove('hidden');}
-    }finally{loginSubmit.disabled=false;loginSubmit.textContent='Login to Account';}
+      const q=encodeURIComponent($("accountQuery").value.trim());const r=await fetch("/api/public/customer-check?query="+q,{headers:{Accept:"application/json"}});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||"Account not found.");
+      const c=d.customer||{};result.innerHTML='<div class="rounded-2xl border border-slate-200 bg-slate-50 p-5"><div class="grid gap-4 sm:grid-cols-2"><div><p class="text-xs text-slate-500">Customer</p><p class="font-black">'+esc(c.name)+'</p></div><div><p class="text-xs text-slate-500">Package</p><p class="font-black">'+esc(c.package||c.profile||"—")+'</p></div><div><p class="text-xs text-slate-500">Expiration</p><p class="font-bold">'+esc(c.expirationDate||"—")+'</p></div><div><p class="text-xs text-slate-500">Remaining</p><p class="font-bold">'+esc(c.remainingDays??"—")+' days</p></div><div><p class="text-xs text-slate-500">Connection</p><p class="font-bold">'+esc(c.connectionStatus||"Offline")+'</p></div><div><p class="text-xs text-slate-500">Bill Status</p><p class="font-bold">'+esc(c.billingStatus||"Unpaid")+'</p></div></div></div>';
+    }catch(err){result.innerHTML='<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">'+esc(err.message)+'</div>'}
   });
 
-  const esc=(value)=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const show=(html)=>{result.innerHTML=html;result.classList.remove('hidden');};
-
-  form.addEventListener('submit',async event=>{
-    event.preventDefault();
-    const query=input.value.trim();
-    if(!query)return;
-    button.disabled=true;button.textContent='Checking...';
-    show('<div class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Checking live account status...</div>');
+  $("customerLoginForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();const btn=$("loginSubmit"),errBox=$("loginError"),dash=$("customerDashboard");errBox.classList.add("hidden");btn.disabled=true;btn.textContent="Verifying...";
     try{
-      const response=await fetch('/api/public/customer-check?query='+encodeURIComponent(query),{headers:{Accept:'application/json'}});
-      const data=await response.json().catch(()=>({success:false,message:'Invalid server response.'}));
-      if(!response.ok||!data.success)throw new Error(data.message||'Customer account was not found.');
-      const c=data.customer||{};
-      const online=c.connectionStatus==='Online';
-      const paid=String(c.billingStatus||'').toLowerCase()==='paid';
-      const days=c.remainingDays==null?'—':String(c.remainingDays);
-      const expiry=c.expirationDate||'No expiry date';
-      const contact=c.supportPhone?'<a class="font-bold text-cyan-700 hover:underline" href="tel:'+esc(c.supportPhone)+'">Call '+esc(c.supportPhone)+'</a>':'<span class="text-slate-500">Contact your ISP support team</span>';
-      const recharge=c.rechargeUrl?'<a class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700" href="'+esc(c.rechargeUrl)+'">Recharge</a>':'';
-      show('<div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">'+
-        '<div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">'+
-          '<div><p class="text-xs font-bold uppercase tracking-wide text-slate-400">Customer</p><h4 class="text-xl font-black text-slate-900">'+esc(c.name||c.username)+'</h4><p class="text-sm text-slate-500 font-mono">'+esc(c.username||'')+'</p></div>'+
-          '<span class="inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold '+(online?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-600')+'">'+(online?'● Online':'● Offline')+'</span>'+
-        '</div>'+
-        '<div class="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">'+
-          '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Package / Plan</p><p class="mt-1 font-bold text-slate-800">'+esc(c.package||c.profile||'-')+'</p></div>'+
-          '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Expiration</p><p class="mt-1 font-bold text-slate-800">'+esc(expiry)+'</p></div>'+
-          '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Remaining Days</p><p class="mt-1 font-bold text-slate-800">'+esc(days)+'</p></div>'+
-          '<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-400">Billing Status</p><p class="mt-1 font-bold '+(paid?'text-emerald-600':'text-red-600')+'">'+esc(paid?'Paid':'Unpaid')+'</p></div>'+
-        '</div>'+
-        '<div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">'+
-          '<div><span class="font-semibold">Live IP:</span> '+esc(c.liveIp||'Not online')+'</div>'+
-          '<div class="flex items-center gap-2">'+contact+recharge+'</div>'+
-        '</div>'+
-      '</div>');
-    }catch(error){
-      show('<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">'+esc(error.message)+'</div>');
-    }finally{button.disabled=false;button.textContent='Check Account';}
+      const r=await fetch("/api/public/customer-login",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({identifier:$("loginIdentifier").value.trim(),password:$("loginPassword").value.trim()})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||"Login failed.");
+      const c=d.customer||{};dash.innerHTML='<div class="rounded-2xl bg-slate-50 p-5"><h3 class="text-xl font-black">'+esc(c.name)+'</h3><div class="mt-4 grid gap-3 sm:grid-cols-2 text-sm"><p><b>Username:</b> '+esc(c.username)+'</p><p><b>Phone:</b> '+esc(c.phone||"—")+'</p><p><b>Package:</b> '+esc(c.package||c.profile||"—")+'</p><p><b>Expiry:</b> '+esc(c.expirationDate||"—")+'</p><p><b>Remaining:</b> '+esc(c.remainingDays??"—")+' days</p><p><b>Status:</b> '+esc(c.connectionStatus||"Offline")+'</p><p><b>Bill:</b> '+esc(c.billingStatus||"Unpaid")+'</p><p><b>Live IP:</b> '+esc(c.liveIp||"—")+'</p></div><div class="mt-5 flex flex-wrap gap-2">'+(c.rechargeUrl?'<a class="rounded-xl bg-cyan-600 px-4 py-2 font-bold text-white" href="'+esc(c.rechargeUrl)+'" target="_blank" rel="noopener">Pay / Recharge</a>':'')+'<a class="rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white" href="https://wa.me/8801339932887" target="_blank" rel="noopener">WhatsApp Support</a></div></div>';
+      $("customerLoginForm").classList.add("hidden");dash.classList.remove("hidden");
+    }catch(ex){errBox.textContent=ex.message;errBox.classList.remove("hidden")}finally{btn.disabled=false;if(btn.disabled===false)btn.textContent="Login to Account"}
   });
 })();
 </script>
-<%- include("layout", { body: dashboardBody, title: title, page: page }) %>
+</body>
+</html>
