@@ -414,6 +414,7 @@
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('all', 'all_user'); return false;"><span data-key="hotspot_all_users">All Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotSection('active', 'active_user'); return false;"><span data-key="hotspot_active_users">Active Users</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadHotspotProfiles('hotspot_profile'); return false;"><span data-key="hotspot_profile">Profile</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="switchView('hotspot-webhook'); return false;"><i class="bi bi-webhook me-2"></i><span>Hotspot Webhook</span></a></li>
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
                 </ul>
             </li>
@@ -448,7 +449,6 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="switchView('website-settings'); return false;"><span data-key="website_setting">Website Setting</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="sms_setting">SMS Setting</span></a></li>
                     <li><a href="javascript:void(0)"><span data-key="backup_restore">Backup & Restore</span></a></li>
                 </ul>
@@ -577,10 +577,11 @@
                 </div>
             </section>
 
-            <!-- VIEW: WEBSITE SETTINGS -->
-            <section id="view-website-settings" class="admin-view" style="display:none">
+            <!-- VIEW: HOTSPOT WEBHOOK SETTINGS -->
+            <section id="view-hotspot-webhook" class="admin-view" style="display:none">
+                <div class="mb-3"><h2 class="h4 fw-bold mb-1">Hotspot Webhook Settings</h2><p class="text-muted mb-0">Configure the inbound payment webhook and match payments to MikroTik Hotspot profiles.</p></div>
                 <div class="row g-4"><div class="col-12"><div class="card card-custom shadow-sm border-0">
-                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-broadcast-pin text-success fs-5"></i><div><div class="fw-semibold">Personal Payment Gateway Webhook</div><small class="text-muted fw-normal">Configure the inbound webhook used by your personal MFS payment automation.</small></div></div><span id="paymentWebhookStatus" class="badge bg-secondary ms-auto">Not configured</span></div>
+                    <div class="card-custom-header"><div class="d-flex align-items-center gap-2"><i class="bi bi-webhook text-success fs-5"></i><div><div class="fw-semibold">Hotspot Webhook &amp; Gateway Integration</div><small class="text-muted fw-normal">Configure the inbound webhook used by your payment automation.</small></div></div><span id="paymentWebhookStatus" class="badge bg-secondary ms-auto">Not configured</span></div>
                     <div class="card-body p-4"><form id="paymentWebhookSettingsForm" novalidate><div class="row g-4">
                         <div class="col-12"><label for="paymentWebhookUrl" class="form-label fw-semibold">Webhook URL</label><input id="paymentWebhookUrl" type="url" class="form-control font-monospace" placeholder="https://example.com/api/webhooks/macrodroid-sms" autocomplete="url"><div class="form-text">The endpoint that your SMS automation device/service should POST payment notifications to.</div></div>
                         <div class="col-lg-8"><label for="paymentWebhookSecret" class="form-label fw-semibold">Webhook Secret Key / Token</label><input id="paymentWebhookSecret" type="password" class="form-control font-monospace" placeholder="Leave blank to keep the existing secret" autocomplete="new-password"><div id="paymentWebhookSecretHint" class="form-text">The saved secret is never returned to the browser.</div></div>
@@ -1476,7 +1477,7 @@
             'add-customer': 'Add New Customer',
             'all-customer': 'All Customer (PPPoE)',
             payments: 'All Payments',
-            'website-settings': 'Website Settings'
+            'hotspot-webhook': 'Hotspot Webhook Settings'
         };
 
         let currentIpPoolEdit = null; let ipPoolCache = {};
@@ -1904,7 +1905,7 @@ async function deletePlan(id,name){
         async function loadWebsiteSettings(){
             const form=document.getElementById('paymentWebhookSettingsForm');if(!form||websiteSettingsLoaded)return;
             const result=document.getElementById('paymentWebhookSettingsResult');
-            try{const data=await jsonFetch('/api/settings/website'),s=data.settings||{};const url=document.getElementById('paymentWebhookUrl'),secret=document.getElementById('paymentWebhookSecret'),enabled=document.getElementById('paymentWebhookEnabled');if(url)url.value=s.webhookUrl||((window.location.origin||'')+'/api/webhooks/macrodroid-sms');if(enabled)enabled.checked=Boolean(s.webhookEnabled);if(secret)secret.value='';const status=document.getElementById('paymentWebhookStatus');if(status){status.textContent=s.webhookEnabled?'Enabled':'Disabled';status.className='badge ms-auto '+(s.webhookEnabled?'bg-success':'bg-secondary');}const hint=document.getElementById('paymentWebhookSecretHint');if(hint)hint.textContent=s.secretConfigured?'A secret is already saved. Leave this field blank to keep it unchanged.':'No secret is saved yet.';websiteSettingsLoaded=true;}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to load Website Settings.';}}
+            try{const data=await jsonFetch('/api/settings/hotspot-webhook'),s=data.settings||{};const url=document.getElementById('paymentWebhookUrl'),secret=document.getElementById('paymentWebhookSecret'),enabled=document.getElementById('paymentWebhookEnabled');if(url)url.value=s.webhookUrl||((window.location.origin||'')+'/api/webhooks/macrodroid-sms');if(enabled)enabled.checked=Boolean(s.webhookEnabled);if(secret)secret.value='';const status=document.getElementById('paymentWebhookStatus');if(status){status.textContent=s.webhookEnabled?'Enabled':'Disabled';status.className='badge ms-auto '+(s.webhookEnabled?'bg-success':'bg-secondary');}const hint=document.getElementById('paymentWebhookSecretHint');if(hint)hint.textContent=s.secretConfigured?'A secret is already saved. Leave this field blank to keep it unchanged.':'No secret is saved yet.';websiteSettingsLoaded=true;}catch(error){if(result){result.className='small mt-3 text-danger fw-semibold';result.textContent=error.message||'Unable to load Hotspot Webhook settings.';}}
         }
         const hotspotPresetAmounts=[10,15,20,40,60,90,150,200,350];
         let liveHotspotProfiles=[];
@@ -1958,7 +1959,7 @@ async function deletePlan(id,name){
                 fetchCustomers();
             } else if (target === 'payments') {
                 fetchPayments(currentPaymentChannel);
-            } else if (target === 'website-settings') {
+            } else if (target === 'hotspot-webhook') {
                 loadWebsiteSettings();
                 loadHotspotProfileSettings();
             }
@@ -1966,6 +1967,8 @@ async function deletePlan(id,name){
         }
 
         window.switchView = switchView;
+
+        if (window.location.hash === '#hotspot-webhook') switchView('hotspot-webhook');
 
         window.showSection = function(sectionId) {
             const id = String(sectionId || '').trim();
