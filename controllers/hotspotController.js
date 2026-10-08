@@ -13,7 +13,7 @@ function buildHotspotOnLoginScript(validity,sharedUsers){
    ? ':local loginMac $"mac-address"; :if ([:len $loginMac] > 0) do={ /ip hotspot user set [find name=$user] mac-address=$loginMac; };'
    : '';
  const safeValidity=v.replace(/"/g,'');
- return ':local validity "'+safeValidity+'"; :local userName $user; '+macLock+' :if ([:len [/system scheduler find name=("hs-exp-" . $userName)]] = 0) do={ /system scheduler add name=("hs-exp-" . $userName) interval=$validity start-time=[/system clock get time] on-event=(":local u \\""+$userName+"\\"; /ip hotspot active remove [find user=$u]; /ip hotspot user disable [find name=$u]; /system scheduler remove [find name=(\\"hs-exp-\\" . $u)];"); };';
+ return ':local validity "'+safeValidity+'"; :local userName $user; '+macLock+' :if ([:len [/system scheduler find name=("hs-exp-" . $userName)]] = 0) do={ /system scheduler add name=("hs-exp-" . $userName) interval=$validity start-time=[/system clock get time] on-event=(":local u \\"" . $userName . "\\"; /ip hotspot active remove [find user=$u]; /ip hotspot user disable [find name=$u]; /system scheduler remove [find name=(\\"hs-exp-\\" . $u)];"); };';
 }
 function normalizeProfileValidity(value,unit){
  const n=Math.max(1,Number(value)||0);
