@@ -107,3 +107,6 @@ CREATE INDEX IF NOT EXISTS idx_transactions_used ON transactions(used);
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
 CREATE INDEX IF NOT EXISTS idx_customers_profile ON customers(profile);
 CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS expiration_date DATE;
+CREATE INDEX IF NOT EXISTS idx_customers_expiration_date ON customers(expiration_date);
