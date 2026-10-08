@@ -156,22 +156,37 @@ async function createUser(req,res){
 }
 async function dashboardMetrics(req,res){
   try{
-    const [allUsers,activeSessions]=await Promise.all([
+    const [allUsers,activeSessions,voucherRows]=await Promise.all([
       mikrotikService.getHotspotUsers(),
-      mikrotikService.getActiveHotspotSessions()
+      mikrotikService.getActiveHotspotSessions(),
+      db.query("SELECT COUNT(*)::int AS count FROM hotspot_vouchers")
     ]);
     const customerUsers=(Array.isArray(allUsers)?allUsers:[]).filter(user=>{
       const username=String(user?.username||"").trim().toLowerCase();
       return username&&username!=="default-trial";
     });
-    const liveSessions=(Array.isArray(activeSessions)?activeSessions:[]).filter(session=>{
+    const activeRes=Array.isArray(activeSessions)?activeSessions:[];
+    const totalUsers=customerUsers.length;
+    const activeUsers=activeRes.filter(session=>{
       const username=String(session?.username||"").trim().toLowerCase();
       return username&&username!=="default-trial";
-    });
-    const totalUsers=customerUsers.length;
-    const activeUsers=liveSessions.length;
+    }).length;
     const offlineUsers=Math.max(0,totalUsers-activeUsers);
-    return res.json({success:true,totalUsers,activeUsers,offlineUsers,todayRevenue:0.00});
+    const voucherCommentCount=customerUsers.filter(user=>{
+      const comment=String(user?.comment||"").toLowerCase();
+      return comment.includes("voucher");
+    }).length;
+    const dbVoucherCount=Number(voucherRows?.rows?.[0]?.count||0);
+    const totalVouchers=Math.max(voucherCommentCount,dbVoucherCount);
+    return res.json({
+      success:true,
+      totalUsers,
+      activeUsers,
+      onlineClients:activeUsers,
+      offlineUsers,
+      totalVouchers,
+      todayRevenue:"0.00"
+    });
   }catch(e){return errorResponse(res,e);}
 }
 async function kick(req,res){try{const username=clean(req.body.username,100),id=clean(req.body.id,100);if(!username&&!id)return res.status(400).json({success:false,error:"Username or session id is required."});const result=await mikrotikService.kickActiveHotspotUser(username,id);res.json({success:true,...result});}catch(e){return errorResponse(res,e);}}
