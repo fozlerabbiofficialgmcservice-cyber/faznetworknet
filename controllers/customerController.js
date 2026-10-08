@@ -651,8 +651,8 @@ async function changeCustomerPackage(req,res){
       [plan.plan_name,plan.profile_name,plan.price,expired?"expired":"active",payload.customer.id]
     );
     await db.query(
-      "UPDATE pppoe_users SET profile=$1,remote_address=$2,status=$3,disabled=$4,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($5)",
-      [effective,dbRemoteAddress,expired?"expired":"active",expired,payload.customer.username]
+      "UPDATE pppoe_users SET profile=$1,status=$2,disabled=$3,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($4)",
+      [effective,expired?"expired":"active",expired,payload.customer.username]
     );
 
     await logAuditAction({
@@ -666,7 +666,6 @@ async function changeCustomerPackage(req,res){
         newPackage:plan.plan_name,
         newProfile:plan.profile_name,
         newPool:plan.pool_name,
-        newRemoteAddress:remoteAddress||null,
         newRateLimit:plan.rate_limit,
         sessionDisconnected:disconnected
       },
@@ -681,8 +680,7 @@ async function changeCustomerPackage(req,res){
         profileName:plan.profile_name,
         price:Number(plan.price||0),
         rateLimit:plan.rate_limit,
-        poolName:plan.pool_name,
-        remoteAddress:remoteAddress||null
+        poolName:plan.pool_name
       },
       sessionDisconnected:disconnected,
       message:"Customer package changed successfully."
