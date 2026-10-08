@@ -1,10 +1,10 @@
 const express=require("express");
-const controller=require("../controllers/paymentController");
+const controller=require("../controllers/paymentController");\nconst {requireAdmin}=require("../middleware/adminAuth");
 const router=express.Router();
 router.post("/webhooks/macrodroid-sms",controller.webhook);
 router.post("/forward",controller.webhook);
 router.post("/verify-trx",controller.verifyTrx);
-router.get("/payments/transactions",controller.list);
-router.post("/payments/manual-match",controller.manualMatch);
-router.get("/payments/summary",controller.summary);
+router.get("/payments/transactions",requireAdmin,controller.list);
+router.post("/payments/manual-match",requireAdmin,controller.manualMatch);
+router.get("/payments/summary",requireAdmin,controller.summary);
 module.exports=router;
