@@ -739,17 +739,42 @@
         async function loadHotspotDashboard(){
             currentHotspotMode='dashboard'; setHotspotTitle('hotspot_dashboard');
             appendHotspotView('<section class="hotspot-dynamic-view admin-view"><div class="row g-3 mb-4">'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Hotspot Users</div><div id="hotspotTotalAccounts" class="fs-3 fw-bold mt-1">—</div></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small" data-key="currently_online_clients">Live Active Devices (Online)</div><div id="hotspotOnlineCount" class="fs-3 fw-bold mt-1">—</div></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Today\'s Hotspot Sales</div><div id="hotspotRevenue" class="fs-3 fw-bold mt-1 text-success">৳0.00</div></div></div></div>'+
-            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small" data-key="active_bandwidth_usage">Total Active Bandwidth Usage</div><div id="hotspotBandwidth" class="fs-3 fw-bold mt-1">0 B</div></div></div></div></div>'+
-            '<div class="d-flex flex-wrap gap-2 mb-3"><button type="button" class="btn btn-theme" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill"></i><span data-key="add_single_user"> Add Single User</span></button><button type="button" class="btn btn-outline-success" onclick="window.loadVoucherGeneratorSection()"><i class="bi bi-lightning-charge-fill"></i><span data-key="batch_generator"> Batch Generator</span></button></div>'+
-            '<div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i><span data-key="live_connected_clients">Real-Time Connected Clients</span></div><span id="hotspotDashboardStatus" class="badge bg-secondary ms-auto">Loading...</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>#</th><th>Username</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th><th>Download / Upload</th><th>Action</th></tr></thead><tbody id="hotspotDashboardSessions"><tr><td colspan="7" class="text-center py-5 text-muted">Loading live sessions...</td></tr></tbody></table></div></div></section>');
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Total Hotspot Users</div><span id="hsTotalUsers" class="fs-3 fw-bold mt-1 d-block">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Active / Online Users</div><span id="hsActiveUsers" class="fs-3 fw-bold mt-1 d-block text-success">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Offline Users</div><span id="hsOfflineUsers" class="fs-3 fw-bold mt-1 d-block text-secondary">0</span></div></div></div>'+
+            '<div class="col-12 col-sm-6 col-xl-3"><div class="card card-custom hotspot-kpi h-100"><div class="card-body"><div class="text-muted small">Today\'s Revenue</div><div class="fs-3 fw-bold mt-1">৳ <span id="hsTodayRevenue">0.00</span></div></div></div></div></div>'+
+            '<div class="d-flex flex-wrap gap-2 mb-3"><button type="button" class="btn btn-theme" onclick="window.loadAddHotspotUserView()"><i class="bi bi-person-plus-fill"></i> + Add Hotspot User</button><button type="button" class="btn btn-outline-success" onclick="window.loadVoucherGeneratorSection()"><i class="bi bi-lightning-charge-fill"></i> ⚡ Batch Generator</button></div>'+
+            '<div class="card card-custom"><div class="card-custom-header flex-wrap"><div><i class="bi bi-broadcast-pin text-success fs-5 me-2"></i>Real-Time Active Users</div><span id="hotspotDashboardStatus" class="badge bg-secondary ms-auto">Loading...</span></div><div class="card-body p-0 table-responsive"><table class="table table-hover mb-0 hotspot-live-table"><thead class="table-light"><tr><th>Username</th><th>IP Address</th><th>MAC Address</th><th>Uptime</th></tr></thead><tbody id="hotspotDashboardSessions"><tr><td colspan="4" class="text-center py-5 text-muted">Loading live sessions...</td></tr></tbody></table></div></div></section>');
             await refreshHotspotDashboardMetrics();
         }
         async function refreshHotspotDashboardMetrics(){
             const body=document.getElementById('hotspotDashboardSessions'); if(!body)return;
-            try{const d=await jsonFetch('/api/hotspot/dashboard-metrics');safeSetText('hotspotTotalAccounts',Number(d.totalUsers||0));safeSetText('hotspotOnlineCount',Number(d.onlineUsers||0));safeSetText('hotspotRevenue','৳'+Number(d.todayRevenue||0).toFixed(2));safeSetText('hotspotBandwidth',hotspotBandwidthLabel(d.totalActiveBandwidthUsage||0));const rows=Array.isArray(d.recentActiveSessions)?d.recentActiveSessions:[];body.innerHTML=rows.length?rows.map((s,i)=>'<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(s.username||'-')+'</strong></td><td class="font-monospace">'+escapeHtml(s.ip||'-')+'</td><td class="font-monospace">'+escapeHtml(s.mac||'-')+'</td><td>'+escapeHtml(s.uptime||'-')+'</td><td>'+hotspotBandwidthLabel(s.rxBytes||0)+' / '+hotspotBandwidthLabel(s.txBytes||0)+'</td><td><button type="button" class="btn btn-sm btn-outline-warning" onclick="kickHotspotUser('+JSON.stringify(s.username||"")+')"><i class="bi bi-box-arrow-right"></i> Kick</button></td></tr>').join(''):'<tr><td colspan="7" class="text-center py-5 text-muted">No active Hotspot devices.</td></tr>';const status=document.getElementById('hotspotDashboardStatus');if(status){status.className='badge bg-success ms-auto';status.textContent='Live · '+Number(d.onlineUsers||0)+' online';}}catch(error){body.innerHTML='<tr><td colspan="7" class="text-center py-5 text-danger">'+escapeHtml(error.message||'Unable to load Hotspot dashboard.')+'</td></tr>';const status=document.getElementById('hotspotDashboardStatus');if(status){status.className='badge bg-danger ms-auto';status.textContent='Offline';}}}
+            try{
+                const [metricsResponse,activeResponse]=await Promise.all([
+                    fetch('/api/hotspot/dashboard-metrics'),
+                    fetch('/api/hotspot/active')
+                ]);
+                if(!metricsResponse.ok) throw new Error('Unable to load Hotspot dashboard metrics.');
+                if(!activeResponse.ok) throw new Error('Unable to load active Hotspot users.');
+                const d=await metricsResponse.json();
+                const activeData=await activeResponse.json();
+                safeSetText('hsTotalUsers',Number(d.totalUsers||0));
+                safeSetText('hsActiveUsers',Number(d.activeUsers||0));
+                safeSetText('hsOfflineUsers',Number(d.offlineUsers||0));
+                safeSetText('hsTodayRevenue',Number(d.todayRevenue||0).toFixed(2));
+                const rows=Array.isArray(activeData.users)?activeData.users:[];
+                body.innerHTML=rows.length?rows.map(function(s){
+                    return '<tr><td><strong>'+escapeHtml(s.username||'-')+'</strong></td><td class="font-monospace">'+escapeHtml(s.address||'-')+'</td><td class="font-monospace">'+escapeHtml(s.mac_address||'-')+'</td><td>'+escapeHtml(s.uptime||'-')+'</td></tr>';
+                }).join(''):'<tr><td colspan="4" class="text-center py-5 text-muted">No active Hotspot users.</td></tr>';
+                const status=document.getElementById('hotspotDashboardStatus');
+                if(status){status.className='badge bg-success ms-auto';status.textContent='Live · '+Number(d.activeUsers||0)+' active';}
+            }catch(error){
+                safeSetText('hsTotalUsers','0'); safeSetText('hsActiveUsers','0'); safeSetText('hsOfflineUsers','0'); safeSetText('hsTodayRevenue','0.00');
+                body.innerHTML='<tr><td colspan="4" class="text-center py-5 text-danger">'+escapeHtml(error.message||'Unable to load Hotspot dashboard.')+'</td></tr>';
+                const status=document.getElementById('hotspotDashboardStatus');
+                if(status){status.className='badge bg-danger ms-auto';status.textContent='Offline';}
+            }
+        }
         window.loadAddHotspotUserView=loadAddHotspotUserView;
         window.refreshHotspotDashboardMetrics=refreshHotspotDashboardMetrics;
 
