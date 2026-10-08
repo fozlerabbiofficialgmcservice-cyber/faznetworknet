@@ -134,11 +134,11 @@ async function users(req, res) {
     const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
 
     const result = await db.query(`
-      SELECT u.*, c.id AS customer_id
+      SELECT u.*, c.id AS customer_id, c.created_at AS customer_created_at
       FROM pppoe_users u
       LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username)
       ${whereClause}
-      ORDER BY u.username ASC
+      ORDER BY c.created_at DESC NULLS LAST, c.id DESC NULLS LAST, u.created_at DESC NULLS LAST, u.id DESC
     `, params);
 
     let sessions = [];
