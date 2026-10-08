@@ -308,8 +308,5 @@ async function removeUser(req,res){
   const customerController=require("./customerController");
   return customerController.removeCustomer(req,res);
 }
-async function page(req, res) {
-  res.render("pppoe", { title: "PPPoE Management", page: "pppoe" });
-}
 
-module.exports = { page, sync, users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile, removeUser };
+module.exports = { sync, users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile, removeUser };
