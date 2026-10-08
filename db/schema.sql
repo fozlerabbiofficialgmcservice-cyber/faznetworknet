@@ -87,6 +87,9 @@ CREATE TABLE IF NOT EXISTS hotspot_vouchers (
 
 ALTER TABLE pppoe_profiles ADD COLUMN IF NOT EXISTS price NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS billing_status TEXT NOT NULL DEFAULT 'unpaid';
+ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS last_paid_at TIMESTAMPTZ;
+ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS paid_until DATE;
 ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS expiry_date DATE;
 -- Expiration is a calendar date in Bangladesh; migrate legacy timestamptz values once.
 DO $$
@@ -125,6 +128,9 @@ CREATE INDEX IF NOT EXISTS idx_customers_profile ON customers(profile);
 CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
 
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS expiration_date DATE;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_status TEXT NOT NULL DEFAULT 'unpaid';
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_paid_at TIMESTAMPTZ;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS paid_until DATE;
 CREATE INDEX IF NOT EXISTS idx_customers_expiration_date ON customers(expiration_date);
 
 CREATE TABLE IF NOT EXISTS ip_pools (
