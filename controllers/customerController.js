@@ -114,7 +114,7 @@ async function createCustomer(req, res) {
   const body = req.body || {};
   const customer = {
     fullName: clean(body.fullName || body.name, 200),
-    phone: clean(body.phone, 40),
+    phone: formatBdPhoneNumber(body.phone),
     connectionDate: normalizeDate(body.connectionDate),
     username: clean(body.username, 100),
     password: clean(body.password, 255),
@@ -131,7 +131,7 @@ async function createCustomer(req, res) {
   };
   customer.effectiveProfile = effectiveProfile(customer.profile, customer.expirationDate);
 
-  if (!customer.fullName || !customer.phone || !customer.connectionDate || !customer.activationDate || !customer.expirationDate ||
+  if (!customer.fullName || !customer.phone || customer.phone === '—' || !customer.connectionDate || !customer.activationDate || !customer.expirationDate ||
       !customer.username || !customer.password || !customer.packageName || !customer.profile) {
     return res.status(400).json({
       success: false,
