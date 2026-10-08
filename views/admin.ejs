@@ -2035,6 +2035,13 @@ async function deletePlan(id,name){
             try {
                 const response = await fetch(url, { credentials: "same-origin", ...options });
                 const data = await response.json().catch(() => ({}));
+                if (response.status === 401 && data?.redirect === '/login') {
+                    if (!window.__adminRedirecting) {
+                        window.__adminRedirecting = true;
+                        window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+                    }
+                    throw new Error(data.message || 'Session expired');
+                }
                 if (!response.ok || data.success === false) {
                     const message = data.message || data.error || ((response.status || '') + ' ' + (response.statusText || 'Server error'));
                     if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message) && !adminDbConnected) {
