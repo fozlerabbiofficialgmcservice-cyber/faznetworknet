@@ -77,6 +77,29 @@ class MikroTikService {
       }).filter((item) => item.name);
     });
   }
+  async getPppoeSecret(username) {
+    const name=this._str(username).trim();
+    if(!name) return null;
+    return this._withConnection("PPPoE secret lookup",async(connection)=>{
+      const rows=await connection.write("/ppp/secret/print",["?name="+name]);
+      const match=(Array.isArray(rows)?rows:[]).find(item=>this._str(item.name).trim().toLowerCase()===name.toLowerCase());
+      if(!match) return null;
+      return {
+        id:this._str(match[".id"]),
+        name:this._str(match.name),
+        password:this._str(match.password),
+        profile:this._str(match.profile),
+        service:this._str(match.service)||"pppoe",
+        disabled:this._bool(match.disabled),
+        comment:this._str(match.comment),
+        callerId:this._str(match["caller-id"]),
+        localAddress:this._str(match["local-address"]),
+        remoteAddress:this._str(match["remote-address"]),
+        raw:match
+      };
+    });
+  }
+
   async fetchExistingSecrets() {
     return this._withConnection("PPPoE secret sync", async (connection) => {
       const rows = await connection.write("/ppp/secret/print", ["?service=pppoe"]);
