@@ -2033,7 +2033,7 @@ async function deletePlan(id,name){
 
         async function jsonFetch(url, options = {}) {
             try {
-                const response = await fetch(url, options);
+                const response = await fetch(url, { credentials: "same-origin", ...options });
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || data.success === false) {
                     const message = data.message || data.error || ((response.status || '') + ' ' + (response.statusText || 'Server error'));
