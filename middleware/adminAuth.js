@@ -2,9 +2,10 @@ const crypto=require("crypto");
 
 const COOKIE_NAME="faz_admin_session";
 const SESSION_TTL_SECONDS=8*60*60;
+const FALLBACK_SESSION_SECRET=crypto.randomBytes(32).toString("hex");
 
 function secret(){
-  return String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"faznetwork-admin-session-2026").trim();
+  return String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||FALLBACK_SESSION_SECRET).trim();
 }
 
 function sign(payload){
