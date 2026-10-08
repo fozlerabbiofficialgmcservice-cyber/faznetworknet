@@ -212,7 +212,7 @@ async function updateCustomer(req, res) {
     return res.status(400).json({ success:false, message:"Name, phone, activation date, expiration date, username, password, package, and bill are required." });
   }
   try {
-    const current = await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1", [id]);
+    const current = await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1", [id]);
     if (!current.rows.length) return res.status(404).json({ success:false, message:"Customer not found." });
     const customerId = current.rows[0].id;
     const duplicate = await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1", [customerId, customer.username, customer.phone]);
