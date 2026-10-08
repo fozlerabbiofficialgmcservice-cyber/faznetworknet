@@ -355,7 +355,7 @@
 
         <ul class="sidebar-menu">
             <li class="menu-item">
-                <a href="javascript:void(0)" class="active" onclick="switchView('dashboard', '', this)"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
+                <a href="javascript:void(0)" class="active" onclick="window.showSection('view-dashboard', event)"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
             </li>
 
             <li class="menu-item">
@@ -364,8 +364,8 @@
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                 </button>
                 <ul class="submenu">
-                    <li><a href="javascript:void(0)" onclick="loadCustomerSection('all', 'all_customer')"><span data-key="all_customer">All Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="showAddCustomerForm(this)"><span data-key="add_customer">Add Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.showSection('view-all-customers', event)"><span data-key="all_customer">All Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="window.showSection('view-add-customer', event)"><span data-key="add_customer">Add Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('online', 'online_customer')"><span data-key="online_customer">Online Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('offline', 'offline_customer')"><span data-key="offline_customer">Offline Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('active', 'active_customer')"><span data-key="active_customer">Active Customer</span></a></li>
@@ -695,7 +695,7 @@
             </section>
 
             <!-- VIEW 3: ALL CUSTOMER -->
-            <section id="view-all-customer" class="admin-view" style="display:none">
+            <section id="view-all-customers" class="admin-view" style="display:none">
                 <div class="card card-custom">
                     <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerSyncBtn" class="btn btn-outline-success btn-sm ms-auto" onclick="syncMikrotik(this)"><i class="bi bi-arrow-repeat"></i> 🔄 Sync MikroTik</button></div>
                     <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Username</th><th>Profile</th><th>Phone</th><th>Status</th><th>Expiry Date</th><th>Action</th></tr></thead><tbody id="pppoeUserList"><tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr></tbody></table></div>
@@ -2158,45 +2158,76 @@ async function deletePlan(id,name){
 
         window.switchView = switchView;
 
-        window.showSection = function(sectionId) {
-            const id = String(sectionId || '').trim();
-            if (!id) return;
+        window.showSection = function(viewId, event) {
+            if (event && event.preventDefault) event.preventDefault();
 
-            const viewName = id.replace(/^view-/, '');
-            const directTarget = document.getElementById(id) ||
-                document.querySelector('[data-section="' + CSS.escape(id) + '"]');
-            const viewTarget = document.getElementById('view-' + viewName);
-
-            if (viewTarget && typeof window.switchView === 'function') {
-                window.switchView(viewName);
-                return;
-            }
-
-            document.querySelectorAll('.admin-view, .admin-section, .content-section, [data-section]').forEach(function(el) {
-                el.style.display = 'none';
-                el.classList.remove('active');
-            });
-
-            const target = directTarget || viewTarget;
-            if (target) {
-                target.style.display = 'block';
-                target.classList.add('active');
-            }
-
-            document.querySelectorAll('.sidebar .nav-link, .nav-item a, .menu-item a').forEach(function(link) {
-                link.classList.remove('active');
-                const onclick = link.getAttribute('onclick') || '';
-                if (onclick.includes(id) || onclick.includes(viewName) || link.getAttribute('data-target') === id) {
-                    link.classList.add('active');
+            try {
+                // 1. Ensure the shared parent container is visible.
+                const parent = document.getElementById('dynamicPageContent');
+                if (parent) {
+                    parent.classList.remove('d-none');
+                    parent.style.display = 'block';
                 }
-            });
 
-            if (id === 'plans' || id === 'packagesSection') {
-                if (typeof window.loadPlans === 'function') window.loadPlans();
-            } else if (id === 'customers' || id === 'pppoeSection') {
-                if (typeof window.loadCustomers === 'function') window.loadCustomers();
+                // 2. Hide all known view sections safely using both Bootstrap
+                //    utility classes and inline styles.
+                const allViews = [
+                    'view-dashboard',
+                    'view-all-customers',
+                    'view-add-customer',
+                    'view-online-customers'
+                ];
+
+                allViews.forEach(function(id) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.classList.add('d-none');
+                        el.style.display = 'none';
+                    }
+                });
+
+                // Also hide any dynamically-created/admin view siblings so a
+                // previously-rendered section cannot remain visible.
+                document.querySelectorAll('.admin-view, .admin-section, .content-section, .view-pane, [data-view-pane]').forEach(function(el) {
+                    if (el.id !== viewId) {
+                        el.classList.add('d-none');
+                        el.style.display = 'none';
+                    }
+                });
+
+                // 3. Show the requested existing view cleanly.
+                const target = document.getElementById(viewId);
+                if (target) {
+                    target.classList.remove('d-none');
+                    target.style.display = 'block';
+                } else {
+                    console.error('Target view not found:', viewId);
+                    return false;
+                }
+
+                // 4. Close Bootstrap offcanvas/backdrop safely.
+                const offcanvasEl = document.querySelector('.offcanvas.show');
+                if (offcanvasEl && typeof bootstrap !== 'undefined') {
+                    const inst = bootstrap.Offcanvas.getInstance(offcanvasEl);
+                    if (inst) inst.hide();
+                }
+                if (typeof closeSidebarMobile === 'function') {
+                    closeSidebarMobile();
+                }
+
+                // Keep sidebar active state synchronized.
+                document.querySelectorAll('.sidebar .submenu a, .sidebar .menu-item > a').forEach(function(el) {
+                    el.classList.remove('active');
+                });
+                if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+                return true;
+            } catch (navigationError) {
+                console.error('[Admin Navigation] showSection failed:', navigationError);
+                return false;
             }
         };
+
 
         function updateLanguage(lang) {
             document.documentElement.lang = lang;
