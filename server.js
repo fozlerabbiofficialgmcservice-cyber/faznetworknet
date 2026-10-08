@@ -58,6 +58,7 @@ app.get("/portal",(req,res)=>res.render("portal",{title:"FAZ NETWORK Hotspot Por
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected}));
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
 app.get("/dashboard",requireAdmin,(req,res)=>res.redirect("/admin"));
+app.get("/hotspot/webhook",requireAdmin,(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
 
 app.get("/",async (req,res)=>{
   try{
