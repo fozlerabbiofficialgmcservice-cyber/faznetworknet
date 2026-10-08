@@ -2179,7 +2179,9 @@ async function deletePlan(id,name){
             const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
             const expiryRaw = String(user?.expiry_date || '').slice(0, 10);
             const expired = /^\d{4}-\d{2}-\d{2}$/.test(expiryRaw) && Date.now() > new Date(expiryRaw + 'T23:59:59.999+06:00').getTime();
-            return billingStatus === 'paid' && /^\d{4}-\d{2}-\d{2}$/.test(paidUntil) && paidUntil >= today && !Boolean(user?.disabled) && !expired;
+            const accountState = String(user?.status || '').trim().toLowerCase();
+            const suspended = Boolean(user?.disabled) || ['expired','suspended','disabled','left','terminated','due'].includes(accountState);
+            return billingStatus === 'paid' && /^\d{4}-\d{2}-\d{2}$/.test(paidUntil) && paidUntil >= today && !suspended && !expired;
         }
 
         function filterCustomerRows(query) {
