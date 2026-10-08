@@ -3,14 +3,14 @@ const path = require("path");
 const db = require("../db");
 
 async function initializeDatabase() {
-  if (!db.isConfigured()) {
-    console.warn("[Database] Skipping schema initialization because DATABASE_URL is not configured.");
-    return { skipped: true };
+  const connected = await db.testConnection();
+  if (!connected) {
+    console.warn("[Database] Schema initialization skipped because PostgreSQL is unavailable.");
+    return { skipped: true, connected: false };
   }
   const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
   await db.query(schema);
   console.log("[Database] Schema initialized.");
-  return { skipped: false };
+  return { skipped: false, connected: true };
 }
-
 module.exports = { initializeDatabase };
