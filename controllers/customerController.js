@@ -1,6 +1,35 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
+async function safePasswordMatch(password, plainPassword, passwordHash) {
+  const input = String(password ?? "");
+  const plain = String(plainPassword ?? "");
+  if (plain && plain === input) return true;
+  const hash = String(passwordHash ?? "");
+  if (!hash) return false;
+  try {
+    const bcrypt = require("bcryptjs");
+    return await bcrypt.compare(input, hash);
+  } catch (error) {
+    console.warn("[CUSTOMER AUTH] bcrypt comparison unavailable:", error.message);
+    return false;
+  }
+}
+
+async function withTimeout(task, timeoutMs = 2500) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(task),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Operation timed out")), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
 }
@@ -339,7 +368,7 @@ async function publicCustomerCheck(req,res){
 async function publicCustomerLogin(req,res){
   try{
     const identifier=clean(req.body?.identifier,120);
-    const password=String(req.body?.password??"");
+    const password=String(req.body?.password??"").trim();
     if(!identifier||!password){
       return res.status(400).json({success:false,message:"Username/Phone and password are required."});
     }
@@ -355,21 +384,43 @@ async function publicCustomerLogin(req,res){
       console.warn("[Public Customer Login DB warning]:",error.message);
     }
 
+    // Authenticate against PostgreSQL first. Support both existing plaintext passwords
+    // and bcrypt hashes without making MikroTik availability a prerequisite.
+    let authenticated=await safePasswordMatch(password,dbUser?.password,dbUser?.password_hash);
+
+    // If DB authentication did not succeed, fall back to the RouterOS PPP secret.
+    // This is also isolated from the request so a slow router cannot crash the login.
     let mtSecret=null;
     const candidateUsername=dbUser?.username||identifier;
-    try{
-      mtSecret=await mikrotikService.getPppoeSecret(candidateUsername);
-    }catch(error){
-      console.warn("[Public Customer Login MikroTik warning]:",error.message);
+    if(!authenticated){
+      try{
+        mtSecret=await withTimeout(
+          ()=>mikrotikService.getPppoeSecret(candidateUsername),
+          2500
+        );
+        authenticated=await safePasswordMatch(password,mtSecret?.password,mtSecret?.password_hash);
+      }catch(error){
+        console.warn("[Public Customer Login MikroTik auth warning]:",error.message);
+      }
     }
 
-    if(!dbUser&&!mtSecret){
-      return res.status(401).json({success:false,message:"Invalid Username/Phone or Password"});
+    if(!authenticated){
+      return res.status(401).json({
+        success:false,
+        message:dbUser||mtSecret ? "Incorrect password" : "User not found"
+      });
     }
 
-    const storedPassword=String(mtSecret?.password??dbUser?.password??"");
-    if(!storedPassword || storedPassword!==password){
-      return res.status(401).json({success:false,message:"Invalid Username/Phone or Password"});
+    // Profile enrichment is best-effort. Authentication has already succeeded.
+    if(!mtSecret){
+      try{
+        mtSecret=await withTimeout(
+          ()=>mikrotikService.getPppoeSecret(candidateUsername),
+          2500
+        );
+      }catch(error){
+        console.warn("[Public Customer Login MikroTik profile warning]:",error.message);
+      }
     }
 
     const comment=String(mtSecret?.comment||"");
@@ -380,9 +431,14 @@ async function publicCustomerLogin(req,res){
     const today=bangladeshToday();
     const remainingDays=expiration?Math.max(0,Math.ceil((Date.parse(expiration+"T00:00:00Z")-Date.parse(today+"T00:00:00Z"))/86400000)):null;
 
+    // Live-session data is explicitly non-critical. A slow/unavailable router
+    // simply leaves the customer as Offline instead of failing the login.
     let online=false,liveIp="",uptime="";
     try{
-      const sessions=await mikrotikService.getActiveSessions();
+      const sessions=await withTimeout(
+        ()=>mikrotikService.getActiveSessions(),
+        2000
+      );
       const target=String(mtSecret?.name||dbUser?.username||candidateUsername).toLowerCase();
       const session=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").toLowerCase()===target);
       online=Boolean(session);
