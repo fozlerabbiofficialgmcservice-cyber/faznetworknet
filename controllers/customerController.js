@@ -177,7 +177,7 @@ async function createCustomer(req, res) {
 async function getCustomer(req, res) {
   try {
     const id = clean(req.params.id, 50);
-    const result = await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1", [id]);
+    const result = await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1", [id]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: "Customer not found." });
     return res.json({ success: true, customer: result.rows[0] });
   } catch (error) { return errorResponse(res, error); }
@@ -210,9 +210,10 @@ async function updateCustomer(req, res) {
   try {
     const current = await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1", [id]);
     if (!current.rows.length) return res.status(404).json({ success:false, message:"Customer not found." });
-    const duplicate = await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1", [id, customer.username, customer.phone]);
+    const customerId = current.rows[0].id;
+    const duplicate = await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1", [customerId, customer.username, customer.phone]);
     if (duplicate.rows.length) return res.status(409).json({ success:false, message:"Another customer already uses this username or phone number." });
-    const result = await db.query("UPDATE customers SET full_name=$1, phone=$2, connection_date=$3, username=$4, password=$5, package_name=$6, profile=$7, monthly_bill=$8, nid=$9, installation_address=$10, fiber_box=$11, onu_mac=$12, remarks=$13, expiration_date=$14, updated_at=NOW() WHERE id=$15 RETURNING *", [customer.fullName,customer.phone,customer.connectionDate,customer.username,customer.password,customer.packageName,customer.profile,customer.monthlyBill,customer.nid||null,customer.installationAddress||null,customer.fiberBox||null,customer.onuMac||null,customer.remarks||null,customer.expirationDate,id]);
+    const result = await db.query("UPDATE customers SET full_name=$1, phone=$2, connection_date=$3, username=$4, password=$5, package_name=$6, profile=$7, monthly_bill=$8, nid=$9, installation_address=$10, fiber_box=$11, onu_mac=$12, remarks=$13, expiration_date=$14, updated_at=NOW() WHERE id=$15 RETURNING *", [customer.fullName,customer.phone,customer.connectionDate,customer.username,customer.password,customer.packageName,customer.profile,customer.monthlyBill,customer.nid||null,customer.installationAddress||null,customer.fiberBox||null,customer.onuMac||null,customer.remarks||null,customer.expirationDate,customerId]);
     const comment = buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks);
     const expired = dateStatus(customer.expirationDate) === "expired";
     let provisioning = "pending";
@@ -220,7 +221,7 @@ async function updateCustomer(req, res) {
       if (await mikrotikService.testConnection()) {
         await mikrotikService.updateSecret(customer.username, { password: customer.password, profile: customer.effectiveProfile, callerId: "", comment, disabled: expired });
         provisioning = "provisioned";
-        await db.query("UPDATE customers SET provisioning_status='provisioned', router_id=$1, status=$2, updated_at=NOW() WHERE id=$3", [String(process.env.ROUTER_HOST||""),dateStatus(customer.expirationDate),id]);
+        await db.query("UPDATE customers SET provisioning_status='provisioned', router_id=$1, status=$2, updated_at=NOW() WHERE id=$3", [String(process.env.ROUTER_HOST||""),dateStatus(customer.expirationDate),customerId]);
         await db.query("INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,synced_at,updated_at) VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,NOW(),NOW()) ON CONFLICT (username) DO UPDATE SET password=EXCLUDED.password, profile=EXCLUDED.profile, disabled=EXCLUDED.disabled, comment=EXCLUDED.comment, phone=EXCLUDED.phone, router_id=EXCLUDED.router_id, expiry_date=EXCLUDED.expiry_date, status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()", [customer.username,customer.password,customer.effectiveProfile,expired,comment,customer.phone,String(process.env.ROUTER_HOST||""),customer.expirationDate,dateStatus(customer.expirationDate)]);
       }
     } catch (routerError) { console.warn("[CUSTOMER UPDATE] MikroTik provisioning deferred:", routerError.message); provisioning="failed"; }
