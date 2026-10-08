@@ -2604,7 +2604,11 @@ async function deletePlan(id,name){
             filterCustomerRows(document.getElementById('customerLiveSearch')?.value||'');
         }
         function renderCustomerTable(users) {
-            const sourceUsers = Array.isArray(users) ? users : [];
+            const sourceUsers = (Array.isArray(users) ? users : []).slice().sort(function(a, b) {
+                const dateA = new Date(a?.created_at || a?.customer_created_at || 0).getTime();
+                const dateB = new Date(b?.created_at || b?.customer_created_at || 0).getTime();
+                return dateB - dateA || (Number(b?.id || b?.customer_id || 0) - Number(a?.id || a?.customer_id || 0));
+            });
             const deletedIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
             const deletedUsernames = window.__deletedCustomerUsernames instanceof Set ? window.__deletedCustomerUsernames : new Set();
             const visibleUsers = sourceUsers.filter(function(user) {
