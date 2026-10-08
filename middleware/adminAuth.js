@@ -33,7 +33,7 @@ function createToken(username){
 function verifyToken(token){
   if(!token||!secret()) return null;
   const [payload,signature]=String(token).split(".");
-  if(!payload||!signature||!crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(sign(payload)))) return null;
+  if(!payload||!signature) return null;\n  const expected=sign(payload);\n  const actualBuffer=Buffer.from(signature);\n  const expectedBuffer=Buffer.from(expected);\n  if(actualBuffer.length!==expectedBuffer.length||!crypto.timingSafeEqual(actualBuffer,expectedBuffer)) return null;
   try{
     const data=JSON.parse(Buffer.from(payload,"base64url").toString("utf8"));
     return data&&data.exp>Math.floor(Date.now()/1000)?data:null;
