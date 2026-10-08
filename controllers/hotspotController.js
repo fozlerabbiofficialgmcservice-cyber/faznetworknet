@@ -2,7 +2,7 @@ const crypto=require("crypto");const db=require("../db");const mikrotikService=r
 function clean(v,max=255){return String(v??"").trim().slice(0,max)}
 function errorResponse(res,e){console.error("[Hotspot API]",e);const message=e?.message||"Hotspot operation failed.";return res.status(e?.statusCode||503).json({success:false,users:[],profiles:[],message,error:message});}
 function randomPin(length=8){return crypto.randomBytes(Math.ceil(length*1.5)).toString("base64url").replace(/[^A-Za-z0-9]/g,"").slice(0,length).toUpperCase();}
-function normalizeFilter(value){const filter=String(value||"all").trim().toLowerCase();return ["all","active","online"].includes(filter)?filter:"all";}
+function normalizeFilter(value){const filter=String(value||"all").trim().toLowerCase();return ["all","active"].includes(filter)?filter:"all";}
 function validityMs(value){const m=String(value||"").trim().match(/^(\\d+(?:\\.\\d+)?)\\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$/i);if(!m)return 0;const n=Number(m[1]),u=m[2].toLowerCase();const unit=u.startsWith("m")?60000:u.startsWith("h")?3600000:u.startsWith("w")?604800000:86400000;return n*unit;}
 function voucherValidUntil(createdAt,validity){const ms=validityMs(validity);return ms?new Date(new Date(createdAt).getTime()+ms):null;}
 async function page(req,res){res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"});}
@@ -58,7 +58,7 @@ async function deleteProfile(req,res){
 async function serverProfiles(req,res){try{const data=await mikrotikService.getHotspotServerProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
 async function list(req,res){try{
  const filter=normalizeFilter(req.query.filter);
- const needSessions=filter==="online"||filter==="active";
+ const needSessions=filter==="active";
  const [dbRows,mikrotikUsers,sessions]=await Promise.all([
    db.query("SELECT * FROM hotspot_vouchers ORDER BY created_at DESC LIMIT 5000"),
    mikrotikService.getHotspotUsers(),
@@ -81,9 +81,27 @@ async function list(req,res){try{
    return {id:v.id||null,username,password:v.password||mt?.password||"",profile:v.profile||mt?.profile||"",validity:v.validity||mt?.validity||"",price:Number(v.price||mt?.price||0),status:v.status||((mt&&!mt.disabled)?"active":"unused"),comment:v.comment||mt?.comment||"",created_at:v.created_at||null,mikrotik:mt,online,valid_until:validUntil?validUntil.toISOString():null,active:(v.status!=="expired"&&(dbValid||mtValid))};
  });
  if(filter==="active") vouchers=vouchers.filter(v=>v.active);
- if(filter==="online") vouchers=customerSessions.map(s=>({id:s.id,username:s.username,password:mtMap.get(s.username)?.password||"",profile:s.profile||mtMap.get(s.username)?.profile||"",validity:mtMap.get(s.username)?.validity||"",price:Number(mtMap.get(s.username)?.price||0),status:"active",comment:"Live MikroTik session",created_at:null,online:s,active:true,address:s.address,mac_address:s.macAddress,uptime:s.uptime,bytes_in:s.bytesIn,bytes_out:s.bytesOut,session_time_left:s.sessionTimeLeft}));
  res.json({success:true,filter,count:vouchers.length,users:vouchers,sessions:customerSessions});
-}catch(e){return errorResponse(res,e);}}async function active(req,res){req.query.filter="online";return list(req,res);}
+}catch(e){return errorResponse(res,e);}}async function active(req,res){
+ try{
+  const sessions=await mikrotikService.getActiveHotspotSessions();
+  const users=sessions.filter(s=>{
+   const username=String(s.username||"").trim().toLowerCase();
+   const profile=String(s.profile||"").trim().toLowerCase();
+   return Boolean(username&&username!=="default-trial"&&profile!=="default-trial");
+  }).map(s=>({
+   id:s.id,
+   username:s.username,
+   address:s.address,
+   mac_address:s.macAddress,
+   uptime:s.uptime,
+   bytes_in:s.bytesIn,
+   bytes_out:s.bytesOut,
+   session_time_left:s.sessionTimeLeft
+  }));
+  return res.json({success:true,filter:"active",count:users.length,users,sessions});
+ }catch(e){return errorResponse(res,e);}
+}
 async function generate(req,res){try{
  const quantity=Math.min(Math.max(Number(req.body.quantity)||0,1),500);
  const profile=clean(req.body.profile,100),validity=clean(req.body.validity,50),price=Number(req.body.price);
