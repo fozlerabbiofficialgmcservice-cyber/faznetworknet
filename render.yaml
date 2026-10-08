@@ -19,3 +19,9 @@ services:
         sync: false
       - key: MACRODROID_WEBHOOK_KEY
         sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: ADMIN_SESSION_SECRET
+        sync: false
