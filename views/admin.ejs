@@ -1803,6 +1803,7 @@
                     <div class="btn-group btn-group-sm customer-action-group">
                         <button class="btn btn-outline-danger" title="${escapeHtml(t.kick)}" onclick="kickCustomerFromSection('${safeUsername}')"><i class="bi bi-power"></i></button>
                         <button class="btn btn-outline-success" title="${escapeHtml(toggleLabel)}" onclick="toggleCustomerFromSection('${safeUsername}', ${!disabled})"><i class="bi ${toggleIcon}"></i></button>
+                        <button class="btn btn-outline-primary" title="Edit" onclick="editCustomer('${safeUsername}')"><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-outline-secondary" title="${escapeHtml(t.view)}" onclick="viewCustomerDetails('${safeUsername}')"><i class="bi bi-eye"></i></button>
                     </div>
                 </td>
