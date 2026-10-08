@@ -64,14 +64,12 @@ function buildHotspotOnLoginScript(config) {
 
   // Use one persistent scheduler per username. Re-login updates the existing
   // scheduler instead of silently retaining an old expiry interval.
-  const event = ':local n "' + '$u' + '"; /ip hotspot active remove [find where user=$n]; /ip hotspot user disable [find where name=$n]; /system scheduler remove [find where name=("faz-exp-" . $n)];';
   return prefix +
     " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };" +
     ' :local sched ("faz-exp-" . $u);' +
-    ' :local event (":local n \\"" . $u . "\\"; /ip hotspot active remove [find where user=\\$n]; /ip hotspot user disable [find where name=\\$n]; /system scheduler remove [find where name=(\\\"faz-exp-\\\" . \\$n)];");' +
     ' :local oldSched [/system scheduler find where name=$sched];' +
     ' :if ([:len $oldSched] > 0) do={ /system scheduler remove $oldSched; };' +
-    ' /system scheduler add name=$sched interval=' + validity.validity + ' start-time=startup on-event=$event;';
+    ' /system scheduler add name=$sched interval=' + validity.validity + ' start-time=startup on-event=(\"/ip hotspot active remove [find where user=\\\"\" . $u . \"\\\"]; /ip hotspot user disable [find where name=\\\"\" . $u . \"\\\"]; /system scheduler remove [find where name=\\\"faz-exp-\" . $u . \"\\\"];\");';
 }
 
 module.exports = { normalizeProfileValidity, parseStoredValidity, buildHotspotOnLoginScript };
