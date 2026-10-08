@@ -683,6 +683,16 @@
     </div>
 
     <script>
+        // Defensive UI reset: a stale Bootstrap backdrop must never own the click layer.
+        try {
+            document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop, .sidebar-backdrop').forEach(el => el.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+        } catch (error) {
+            console.warn('[Admin Boot] backdrop cleanup failed:', error);
+        }
+
         window.jsonFetch = async function(url, options = {}) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 5000);
@@ -1977,6 +1987,8 @@ async function deletePlan(id,name){
         let trafficChart = null;
         let trafficTimer = null;
         let metricsTimer = null;
+        let trafficPollInFlight = false;
+        let metricsPollInFlight = false;
 
         function switchView(viewName, channel = '') {
             purgeStuckBackdrops();
@@ -2539,7 +2551,6 @@ async function deletePlan(id,name){
             hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for one calendar month?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
-        }
         if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initializeCustomerHub,{once:true});else initializeCustomerHub();
         window.openCustomerProfile=openCustomerProfile;
 
@@ -2978,8 +2989,10 @@ async function deletePlan(id,name){
         }
 
         async function pollTraffic() {
+            if (trafficPollInFlight) return;
             const select = document.getElementById('dashboardInterface');
             if (!select || !select.value) return;
+            trafficPollInFlight = true;
             try {
                 const data = await jsonFetch('/api/router/traffic?interface=' + encodeURIComponent(select.value));
                 const t = data.traffic || data;
@@ -3001,14 +3014,18 @@ async function deletePlan(id,name){
                     trafficChart.data.datasets.forEach(d => d.data.shift());
                 }
                 trafficChart.update('none');
-            } catch (error) { console.error('[Traffic]', error); }
+            } catch (error) {
+                console.error('[Traffic]', error);
+            } finally {
+                trafficPollInFlight = false;
+            }
         }
 
         function startTrafficPolling() {
             if (trafficTimer) clearInterval(trafficTimer);
-            loadInterfaces();
-            pollTraffic();
-            trafficTimer = setInterval(pollTraffic, 2500);
+            void loadInterfaces();
+            void pollTraffic();
+            trafficTimer = setInterval(() => { void pollTraffic(); }, 5000);
         }
 
         async function safeAdminBootStep(label, task) {
@@ -3050,23 +3067,26 @@ async function deletePlan(id,name){
             try {
                 if (metricsTimer) clearInterval(metricsTimer);
                 metricsTimer = setInterval(() => {
-                    try { void safeAdminBootStep('router metrics', () => loadRouterMetrics()); }
-                    catch (error) { console.error('[Admin Poll] router metrics failed:', error); }
-                    try {
-                        if (document.getElementById('view-dashboard')?.style.display !== 'none') {
-                            void safeAdminBootStep('dashboard refresh', () => refreshDashboard());
+                    if (metricsPollInFlight) return;
+                    metricsPollInFlight = true;
+                    (async () => {
+                        try {
+                            await safeAdminBootStep('router metrics', () => loadRouterMetrics());
+                            if (document.getElementById('view-dashboard')?.style.display !== 'none') {
+                                await safeAdminBootStep('dashboard refresh', () => refreshDashboard());
+                            }
+                            if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) {
+                                await safeAdminBootStep('hotspot metrics', () => refreshHotspotDashboardMetrics());
+                            }
+                            if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) {
+                                await safeAdminBootStep('payment refresh', () => fetchPaymentsSection());
+                            }
+                        } catch (error) {
+                            console.error('[Admin Poll] metrics cycle failed:', error);
+                        } finally {
+                            metricsPollInFlight = false;
                         }
-                    } catch (error) { console.error('[Admin Poll] dashboard refresh failed:', error); }
-                    try {
-                        if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) {
-                            void safeAdminBootStep('hotspot metrics', () => refreshHotspotDashboardMetrics());
-                        }
-                    } catch (error) { console.error('[Admin Poll] hotspot metrics failed:', error); }
-                    try {
-                        if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) {
-                            void safeAdminBootStep('payment refresh', () => fetchPaymentsSection());
-                        }
-                    } catch (error) { console.error('[Admin Poll] payment refresh failed:', error); }
+                    })();
                 }, 5000);
             } catch (error) {
                 console.error('[Admin Boot] metrics timer failed:', error);
