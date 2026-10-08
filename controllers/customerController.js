@@ -577,4 +577,4 @@ async function updateCustomer(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, markPaid, renew, removeCustomer };
+module.exports = { packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer };
