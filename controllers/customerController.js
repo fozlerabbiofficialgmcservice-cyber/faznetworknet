@@ -174,4 +174,58 @@ async function createCustomer(req, res) {
   }
 }
 
-module.exports = { packages, createCustomer };
+async function getCustomer(req, res) {
+  try {
+    const id = clean(req.params.id, 50);
+    const result = await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1", [id]);
+    if (!result.rows.length) return res.status(404).json({ success: false, message: "Customer not found." });
+    return res.json({ success: true, customer: result.rows[0] });
+  } catch (error) { return errorResponse(res, error); }
+}
+
+async function updateCustomer(req, res) {
+  const body = req.body || {};
+  const id = clean(req.params.id, 50);
+  const customer = {
+    fullName: clean(body.fullName || body.name, 200),
+    phone: clean(body.phone, 40),
+    connectionDate: normalizeDate(body.connectionDate || body.activationDate),
+    activationDate: normalizeDate(body.activationDate || body.connectionDate),
+    expirationDate: normalizeDate(body.expirationDate),
+    username: clean(body.username, 100),
+    password: clean(body.password, 255),
+    packageName: clean(body.package || body.packageName || body.profile, 100),
+    profile: clean(body.packageProfile || body.profile || body.package || body.packageName, 100),
+    monthlyBill: normalizeBill(body.bill ?? body.monthlyBill),
+    nid: clean(body.nid, 100),
+    installationAddress: clean(body.installationAddress || body.address, 500),
+    fiberBox: clean(body.fiberBox, 150),
+    onuMac: clean(body.onuMac, 100),
+    remarks: clean(body.remarks || body.note, 1000)
+  };
+  customer.effectiveProfile = effectiveProfile(customer.profile, customer.expirationDate);
+  if (!id || !customer.fullName || !customer.phone || !customer.activationDate || !customer.expirationDate || !customer.username || !customer.password || !customer.packageName || !customer.profile || customer.monthlyBill === null) {
+    return res.status(400).json({ success:false, message:"Name, phone, activation date, expiration date, username, password, package, and bill are required." });
+  }
+  try {
+    const current = await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1", [id]);
+    if (!current.rows.length) return res.status(404).json({ success:false, message:"Customer not found." });
+    const duplicate = await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1", [id, customer.username, customer.phone]);
+    if (duplicate.rows.length) return res.status(409).json({ success:false, message:"Another customer already uses this username or phone number." });
+    const result = await db.query("UPDATE customers SET full_name=$1, phone=$2, connection_date=$3, username=$4, password=$5, package_name=$6, profile=$7, monthly_bill=$8, nid=$9, installation_address=$10, fiber_box=$11, onu_mac=$12, remarks=$13, expiration_date=$14, updated_at=NOW() WHERE id=$15 RETURNING *", [customer.fullName,customer.phone,customer.connectionDate,customer.username,customer.password,customer.packageName,customer.profile,customer.monthlyBill,customer.nid||null,customer.installationAddress||null,customer.fiberBox||null,customer.onuMac||null,customer.remarks||null,customer.expirationDate,id]);
+    const comment = buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks);
+    const expired = dateStatus(customer.expirationDate) === "expired";
+    let provisioning = "pending";
+    try {
+      if (await mikrotikService.testConnection()) {
+        await mikrotikService.updateSecret(customer.username, { password: customer.password, profile: customer.effectiveProfile, callerId: "", comment, disabled: expired });
+        provisioning = "provisioned";
+        await db.query("UPDATE customers SET provisioning_status='provisioned', router_id=$1, status=$2, updated_at=NOW() WHERE id=$3", [String(process.env.ROUTER_HOST||""),dateStatus(customer.expirationDate),id]);
+        await db.query("INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,synced_at,updated_at) VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,NOW(),NOW()) ON CONFLICT (username) DO UPDATE SET password=EXCLUDED.password, profile=EXCLUDED.profile, disabled=EXCLUDED.disabled, comment=EXCLUDED.comment, phone=EXCLUDED.phone, router_id=EXCLUDED.router_id, expiry_date=EXCLUDED.expiry_date, status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()", [customer.username,customer.password,customer.effectiveProfile,expired,comment,customer.phone,String(process.env.ROUTER_HOST||""),customer.expirationDate,dateStatus(customer.expirationDate)]);
+      }
+    } catch (routerError) { console.warn("[CUSTOMER UPDATE] MikroTik provisioning deferred:", routerError.message); provisioning="failed"; }
+    return res.json({success:true,message:provisioning==="provisioned"?"Customer updated successfully":"Customer updated successfully; MikroTik update is pending.",customer:{...result.rows[0],effective_profile:customer.effectiveProfile,status:dateStatus(customer.expirationDate),provisioningStatus:provisioning}});
+  } catch(error) { return errorResponse(res,error); }
+}
+
+module.exports = { packages, createCustomer, getCustomer, updateCustomer };
