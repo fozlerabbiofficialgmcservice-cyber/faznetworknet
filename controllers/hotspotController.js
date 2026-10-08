@@ -56,50 +56,52 @@ async function deleteProfile(req,res){
  }catch(e){return errorResponse(res,e);}
 }
 async function serverProfiles(req,res){try{const data=await mikrotikService.getHotspotServerProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
-async function list(req,res){try{
- const filter=normalizeFilter(req.query.filter);
- const needSessions=filter==="active";
- const [dbRows,mikrotikUsers,sessions]=await Promise.all([
-   db.query("SELECT * FROM hotspot_vouchers ORDER BY created_at DESC LIMIT 5000"),
-   mikrotikService.getHotspotUsers(),
-   needSessions?mikrotikService.getActiveHotspotSessions():Promise.resolve([])
- ]);
- const isExplicitCustomer=function(user){
-   const username=String(user?.username||user?.name||"").trim().toLowerCase();
-   const profile=String(user?.profile||"").trim().toLowerCase();
-   return Boolean(username&&username!=="default-trial"&&profile&&profile!=="default-trial");
- };
- const customerMikrotikUsers=mikrotikUsers.filter(isExplicitCustomer);
- const customerSessions=sessions.filter(isExplicitCustomer);
- const mtMap=new Map(customerMikrotikUsers.map(u=>[u.username,u]));
- const onlineMap=new Map(customerSessions.map(s=>[s.username,s]));
- const dbMap=new Map(dbRows.rows.filter(isExplicitCustomer).map(v=>[v.username,v]));
- const allNames=new Set([...dbMap.keys(),...mtMap.keys()]);
- let vouchers=[...allNames].map(username=>{
-   const v=dbMap.get(username)||{},mt=mtMap.get(username)||null,validUntil=v.created_at?voucherValidUntil(v.created_at,v.validity):null,online=onlineMap.get(username)||null;
-   const dbValid=Boolean(validUntil&&validUntil.getTime()>Date.now()),mtValid=Boolean(online||mt);
-   return {id:v.id||null,username,password:v.password||mt?.password||"",profile:v.profile||mt?.profile||"",validity:v.validity||mt?.validity||"",price:Number(v.price||mt?.price||0),status:v.status||((mt&&!mt.disabled)?"active":"unused"),comment:v.comment||mt?.comment||"",created_at:v.created_at||null,mikrotik:mt,online,valid_until:validUntil?validUntil.toISOString():null,active:(v.status!=="expired"&&(dbValid||mtValid))};
- });
- if(filter==="active") vouchers=vouchers.filter(v=>v.active);
- res.json({success:true,filter,count:vouchers.length,users:vouchers,sessions:customerSessions});
-}catch(e){return errorResponse(res,e);}}async function active(req,res){
+async function list(req,res){
+ try{
+  const rows=await mikrotikService.getHotspotUsers();
+  const users=(Array.isArray(rows)?rows:[]).filter(user=>{
+    const name=String(user?.username||"").trim().toLowerCase();
+    return name&&name!=="default-trial";
+  }).map(user=>({
+    id:user.id,
+    name:user.username,
+    profile:user.profile||"",
+    uptime:user.uptime||"",
+    limitUptime:user.limitUptime||"",
+    bytesIn:Number(user.bytesIn||0),
+    bytesOut:Number(user.bytesOut||0),
+    comment:user.comment||"",
+    disabled:Boolean(user.disabled)
+  }));
+  return res.json({success:true,filter:"all",count:users.length,users});
+ }catch(e){return errorResponse(res,e);}
+}
+async function active(req,res){
  try{
   const sessions=await mikrotikService.getActiveHotspotSessions();
-  const users=sessions.filter(s=>{
-   const username=String(s.username||"").trim().toLowerCase();
-   const profile=String(s.profile||"").trim().toLowerCase();
-   return Boolean(username&&username!=="default-trial"&&profile!=="default-trial");
+  const users=(Array.isArray(sessions)?sessions:[]).filter(s=>{
+    const name=String(s?.username||"").trim().toLowerCase();
+    return name&&name!=="default-trial";
   }).map(s=>({
-   id:s.id,
-   username:s.username,
-   address:s.address,
-   mac_address:s.macAddress,
-   uptime:s.uptime,
-   bytes_in:s.bytesIn,
-   bytes_out:s.bytesOut,
-   session_time_left:s.sessionTimeLeft
+    id:s.id,
+    user:s.username,
+    address:s.address||"",
+    macAddress:s.macAddress||"",
+    uptime:s.uptime||"",
+    sessionTimeLeft:s.sessionTimeLeft||"",
+    idleTime:s.idleTime||"",
+    bytesIn:Number(s.bytesIn||0),
+    bytesOut:Number(s.bytesOut||0)
   }));
-  return res.json({success:true,filter:"active",count:users.length,users,sessions});
+  return res.json({success:true,filter:"active",count:users.length,users});
+ }catch(e){return errorResponse(res,e);}
+}
+async function disconnectActive(req,res){
+ try{
+  const id=clean(req.body.id,100);
+  if(!id)return res.status(400).json({success:false,error:"Active session id is required."});
+  const result=await mikrotikService.kickActiveHotspotUser("",id);
+  return res.json({success:true,...result});
  }catch(e){return errorResponse(res,e);}
 }
 async function generate(req,res){try{
@@ -195,4 +197,4 @@ async function remove(req,res){try{
  await db.query("UPDATE hotspot_vouchers SET status='expired' WHERE username=$1",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
-module.exports={page,profiles,createProfile,updateProfile,deleteProfile,serverProfiles,list,active,generate,createUser,dashboardMetrics,kick,remove};
+module.exports={page,profiles,createProfile,updateProfile,deleteProfile,serverProfiles,list,active,disconnectActive,generate,createUser,dashboardMetrics,kick,remove};
