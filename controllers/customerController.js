@@ -215,6 +215,7 @@ async function updateCustomer(req, res) {
     const current = await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1", [id]);
     if (!current.rows.length) return res.status(404).json({ success:false, message:"Customer not found." });
     const customerId = current.rows[0].id;
+    if (String(current.rows[0].username).toLowerCase() !== customer.username.toLowerCase()) return res.status(400).json({ success:false, message:"PPPoE username cannot be changed from the customer editor." });
     const duplicate = await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1", [customerId, customer.username, customer.phone]);
     if (duplicate.rows.length) return res.status(409).json({ success:false, message:"Another customer already uses this username or phone number." });
     const result = await db.query("UPDATE customers SET full_name=$1, phone=$2, connection_date=$3, username=$4, password=$5, package_name=$6, profile=$7, monthly_bill=$8, nid=$9, installation_address=$10, fiber_box=$11, onu_mac=$12, remarks=$13, expiration_date=$14, updated_at=NOW() WHERE id=$15 RETURNING *", [customer.fullName,customer.phone,customer.connectionDate,customer.username,customer.password,customer.packageName,customer.profile,customer.monthlyBill,customer.nid||null,customer.installationAddress||null,customer.fiberBox||null,customer.onuMac||null,customer.remarks||null,customer.expirationDate,customerId]);
