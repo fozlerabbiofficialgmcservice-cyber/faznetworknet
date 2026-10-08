@@ -44,6 +44,18 @@ async function webhook(req,res){
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
  }catch(error){return errorResponse(res,error,400);}
 }
+async function dynamicWebhook(req,res,next){
+ try{
+  const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_url')");
+  const url=String(configured.rows.find(row=>row.key==="personal_payment_webhook_url")?.value||"").trim();
+  if(!url)return next();
+  let configuredPath=url;
+  try{configuredPath=new URL(url, "http://faznetwork.local").pathname;}catch(_){return next();}
+  if(!configuredPath.startsWith("/"))configuredPath="/"+configuredPath;
+  if(req.path!==configuredPath)return next();
+  return webhook(req,res);
+ }catch(error){return errorResponse(res,error,503);}
+}
 async function list(req,res){
  try{
   const gateway=String(req.query.gateway||req.query.channel||"all").trim().toLowerCase();
@@ -122,4 +134,4 @@ async function verifyTrx(req,res){
  }catch(e){return errorResponse(res,e,503);}
 }
 
-module.exports={webhook,list,manualMatch,summary,verifyTrx};
+module.exports={webhook,dynamicWebhook,list,manualMatch,summary,verifyTrx};
