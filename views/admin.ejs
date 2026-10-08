@@ -1531,11 +1531,14 @@
                     nextPool:document.getElementById('ipPoolNext').value||'none'
                 };
                 if(!payload.name||!payload.localAddress||!payload.ranges)throw new Error('Pool Name, Local Address and Pool Range are required.');
-                const endpoint=currentIpPoolEdit?'/api/ip-pools/update':'/api/ip-pools';
-                await jsonFetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                const endpoint=currentIpPoolEdit?'/api/ip-pools/update':'/api/ip-pools/save';
+                const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                const data=await res.json().catch(()=>({}));
+                if(!res.ok||!data.success){alert('Operation Failed: '+(data.message||res.statusText||'Server error'));return;}
+                alert(data.message||'IP Pool saved and synchronized with MikroTik.');
                 const modal=bootstrap.Modal.getInstance(document.getElementById('ipPoolModal')); if(modal)modal.hide();
                 purgeStuckBackdrops(); currentIpPoolEdit=null; await loadIpPools();
-            }catch(error){alert(error.message);}finally{button.disabled=false;button.innerHTML=oldHtml;}
+            }catch(error){alert('Operation Failed: '+(error?.message||'Network error while saving IP Pool'));}finally{button.disabled=false;button.innerHTML=oldHtml;}
         }
 
         async function syncIpPoolsFromMikrotik(){
@@ -1691,14 +1694,15 @@
         }
 
 async function deletePlan(id,name){
-            if(!id)return;
-            if(!confirm('Delete plan "'+(name||'')+'"? This will also remove the matching MikroTik PPP profile.'))return;
+            if(!id&&!name)return;
+            if(!confirm('Are you sure you want to delete "'+(name||'')+'"?'))return;
             try{
-                const response=await fetch('/api/packages/'+encodeURIComponent(id),{method:'DELETE'});
-                const data=await response.json().catch(()=>({}));
-                if(!response.ok||data.success===false)throw new Error(data.message||'Failed to delete plan.');
-                await loadPlanPackages();
-            }catch(error){alert(error.message);}
+                const res=await fetch('/api/packages/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id||null,name:name||''})});
+                const data=await res.json().catch(()=>({}));
+                if(!res.ok||!data.success){alert('Delete Failed: '+(data.message||res.statusText||'Server error'));return;}
+                alert(data.message||('Plan "'+(name||'')+'" deleted successfully'));
+                if(typeof window.loadPlans==='function')await window.loadPlans();else await loadPlanPackages();
+            }catch(err){alert('Network error while deleting plan: '+(err?.message||'Unknown error'));}
         }
 
         async function syncPlansFromMikrotik(){
@@ -1944,7 +1948,7 @@ async function deletePlan(id,name){
                 const response = await fetch(url, options);
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || data.success === false) {
-                    const message = data.message || data.error || 'Request failed';
+                    const message = data.message || data.error || ((response.status || '') + ' ' + (response.statusText || 'Server error'));
                     if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message) && !adminDbConnected) {
                         await refreshAdminDbHealth();
                         if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
