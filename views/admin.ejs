@@ -1179,6 +1179,8 @@
             localStorage.setItem('faz_preferred_lang', lang);
         }
 
+        refreshAdminDbHealth();
+
         const langSelect = document.getElementById('langSelect');
         const savedLang = localStorage.getItem('faz_preferred_lang') || 'en';
         langSelect.value = savedLang;
@@ -1189,7 +1191,26 @@
             return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
         }
 
+        let adminDbConnected = <%= Boolean(typeof dbConnected !== 'undefined' && dbConnected) %>;
+
+        function hideAdminDbWarning() {
+            const toast = document.getElementById('adminDbWarningToast');
+            if (toast) toast.remove();
+            clearTimeout(window.__adminDbWarningTimer);
+        }
+
+        async function refreshAdminDbHealth() {
+            try {
+                const response = await fetch('/api/health/database', { cache: 'no-store' });
+                const data = await response.json().catch(() => ({}));
+                adminDbConnected = Boolean(response.ok && data.success && data.database?.connected);
+                if (adminDbConnected) hideAdminDbWarning();
+                return adminDbConnected;
+            } catch (_) { return false; }
+        }
+
         function showAdminDbWarning(message) {
+            if (adminDbConnected) { hideAdminDbWarning(); return; }
             const text = message || 'Database not connected. Please set DATABASE_URL in Render environment.';
             let toast = document.getElementById('adminDbWarningToast');
             if (!toast) {
@@ -1212,18 +1233,17 @@
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || data.success === false) {
                     const message = data.message || data.error || 'Request failed';
-                    if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message)) {
-                        showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
+                    if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(message) && !adminDbConnected) {
+                        await refreshAdminDbHealth();
+                        if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
                     }
                     throw new Error(message);
                 }
                 return data;
             } catch (error) {
-                if (/^\/api\/(hotspot|pppoe)\//.test(url)) {
-                    const message = /database|DATABASE_URL|database configuration|failed to fetch|networkerror/i.test(String(error?.message || ''))
-                        ? 'Database not connected. Please set DATABASE_URL in Render environment.'
-                        : (error?.message || 'Request failed');
-                    showAdminDbWarning(message);
+                if (/^\/api\/(hotspot|pppoe)\//.test(url) && /database|DATABASE_URL|database configuration/i.test(String(error?.message || '')) && !adminDbConnected) {
+                    await refreshAdminDbHealth();
+                    if (!adminDbConnected) showAdminDbWarning('Database not connected. Please set DATABASE_URL in Render environment.');
                 }
                 throw error;
             }
