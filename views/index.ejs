@@ -145,21 +145,28 @@ const dashboardBody = `
     const identifier=loginIdentifier?.value.trim()||'';
     const password=loginPassword?.value||'';
     if(!identifier||!password)return;
-    loginSubmit.disabled=true;loginSubmit.textContent='Signing in...';
+    loginSubmit.disabled=true;loginSubmit.innerHTML='<span class="inline-flex items-center justify-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span> Verifying...</span>';
     loginError?.classList.add('hidden');
     try{
       const response=await fetch('/api/public/customer-login',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({identifier,password})});
       const data=await response.json().catch(()=>({success:false,message:'Invalid server response.'}));
-      if(!response.ok||!data.success)throw new Error(data.message||'Invalid Username/Phone or Password');
+      if(!response.ok||!data.success){
+        const message=String(data.message||'Login failed. Please try again.');
+        throw new Error(message);
+      }
       const c=data.customer||{};
       const paid=String(c.billingStatus||'').toLowerCase()==='paid';
       const online=c.connectionStatus==='Online';
       const recharge=c.rechargeUrl
         ? '<a href="'+esc(c.rechargeUrl)+'" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700">Pay / Recharge Bill</a>'
         : '<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><strong>Recharge:</strong> Contact Helpline 01339932887 or use WhatsApp support for bKash/Nagad payment instructions.</div>';
-      if(loginPanel)loginPanel.classList.add('hidden');
+      if(loginPanel){
+        loginPanel.classList.add('opacity-0','translate-y-1','transition','duration-200');
+        setTimeout(()=>loginPanel.classList.add('hidden'),180);
+      }
       if(dashboardPanel){
-        dashboardPanel.classList.remove('hidden');
+        dashboardPanel.classList.remove('hidden','opacity-0');
+        dashboardPanel.classList.add('opacity-100','transition','duration-300');
         dashboardPanel.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-wide text-cyan-600">My Account</p><h4 class="mt-1 text-2xl font-black text-slate-900">'+esc(c.name||c.username)+'</h4><p class="text-sm font-mono text-slate-500">'+esc(c.username||'')+'</p></div><span class="rounded-full px-3 py-1 text-xs font-bold '+(online?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-600')+'">'+(online?'● Online':'● Offline')+'</span></div>'+
         '<div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">'+
         '<div class="rounded-xl bg-slate-50 p-4"><p class="text-xs text-slate-400">Registered Phone</p><p class="mt-1 font-bold text-slate-800">'+esc(c.phone||'-')+'</p></div>'+
