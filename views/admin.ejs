@@ -2086,6 +2086,14 @@ async function deletePlan(id,name){
                     return false;
                 }
 
+                // Dashboard and Add Customer are existing views inside #dynamicPageContent.
+                // The parent must be visible before the child can be revealed; otherwise
+                // the child remains effectively hidden even when its own display is "block".
+                if (dynamicContent && dynamicContent.contains(targetSec)) {
+                    dynamicContent.style.display = 'block';
+                    dynamicContent.classList.remove('d-none');
+                }
+
                 targetSec.style.display = 'block';
                 targetSec.classList.remove('d-none');
 
@@ -2095,6 +2103,11 @@ async function deletePlan(id,name){
                     el.classList.remove('active');
                 });
                 if (activeMenuEl) activeMenuEl.classList.add('active');
+
+                // Never leave the mobile sidebar/offcanvas overlay over the selected view.
+                if (window.innerWidth < 768 && typeof closeSidebarMobile === 'function') {
+                    closeSidebarMobile();
+                }
 
                 const pageTitle = document.getElementById('pageTitle') ||
                     document.querySelector('.main-header h1, .page-title, .breadcrumb-current');
