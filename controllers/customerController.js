@@ -568,8 +568,8 @@ async function updateCustomer(req,res){
     if(duplicate.rows.length)return res.status(409).json({success:false,message:"Another customer already uses this username or phone number."});
     const comment=buildExpirationComment(fullName,phone,expirationDate,remarks),expired=dateStatus(expirationDate)==="expired",effectiveDisabled=expired||disabled,previousUsername=clean(row.username,100);
     if(await mikrotikService.testConnection()){
-      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,comment,disabled:effectiveDisabled});
-      else await mikrotikService.updateSecret(username,{password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,comment,disabled:effectiveDisabled});
+      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,allowStaticRemoteAddress:Boolean(explicitRemoteAddress),comment,disabled:effectiveDisabled});
+      else await mikrotikService.updateSecret(username,{password,profile:effectiveProfile(profileName,expirationDate),remoteAddress,allowStaticRemoteAddress:Boolean(explicitRemoteAddress),comment,disabled:effectiveDisabled});
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,provisioning_status='provisioned',status=$20,updated_at=NOW() WHERE id=$21 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,billingStatus,expired?"expired":effectiveDisabled?"inactive":"active",row.id]);
@@ -632,57 +632,10 @@ async function changeCustomerPackage(req,res){
     const expired=payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired";
     const effective=expired?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(plan.profile_name||plan.plan_name,120);
 
-    // RouterOS /ppp/secret remote-address accepts one IPv4 or an existing pool
-    // name. IP ranges must never be sent to the secret.
-    const isSingleIp=value=>{
-      const val=clean(value,100);
-      if(!/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(val))return false;
-      return val.split(".").every(octet=>Number(octet)>=0&&Number(octet)<=255);
-    };
-    const isPlaceholder=value=>{
-      const val=clean(value,100).toLowerCase();
-      return !val||val==="—"||val==="none"||val==="default"||val==="null"||val==="undefined";
-    };
-    const isValidPoolName=value=>{
-      const val=clean(value,100);
-      return Boolean(val)&&!/[\\s-]/.test(val)&&/^[A-Za-z0-9_.:]+$/.test(val);
-    };
-
-    let remoteAddress="";
-    const configuredRemote=clean(plan.remote_address,100);
-    const configuredPool=clean(plan.pool_name,100);
-
-    // A configured static IP is valid. Anything containing '-' (including
-    // 10.20.30.2-10.20.30.254) is explicitly rejected.
-    if(!isPlaceholder(configuredRemote)&&!configuredRemote.includes("-")&&isSingleIp(configuredRemote)){
-      remoteAddress=configuredRemote;
-    }else if(!isPlaceholder(configuredPool)&&!configuredPool.includes("-")&&isValidPoolName(configuredPool)){
-      try{
-        const pools=await mikrotikService.getIpPools();
-        const match=(Array.isArray(pools)?pools:[]).find(x=>clean(x?.name,100).toLowerCase()===configuredPool.toLowerCase());
-        if(match)remoteAddress=clean(match.name,100);
-      }catch(poolError){
-        console.warn("[CUSTOMER PACKAGE] IP pool validation skipped:",poolError.message);
-      }
-    }
-
-    const secretData={
-      password:payload.customer.password,
-      profile:effective,
-      comment:buildExpirationComment(
-        payload.customer.name,
-        payload.customer.phone,
-        payload.customer.expirationDate||bangladeshToday(),
-        payload.customer.remarks
-      ),
-      disabled:expired
-    };
-
-    // Standard PPPoE uses the pool from /ppp/profile. If there is no dedicated
-    // static IP, do not send remote-address at all.
-    if(remoteAddress)secretData.remoteAddress=remoteAddress;
-
-    await mikrotikService.updateSecret(payload.customer.username,secretData);
+    // Standard package changes MUST update only the PPP profile.
+    // MikroTik assigns the IP from the selected /ppp/profile pool.
+    // Never send remote-address from this endpoint.
+    await mikrotikService.changeSecretProfile(payload.customer.username,effective);
 
     // Force an immediate PPPoE reconnect so the new profile/pool takes effect.
     let disconnected=false;
@@ -693,7 +646,8 @@ async function changeCustomerPackage(req,res){
       console.warn("[CUSTOMER PACKAGE] Active session disconnect warning:",kickError.message);
     }
 
-    const dbRemoteAddress=remoteAddress||null;
+    // Package changes do not modify the customer's explicit static IP.
+    const dbRemoteAddress=payload.customer.remoteAddress||null;
     await db.query(
       "UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,remote_address=$4,status=$5,updated_at=NOW() WHERE id=$6",
       [plan.plan_name,plan.profile_name,plan.price,dbRemoteAddress,expired?"expired":"active",payload.customer.id]

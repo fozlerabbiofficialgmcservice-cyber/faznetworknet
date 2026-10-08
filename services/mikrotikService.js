@@ -450,7 +450,9 @@ class MikroTikService {
     return this._withConnection("PPPoE user renewal", async (connection) => {
       const secret = await this._findSecret(connection, name);
       const params = ["=.id=" + secret[".id"], "=comment=" + comment, "=disabled=" + (data?.disabled ? "yes" : "no")];
-      await connection.write("/ppp/secret/set", params);
+      const cmdArray=["/ppp/secret/set",...params];
+      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
+      await connection.write(cmdArray);
       return { username: name, id: this._str(secret[".id"]), disabled: Boolean(data?.disabled), comment };
     });
   }
@@ -497,16 +499,67 @@ class MikroTikService {
         "=name=" + newName,
         "=password=" + this._str(data?.password),
         "=profile=" + this._str(data?.profile),
+        ...(data?.allowStaticRemoteAddress && this._validStaticRemoteAddress(data?.remoteAddress)
+          ? ["=remote-address=" + this._validStaticRemoteAddress(data?.remoteAddress)]
+          : []),
         "=comment=" + this._str(data?.comment),
         "=disabled=" + (data?.disabled ? "yes" : "no")
       ];
-      await connection.write("/ppp/secret/set", params);
+      const cmdArray=["/ppp/secret/set",...params];
+      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
+      await connection.write(cmdArray);
       return { username: newName, previousUsername: oldName, id: this._str(secret[".id"]) };
     });
   }
 
-  async updateSecret(username,data){const name=this._str(username).trim();return this._withConnection("PPPoE user update",async(connection)=>{const secret=await this._findSecret(connection,name);const params=this._writeParams({password:data.password,profile:data.profile,"remote-address":data.remoteAddress,"caller-id":data.callerId,comment:data.comment,disabled:data.disabled?"yes":"no"});await connection.write("/ppp/secret/set",["=.id="+secret[".id"],...params]);return {username:name};});}
-  async toggleSecret(username, disabled) { const name = this._str(username).trim(); return this._withConnection("PPPoE user toggle", async (connection) => { const secret = await this._findSecret(connection, name); await connection.write("/ppp/secret/set", ["=.id=" + secret[".id"], "=disabled=" + (disabled ? "yes" : "no")]); return { username: name, disabled: Boolean(disabled) }; }); }
+  _validStaticRemoteAddress(value){
+    const ip=this._str(value).trim();
+    if(!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip))return undefined;
+    if(!ip.split(".").every(octet=>Number(octet)>=0&&Number(octet)<=255))return undefined;
+    return ip;
+  }
+
+  async updateSecret(username,data){
+    const name=this._str(username).trim();
+    return this._withConnection("PPPoE user update",async(connection)=>{
+      const secret=await this._findSecret(connection,name);
+      const params=this._writeParams({
+        password:data.password,
+        profile:data.profile,
+        "remote-address":data.allowStaticRemoteAddress ? this._validStaticRemoteAddress(data.remoteAddress) : undefined,
+        "caller-id":data.callerId,
+        comment:data.comment,
+        disabled:data.disabled?"yes":"no"
+      });
+      const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],...params];
+      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
+      await connection.write(cmdArray);
+      return {username:name};
+    });
+  }
+
+  async changeSecretProfile(username,profileName){
+    const name=this._str(username).trim();
+    const profile=this._str(profileName).trim();
+    if(!name||!profile)throw new Error("PPPoE username and profile are required.");
+    return this._withConnection("PPPoE package profile change",async(connection)=>{
+      const secret=await this._findSecret(connection,name);
+      const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],"=profile="+profile];
+      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
+      await connection.write(cmdArray);
+      return {username:name,profile};
+    });
+  }
+  async toggleSecret(username, disabled) {
+    const name=this._str(username).trim();
+    return this._withConnection("PPPoE user toggle",async(connection)=>{
+      const secret=await this._findSecret(connection,name);
+      const cmdArray=["/ppp/secret/set","=.id="+secret[".id"],"=disabled="+(disabled?"yes":"no")];
+      console.log("[MIKROTIK PPP SET CMD]:",cmdArray);
+      await connection.write(cmdArray);
+      return {username:name,disabled:Boolean(disabled)};
+    });
+  }
   async kickActiveUser(username) { const name = this._str(username).trim(); return this._withConnection("active PPPoE user kick", async (connection) => { const rows = await connection.write("/ppp/active/print"); const matches = (Array.isArray(rows) ? rows : []).filter((item) => this._str(item.name) === name && this._str(item.service).toLowerCase() === "pppoe" && item[".id"]); if (!matches.length) return { username: name, kicked: false, count: 0, message: "User is not currently online." }; for (const session of matches) await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]); return { username: name, kicked: true, count: matches.length }; }); }
 }
 
