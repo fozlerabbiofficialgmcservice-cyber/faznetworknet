@@ -2,7 +2,7 @@ process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
 const path=require("path");const express=require("express");const cors=require("cors");
 const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const ipPoolRoutes=require("./routes/ipPoolRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
-const app=express();const PORT=Number(process.env.PORT)||3000;
+const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());app.use(express.json());app.use(express.urlencoded({extended:true}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
 app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",database:db.getStatus(),timestamp:new Date()}));
 app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
@@ -15,10 +15,10 @@ app.post("/login",(req,res)=>{
   const password=String(req.body?.password||"");
   const nextTarget=String(req.body?.next||"/admin");
   if(!adminCredentialsValid(username,password)) return res.status(401).render("login",{next:nextTarget,error:"Invalid admin username or password."});
-  setSessionCookie(res,username);
+  setSessionCookie(res,username,req);
   return res.redirect(nextTarget.startsWith("/")&&!nextTarget.startsWith("//")?nextTarget:"/admin");
 });
-app.post("/logout",(req,res)=>{clearSessionCookie(res);return res.redirect("/");});
+app.post("/logout",(req,res)=>{clearSessionCookie(res,req);return res.redirect("/");});
 app.get("/portal",(req,res)=>res.render("portal",{title:"FAZ NETWORK Hotspot Portal"}));
 
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected}));
