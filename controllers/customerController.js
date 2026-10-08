@@ -99,13 +99,13 @@ async function createCustomer(req, res) {
        (full_name, phone, connection_date, username, password, package_name, profile,
         monthly_bill, nid, installation_address, fiber_box, onu_mac, remarks, expiration_date,
         provisioning_status, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending','active',NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending',$15,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
         customer.password, customer.packageName, customer.profile, customer.monthlyBill,
         customer.nid || null, customer.installationAddress || null, customer.fiberBox || null,
-        customer.onuMac || null, customer.remarks || null, customer.expirationDate
+        customer.onuMac || null, customer.remarks || null, customer.expirationDate, dateStatus(customer.expirationDate)
       ]
     );
 
@@ -119,28 +119,32 @@ async function createCustomer(req, res) {
           username: customer.username,
           password: customer.password,
           profile: customer.effectiveProfile,
-          comment: buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks)
+          comment: buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
+          disabled: dateStatus(customer.expirationDate) === "expired"
         });
         provisioning = "provisioned";
         await db.query(
-          `UPDATE customers SET provisioning_status='provisioned', router_id=$1, updated_at=NOW() WHERE id=$2`,
-          [String(process.env.ROUTER_HOST || ""), customerId]
+          `UPDATE customers SET provisioning_status='provisioned', router_id=$1, status=$2, updated_at=NOW() WHERE id=$3`,
+          [String(process.env.ROUTER_HOST || ""), dateStatus(customer.expirationDate), customerId]
         );
         await db.query(
           `INSERT INTO pppoe_users
-           (username,password,profile,service,disabled,comment,phone,router_id,synced_at,updated_at)
-           VALUES ($1,$2,$3,'pppoe',FALSE,$4,$5,$6,NOW(),NOW())
+           (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,synced_at,updated_at)
+           VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,NOW(),NOW())
            ON CONFLICT (username) DO UPDATE SET
-             password=EXCLUDED.password, profile=EXCLUDED.profile, disabled=FALSE,
+             password=EXCLUDED.password, profile=EXCLUDED.profile, disabled=EXCLUDED.disabled,
              comment=EXCLUDED.comment, phone=EXCLUDED.phone, router_id=EXCLUDED.router_id,
-             synced_at=NOW(), updated_at=NOW()`,
+             expiry_date=EXCLUDED.expiry_date, status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()`,
           [
             customer.username,
             customer.password,
             customer.effectiveProfile,
+            dateStatus(customer.expirationDate) === "expired",
             buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
             customer.phone,
-            String(process.env.ROUTER_HOST || "")
+            String(process.env.ROUTER_HOST || ""),
+            customer.expirationDate,
+            dateStatus(customer.expirationDate)
           ]
         );
       }
