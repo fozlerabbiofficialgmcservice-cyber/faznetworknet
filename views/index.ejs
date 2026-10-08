@@ -128,8 +128,8 @@ const dashboardBody = `
     else if(!document.querySelector('[role="dialog"].flex')) document.body.classList.remove('overflow-hidden');
   };
   const resetLogin=()=>{
-    if(loginPanel)loginPanel.classList.remove('hidden');
-    if(dashboardPanel){dashboardPanel.classList.add('hidden');dashboardPanel.innerHTML='';}
+    if(loginPanel){loginPanel.classList.remove('hidden','opacity-0','translate-y-1');loginPanel.classList.add('opacity-100');}
+    if(dashboardPanel){dashboardPanel.classList.add('hidden');dashboardPanel.classList.remove('opacity-100');dashboardPanel.innerHTML='';}
     if(loginError){loginError.classList.add('hidden');loginError.textContent='';}
     if(loginForm)loginForm.reset();
   };
