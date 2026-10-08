@@ -259,7 +259,7 @@ async function listCustomers(req,res){
              u.profile AS pppoe_profile
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
-      ORDER BY c.full_name ASC,c.username ASC
+      ORDER BY c.created_at DESC, c.id DESC
     `);
 
     let sessions=[];
