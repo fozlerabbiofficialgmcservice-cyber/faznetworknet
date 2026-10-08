@@ -208,32 +208,6 @@ class MikroTikService {
     });
   }
 
-  async getIpPools() {
-    return this._withConnection("IP pool query", async (connection) => {
-      const rows = await connection.write("/ip/pool/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ id: this._str(item[".id"]), name: this._str(item.name), ranges: this._str(item.ranges), nextPool: this._str(item["next-pool"]), raw: item })).filter((item) => item.name && item.id);
-    });
-  }
-  async createIpPool(data) {
-    const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim();
-    if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
-    return this._withConnection("IP pool creation",async(connection)=>{ await connection.write("/ip/pool/add",this._writeParams({name,ranges,"next-pool":nextPool})); return {name,ranges,nextPool}; });
-  }
-  async _findIpPool(connection,identifier) {
-    const key=this._str(identifier).trim(), rows=await connection.write("/ip/pool/print"), items=Array.isArray(rows)?rows:[];
-    const match=items.find(item=>this._str(item[".id"])===key)||items.find(item=>this._str(item.name)===key);
-    if(!match||!match[".id"]) throw new Error('MikroTik IP pool "'+key+'" was not found.');
-    if(/^default(?:[-_].*)?$/i.test(this._str(match.name))) throw new Error("The default system IP pool cannot be modified.");
-    return match;
-  }
-  async updateIpPool(identifier,data) {
-    const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim();
-    if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
-    return this._withConnection("IP pool update",async(connection)=>{ const item=await this._findIpPool(connection,identifier); const params=["=.id="+item[".id"],...this._writeParams({name,ranges})]; params.push(nextPool?"=next-pool="+nextPool:"=next-pool="); await connection.write("/ip/pool/set",params); return {id:this._str(item[".id"]),name,ranges,nextPool}; });
-  }
-  async deleteIpPool(identifier) {
-    return this._withConnection("IP pool deletion",async(connection)=>{ const item=await this._findIpPool(connection,identifier); await connection.write("/ip/pool/remove",["=.id="+item[".id"]]); return {id:this._str(item[".id"]),name:this._str(item.name)}; });
-  }
   async createProfile(data) {
     const name = this._str(data.name).trim(); if (!name) throw new Error("Profile name is required.");
     return this._withConnection("PPPoE profile creation", async (connection) => {
