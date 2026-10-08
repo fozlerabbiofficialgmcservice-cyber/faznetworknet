@@ -23,7 +23,7 @@ function normalizeProfileValidity(value, unit) {
 
 function parseStoredValidity(profile) {
   const timeout = String(profile?.sessionTimeout || profile?.["session-timeout"] || "").trim();
-  const match = timeout.match(/^(\\d+)(m|h|d)$/i);
+  const match = timeout.match(/^(\d+)(m|h|d)$/i);
   if (!match) return { value: 1, unit: "days", validity: "1d", validityLabel: "1 Day", limitBytesTotal: 0 };
   return normalizeProfileValidity(Number(match[1]), match[2].toLowerCase());
 }
