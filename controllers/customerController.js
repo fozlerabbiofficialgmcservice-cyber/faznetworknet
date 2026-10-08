@@ -241,7 +241,8 @@ async function renew(req,res){
     const currentExp=normalizeDate(customer?.expiration_date||routerUser?.expiry_date);
     const today=bangladeshToday(), base=currentExp&&currentExp>=today?currentExp:today;
     const newExpDate=addBangladeshCalendarMonth(base);
-    const comment=buildExpirationComment(clean(customer?.full_name||"",200),clean(customer?.phone||routerUser?.phone||"",40),newExpDate,clean(customer?.remarks||"",1000));
+    const phone=clean(customer?.phone||routerUser?.phone||"","");
+    const comment=phone ? "EXP: "+newExpDate+" | "+phone : "EXP: "+newExpDate;
     await mikrotikService.renewSecret(username,{comment,disabled:false});
     await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',last_paid_at=NOW(),paid_until=$1,provisioning_status='provisioned',updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[newExpDate,username]);
     await db.query("UPDATE pppoe_users SET expiry_date=$1,status='active',disabled=FALSE,comment=$2,billing_status='paid',last_paid_at=NOW(),paid_until=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[newExpDate,comment,username]);
