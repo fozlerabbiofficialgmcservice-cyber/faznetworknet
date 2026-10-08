@@ -6,6 +6,7 @@ router.get("/packages",controller.packages);
 router.post("/customers",controller.createCustomer);
 router.get("/profile",controller.profile);
 router.get("/:id/profile",controller.getCustomerProfileById);
+router.put("/:id",controller.updateCustomer);
 router.post("/:id/kick",controller.kickCustomerById);
 router.post("/:id/toggle-status",controller.toggleCustomerStatus);
 router.post("/:id/renew",controller.renewCustomerById);

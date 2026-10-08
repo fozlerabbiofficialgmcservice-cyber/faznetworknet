@@ -180,3 +180,17 @@ ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK(status IN ('ac
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_channel_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_channel_check CHECK(channel IN ('bkash','nagad','rocket','cash'));
 CREATE INDEX IF NOT EXISTS idx_customers_area_zone ON customers(area_zone);
+
+
+-- Enterprise customer 360 audit trail.
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
+  admin_id VARCHAR(100) NOT NULL DEFAULT 'admin',
+  action VARCHAR(50) NOT NULL,
+  details TEXT NOT NULL,
+  ip_address VARCHAR(50),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_customer ON audit_logs(customer_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_customer_created ON audit_logs(customer_id, created_at DESC);

@@ -1571,6 +1571,16 @@
             if (sidebarButton) sidebarButton.setAttribute('aria-expanded', 'false');
         }
 
+        window.navigateToCustomerProfile = function(customerId){
+            const id=String(customerId||'').trim();
+            if(!id)return;
+            purgeStuckBackdrops();
+            const target='/admin/customers/'+encodeURIComponent(id);
+            if(window.location.pathname===target)return;
+            window.history.pushState({customer360:true,customerId:id},'',target);
+            window.location.replace(target);
+        };
+
         function syncMobileSidebarState(){const sidebar=document.getElementById('sidebar'),backdrop=document.getElementById('sidebarBackdrop'),button=document.getElementById('mobileSidebarToggle');const open=Boolean(sidebar&&sidebar.classList.contains('show')&&window.innerWidth<768);if(backdrop)backdrop.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);if(button)button.setAttribute('aria-expanded',open?'true':'false');}
         function closeSidebarMobile(){purgeStuckBackdrops();const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.classList.remove('show');const backdrop=document.getElementById('sidebarBackdrop');if(backdrop)backdrop.classList.remove('show');if(document.body)document.body.classList.remove('sidebar-open');syncMobileSidebarState();}
         function toggleSidebar(){const sidebar=document.getElementById('sidebar');if(!sidebar||window.innerWidth>=768)return;sidebar.classList.toggle('show');syncMobileSidebarState();}
@@ -2384,7 +2394,13 @@ async function deletePlan(id,name){
                 const username=String((profileLink||button)?.dataset?.username||'').trim();
                 if(!username)return;
 
-                if(profileLink||editBtn){
+                if(profileLink){
+                    event.preventDefault();
+                    const customerId=String(profileLink.dataset.customerId||profileLink.dataset.id||'').trim();
+                    if(customerId) window.navigateToCustomerProfile(customerId);
+                    return;
+                }
+                if(editBtn){
                     event.preventDefault();
                     await openCustomerProfile(username);
                     return;
@@ -2508,7 +2524,13 @@ async function deletePlan(id,name){
             const customerId=user.customer_id||user.id||'';
             return `<tr data-customer-row data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}">
                 <td class="ps-3">${index}</td>
-                <td><a href="javascript:void(0)" class="fw-bold text-primary text-decoration-none customer-profile-link" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}">${escapeHtml(metadata.displayName)}</a></td>
+                <td>
+    <a href="/admin/customers/${escapeHtml(customerId)}" class="customer-profile-link fw-bold text-decoration-none text-primary d-inline-flex align-items-center gap-1" data-customer-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}" onclick="event.preventDefault(); window.navigateToCustomerProfile('${escapeHtml(customerId)}');">
+        <i class="bi bi-person-circle"></i>
+        <span>${escapeHtml(metadata.displayName)}</span>
+    </a>
+    <div class="small text-muted font-monospace">${escapeHtml(user.username||'')}</div>
+</td>
                 <td><span class="text-secondary font-monospace">${escapeHtml(metadata.displayPhone)}</span></td>
                 <td><strong>${escapeHtml(user.username)}</strong></td>
                 <td><span class="badge bg-info text-dark">${escapeHtml(user.profile||'N/A')}</span></td>
