@@ -446,7 +446,18 @@ async function publicCustomerLogin(req,res){
     const whatsappNumber=clean(process.env.SUPPORT_WHATSAPP||supportPhone,40).replace(/\D/g,"");
     const rechargeUrl=String(process.env.RECHARGE_URL||"").trim();
 
-    return res.json({
+    req.session.customerUser={
+      id:dbUser?.id||null,
+      username:clean(mtSecret?.name||dbUser?.username||candidateUsername,100)
+    };
+    req.session.isCustomer=true;
+    req.session.customerLoginAt=Date.now();
+    return req.session.save(err=>{
+      if(err){
+        console.error("[Customer Session Save Error]:",err);
+        return res.status(500).json({success:false,message:"Failed to initialize customer session."});
+      }
+      return res.json({
       success:true,
       customer:{
         customerId:dbUser?.id||null,
@@ -468,6 +479,7 @@ async function publicCustomerLogin(req,res){
         officeAddress,
         rechargeUrl:rechargeUrl||null
       }
+      });
     });
   }catch(error){
     console.error("[Public Customer Login Error]:",error);
