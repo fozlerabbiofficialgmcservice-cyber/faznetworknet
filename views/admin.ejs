@@ -1833,7 +1833,9 @@ async function deletePlan(id,name){
             }).join('');
             el.innerHTML='<section class="admin-view"><div class="card card-custom"><div class="card-header bg-white d-flex align-items-center"><h5 class="mb-0">Plan & Packages <span class="badge bg-success">'+(d.packages||[]).length+'</span></h5><div class="ms-auto d-flex gap-2"><button class="btn btn-success" id="syncPlansBtn" onclick="syncPlansFromMikrotik()"><i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik</button><button class="btn btn-primary" onclick="openCreatePlanModal()"><i class="bi bi-plus-lg me-1"></i> Create Plan</button></div></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>#</th><th>Plan / Profile</th><th>Local Address</th><th>Remote Address / IP Pool</th><th>DNS Servers</th><th>Rate Limit</th><th>Exact Bill</th><th>Duration</th><th>TCP MSS</th><th class="text-end">Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="10" class="text-center py-4 text-muted">No plans found.</td></tr>')+'</tbody></table></div></div></section>';
         }
-        window.loadPlans = loadPlanPackages;\n\n        let currentPaymentChannel = '';
+        window.loadPlans = loadPlanPackages;
+
+        let currentPaymentChannel = '';
         let currentPaymentGateway = 'all';
         let currentPaymentTitleKey = '';
         let currentPaymentPage = 1;
