@@ -101,23 +101,24 @@ async function users(req, res) {
 
     if (filter === "active") {
       conditions.push("u.status = 'active'");
-      conditions.push("u.expiry_date > NOW()");
+      conditions.push("(u.expiry_date IS NULL OR u.expiry_date >= CURRENT_DATE)");
       conditions.push("u.disabled = FALSE");
     } else if (filter === "left") {
       conditions.push("(LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE)");
     } else if (filter === "expire") {
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date <= NOW()");
+      conditions.push("u.expiry_date IS NOT NULL");
+      conditions.push("u.expiry_date < CURRENT_DATE");
     } else if (filter === "expire_today_yesterday") {
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date BETWEEN (NOW() - INTERVAL '1 day') AND (NOW() + INTERVAL '1 day')");
+      conditions.push("u.expiry_date BETWEEN (CURRENT_DATE - INTERVAL '1 day') AND CURRENT_DATE");
     } else if (filter === "expire_7_days") {
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date BETWEEN NOW() AND (NOW() + INTERVAL '7 days')");
+      conditions.push("u.expiry_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')");
     } else if (filter === "new") {
       conditions.push("u.created_at >= NOW() - INTERVAL '7 days'");
     } else if (filter === "due") {
-      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date <= NOW()) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
+      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date < CURRENT_DATE) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
     }
 
     const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
@@ -146,7 +147,12 @@ async function users(req, res) {
 
     let users = result.rows.map(user => {
       const session = sessionMap.get(String(user.username || "").trim().toLowerCase());
-      const expired = Boolean(user.expiry_date && new Date(user.expiry_date).getTime() <= Date.now());
+      const expiryRaw=String(user.expiry_date||"").slice(0,10);
+      let expired=false;
+      if(/^\d{4}-\d{2}-\d{2}$/.test(expiryRaw)){
+        const expDateObj=new Date(expiryRaw+"T23:59:59.999+06:00");
+        expired=!Number.isNaN(expDateObj.getTime()) && new Date().getTime()>expDateObj.getTime();
+      }
       return {
         ...user,
         active: Boolean(session),
