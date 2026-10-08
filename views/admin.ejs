@@ -1816,7 +1816,7 @@
                 purgeStuckBackdrops();
                 const data=await jsonFetch('/api/customers/'+encodeURIComponent(username));
                 const customer=data.customer||{}; switchView('add-customer');
-                document.getElementById('customerEditId').value=username; document.getElementById('fullName').value=customer.full_name||''; document.getElementById('phoneNumber').value=customer.phone||'';
+                document.getElementById('customerEditId').value=username; document.getElementById('username').readOnly=true; document.getElementById('fullName').value=customer.full_name||''; document.getElementById('phoneNumber').value=customer.phone||'';
                 const activation=customer.connection_date?String(customer.connection_date).slice(0,10):localDateValue(); document.getElementById('connectionDate').value=activation;document.getElementById('activationDate').value=activation;
                 document.getElementById('expirationDate').value=customer.expiration_date?String(customer.expiration_date).slice(0,10):addCalendarMonths(activation,1);document.getElementById('username').value=customer.username||username;document.getElementById('password').value=customer.password||'';
                 document.getElementById('monthlyBillInput').value=Number(customer.monthly_bill||0).toFixed(2);document.getElementById('nidNumber').value=customer.nid||'';document.getElementById('installationAddress').value=customer.installation_address||'';document.getElementById('fiberBox').value=customer.fiber_box||'';document.getElementById('onuMac').value=customer.onu_mac||'';document.getElementById('customerRemarks').value=customer.remarks||'';
