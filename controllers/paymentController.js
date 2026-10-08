@@ -13,7 +13,7 @@ async function webhook(req,res){
  try{
   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret')");
   const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
-  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Website Settings."});
+  if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
   const expected=String(settings.personal_payment_webhook_secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
   if(!expected||provided!==expected)return res.status(401).json({success:false,error:"Unauthorized webhook."});
@@ -125,7 +125,7 @@ async function verifyTrx(req,res){
   let mapping={};try{mapping=JSON.parse(settings.hotspot_price_profile_map||"{}");}catch(_){}
   if(!mapping||typeof mapping!=="object"||Array.isArray(mapping))mapping={};
   const mappedProfile=String(mapping[amount.toFixed(2)]||mapping[String(amount)]||"").trim();
-  if(!mappedProfile)return res.status(400).json({success:false,error:"No Hotspot profile is mapped to ৳"+amount.toFixed(2)+". Ask the administrator to configure this amount in Website Settings."});
+  if(!mappedProfile)return res.status(400).json({success:false,error:"No Hotspot profile is mapped to ৳"+amount.toFixed(2)+". Ask the administrator to configure this amount in Hotspot Webhook Settings."});
   const profile=mappedProfile, hotspotProfiles=await mikrotikService.getHotspotProfiles();
   const hotspotProfile=hotspotProfiles.find(item=>String(item.name||"").trim().toLowerCase()===profile.toLowerCase());
   if(!hotspotProfile)return res.status(400).json({success:false,error:"The mapped Hotspot profile is not available on MikroTik."});
