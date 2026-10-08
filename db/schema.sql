@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS pppoe_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   status TEXT NOT NULL DEFAULT 'active',
-  expiry_date TIMESTAMPTZ
+  expiry_date DATE
 );
 
 CREATE TABLE IF NOT EXISTS customers (
@@ -87,7 +87,23 @@ CREATE TABLE IF NOT EXISTS hotspot_vouchers (
 
 ALTER TABLE pppoe_profiles ADD COLUMN IF NOT EXISTS price NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
-ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMPTZ;
+ALTER TABLE pppoe_users ADD COLUMN IF NOT EXISTS expiry_date DATE;
+-- Expiration is a calendar date in Bangladesh; migrate legacy timestamptz values once.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'pppoe_users'
+      AND column_name = 'expiry_date'
+      AND data_type = 'timestamp with time zone'
+  ) THEN
+    ALTER TABLE pppoe_users
+      ALTER COLUMN expiry_date TYPE DATE
+      USING (expiry_date AT TIME ZONE 'UTC')::date;
+  END IF;
+END $$;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS used BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS phone VARCHAR(40);
 ALTER TABLE hotspot_vouchers ADD COLUMN IF NOT EXISTS server VARCHAR(100) DEFAULT 'all';
@@ -111,7 +127,34 @@ CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS expiration_date DATE;
 CREATE INDEX IF NOT EXISTS idx_customers_expiration_date ON customers(expiration_date);
 
-CREATE TABLE IF NOT EXISTS packages (id BIGSERIAL PRIMARY KEY,plan_name VARCHAR(120) NOT NULL UNIQUE,pool_name VARCHAR(100) NOT NULL,profile_name VARCHAR(120) NOT NULL,rate_limit VARCHAR(100) NOT NULL,price NUMERIC(12,2) NOT NULL CHECK(price>0),duration_months INTEGER NOT NULL DEFAULT 1 CHECK(duration_months>=1),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS ip_pools (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  ranges TEXT NOT NULL,
+  subnet TEXT,
+  local_address TEXT,
+  device_name TEXT NOT NULL,
+  next_pool TEXT NOT NULL DEFAULT 'none',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (device_name, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ip_pools_device_name ON ip_pools(device_name);
+
+CREATE TABLE IF NOT EXISTS packages (id BIGSERIAL PRIMARY KEY,plan_name VARCHAR(120) NOT NULL UNIQUE,pool_name VARCHAR(100) NOT NULL,profile_name VARCHAR(120) NOT NULL,rate_limit VARCHAR(100),price NUMERIC(12,2) NOT NULL CHECK(price>0),duration_months INTEGER NOT NULL DEFAULT 1 CHECK(duration_months>=1),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_packages_pool_name ON packages(pool_name);
 ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_status_check;
 ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK(status IN ('active','inactive','left','expired'));
+
+ALTER TABLE packages ALTER COLUMN rate_limit DROP NOT NULL;
+
+-- Plan & Packages: full MikroTik PPP profile fields and safe sync support.
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS local_address VARCHAR(255);
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS remote_address VARCHAR(255);
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS dns_server VARCHAR(255);
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS change_tcp_mss VARCHAR(20) NOT NULL DEFAULT 'default';
+ALTER TABLE packages ALTER COLUMN pool_name DROP NOT NULL;
+ALTER TABLE packages DROP CONSTRAINT IF EXISTS packages_price_check;
+ALTER TABLE packages ADD CONSTRAINT packages_price_check CHECK(price >= 0);
+ALTER TABLE packages ALTER COLUMN rate_limit DROP NOT NULL;

@@ -1,11 +1,164 @@
-const db=require("../db");const mikrotikService=require("../services/mikrotikService");
+const db=require("../db");
+const mikrotikService=require("../services/mikrotikService");
+
 const clean=(v,m=255)=>String(v??"").trim().slice(0,m);
-function errorResponse(res,e){console.error("[PACKAGE API]",e);return res.status(503).json({success:false,message:e.message||"Package operation failed."});}
-async function pools(req,res){try{res.json({success:true,pools:(await mikrotikService.getIpPools()).filter(x=>!/^default(?:[-_].*)?$/i.test(x.name))});}catch(e){errorResponse(res,e);}}
-async function list(req,res){try{const r=await db.query("SELECT * FROM packages ORDER BY plan_name");const p=await mikrotikService.getIpPools(),map=new Map(p.map(x=>[String(x.name).toLowerCase(),x]));res.json({success:true,packages:r.rows.map(x=>({...x,pool_ranges:map.get(String(x.pool_name).toLowerCase())?.ranges||""}))});}catch(e){errorResponse(res,e);}}
-async function normalize(b){const v={planName:clean(b.planName,120),poolName:clean(b.poolName,100),profileName:clean(b.profileName||b.planName,120),rateLimit:clean(b.rateLimit,100),price:Number(b.price),durationMonths:Number.parseInt(b.durationMonths||1,10)};if(!v.planName||!v.poolName||!v.profileName||!v.rateLimit||!Number.isFinite(v.price)||v.price<=0||!Number.isInteger(v.durationMonths)||v.durationMonths<1)return{error:"Valid Plan Name, IP Pool, Profile, Rate Limit, Billing Amount and Duration are required."};const p=await mikrotikService.getIpPools(),pool=p.find(x=>String(x.name).toLowerCase()===v.poolName.toLowerCase());if(!pool)return{error:"Selected IP Pool was not found on MikroTik."};v.poolName=pool.name;return{value:v};}
-async function syncProfile(v){const p=await mikrotikService.fetchExistingProfiles(),x=p.find(y=>String(y.name).toLowerCase()===v.profileName.toLowerCase());if(x)await mikrotikService.updateProfile(x.id,{name:v.profileName,rateLimit:v.rateLimit,remoteAddress:v.poolName});else await mikrotikService.createProfile({name:v.profileName,rateLimit:v.rateLimit,remoteAddress:v.poolName});}
-async function create(req,res){try{const n=await normalize(req.body||{});if(n.error)return res.status(400).json({success:false,message:n.error});await syncProfile(n.value);const r=await db.query("INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",[n.value.planName,n.value.poolName,n.value.profileName,n.value.rateLimit,n.value.price,n.value.durationMonths]);res.status(201).json({success:true,package:r.rows[0]});}catch(e){errorResponse(res,e);}}
-async function update(req,res){try{const n=await normalize(req.body||{});if(n.error)return res.status(400).json({success:false,message:n.error});const r=await db.query("UPDATE packages SET plan_name=$1,pool_name=$2,profile_name=$3,rate_limit=$4,price=$5,duration_months=$6,updated_at=NOW() WHERE id=$7 RETURNING *",[n.value.planName,n.value.poolName,n.value.profileName,n.value.rateLimit,n.value.price,n.value.durationMonths,clean(req.params.id,50)]);if(!r.rows.length)return res.status(404).json({success:false,message:"Package not found."});await syncProfile(n.value);res.json({success:true,package:r.rows[0]});}catch(e){errorResponse(res,e);}}
-async function remove(req,res){try{const r=await db.query("DELETE FROM packages WHERE id=$1 RETURNING *",[clean(req.params.id,50)]);if(!r.rows.length)return res.status(404).json({success:false,message:"Package not found."});res.json({success:true,package:r.rows[0]});}catch(e){errorResponse(res,e);}}
-module.exports={list,pools,create,update,remove};
+const routerError=(e)=>String(e?.message||e||"Package operation failed.");
+
+function errorResponse(res,e,status=503){
+  console.error("[PACKAGE API]",e);
+  return res.status(status).json({success:false,message:routerError(e)});
+}
+
+async function pools(req,res){
+  try{
+    const rows=await mikrotikService.getIpPools();
+    res.json({success:true,pools:rows.filter(x=>!/^default(?:[-_].*)?$/i.test(x.name))});
+  }catch(e){errorResponse(res,e);}
+}
+
+function decorate(row,poolMap){
+  const pool=poolMap.get(String(row.pool_name||"").toLowerCase());
+  return {
+    ...row,
+    name:row.plan_name,
+    profile:row.profile_name,
+    poolName:row.pool_name,
+    poolRanges:pool?.ranges||"",
+    pool_ranges:pool?.ranges||"",
+    localAddress:row.local_address||"",
+    remoteAddress:row.remote_address||"",
+    dnsServer:row.dns_server||"",
+    changeTcpMss:row.change_tcp_mss||"default"
+  };
+}
+
+async function list(req,res){
+  try{
+    const [result,routerPools]=await Promise.all([db.query("SELECT * FROM packages ORDER BY plan_name"),mikrotikService.getIpPools()]);
+    const poolMap=new Map(routerPools.map(x=>[String(x.name).toLowerCase(),x]));
+    res.json({success:true,packages:result.rows.map(row=>decorate(row,poolMap))});
+  }catch(e){errorResponse(res,e);}
+}
+
+async function normalize(body){
+  const b=body||{};
+  const value={
+    planName:clean(b.planName,120),
+    price:Number(b.price),
+    durationMonths:Number.parseInt(b.durationMonths??1,10),
+    rateLimit:clean(b.rateLimit,100),
+    localAddress:clean(b.localAddress,255),
+    remoteAddress:clean(b.remoteAddress,255),
+    dnsServer:clean(b.dnsServer,255),
+    changeTcpMss:clean(b.changeTcpMss||"default",20).toLowerCase()
+  };
+  if(!value.planName)return{error:"Plan Name is required."};
+  if(!Number.isFinite(value.price)||value.price<=0)return{error:"Exact Monthly Price must be greater than 0."};
+  if(!Number.isInteger(value.durationMonths)||value.durationMonths<1)return{error:"Duration must be at least 1 month."};
+  if(!["yes","no","default"].includes(value.changeTcpMss))return{error:"Change TCP MSS must be yes, no, or default."};
+  if(value.remoteAddress){
+    const pools=await mikrotikService.getIpPools();
+    const pool=pools.find(x=>String(x.name).toLowerCase()===value.remoteAddress.toLowerCase());
+    if(pool)value.remoteAddress=pool.name;
+  }
+  return{value};
+}
+
+async function findProfileByName(name){
+  const profiles=await mikrotikService.fetchExistingProfiles();
+  return profiles.find(x=>String(x.name).toLowerCase()===String(name||"").toLowerCase())||null;
+}
+
+async function syncMikrotikProfile(value,previousProfileName=""){
+  const target=await findProfileByName(value.planName);
+  const oldName=clean(previousProfileName,120);
+  const previous=(target||(!target&&oldName&&oldName.toLowerCase()!==value.planName.toLowerCase()?await findProfileByName(oldName):null));
+  const data={
+    name:value.planName,
+    localAddress:value.localAddress,
+    remoteAddress:value.remoteAddress,
+    dnsServer:value.dnsServer,
+    changeTcpMss:value.changeTcpMss,
+    rateLimit:value.rateLimit
+  };
+  if(target){
+    return mikrotikService.updateProfile(target.id,data);
+  }
+  if(previous){
+    return mikrotikService.updateProfile(previous.id,data);
+  }
+  return mikrotikService.createProfile(data);
+}
+
+async function create(req,res){
+  try{
+    const n=await normalize(req.body);
+    if(n.error)return errorResponse(res,new Error(n.error),400);
+    await syncMikrotikProfile(n.value);
+    const r=await db.query(
+      "INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss) VALUES($1,$2,$1,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
+      [n.value.planName,n.value.remoteAddress,n.value.rateLimit||null,n.value.price,n.value.durationMonths,n.value.localAddress,n.value.remoteAddress,n.value.dnsServer||null,n.value.changeTcpMss]
+    );
+    res.status(201).json({success:true,package:r.rows[0]});
+  }catch(e){errorResponse(res,e);}
+}
+
+async function update(req,res){
+  try{
+    const id=clean(req.params.id,50);
+    const existing=await db.query("SELECT * FROM packages WHERE id=$1",[id]);
+    if(!existing.rows.length)return errorResponse(res,new Error("Package not found."),404);
+    const n=await normalize(req.body);
+    if(n.error)return errorResponse(res,new Error(n.error),400);
+    await syncMikrotikProfile(n.value,existing.rows[0].profile_name);
+    const r=await db.query(
+      "UPDATE packages SET plan_name=$1,pool_name=$2,profile_name=$1,rate_limit=$3,price=$4,duration_months=$5,local_address=$6,remote_address=$7,dns_server=$8,change_tcp_mss=$9,updated_at=NOW() WHERE id=$10 RETURNING *",
+      [n.value.planName,n.value.remoteAddress,n.value.rateLimit||null,n.value.price,n.value.durationMonths,n.value.localAddress,n.value.remoteAddress,n.value.dnsServer||null,n.value.changeTcpMss,id]
+    );
+    res.json({success:true,package:r.rows[0]});
+  }catch(e){errorResponse(res,e);}
+}
+
+async function remove(req,res){
+  try{
+    const id=clean(req.params.id,50);
+    const existing=await db.query("SELECT * FROM packages WHERE id=$1",[id]);
+    if(!existing.rows.length)return errorResponse(res,new Error("Package not found."),404);
+    const pkg=existing.rows[0];
+    const profile=await findProfileByName(pkg.profile_name||pkg.plan_name);
+    if(profile)await mikrotikService.removeProfile(profile.id);
+    const r=await db.query("DELETE FROM packages WHERE id=$1 RETURNING *",[id]);
+    res.json({success:true,package:r.rows[0]});
+  }catch(e){errorResponse(res,e);}
+}
+
+async function sync(req,res){
+  try{
+    const [profiles,pools]=await Promise.all([mikrotikService.fetchExistingProfiles(),mikrotikService.getIpPools()]);
+    const poolMap=new Map(pools.map(p=>[String(p.name).toLowerCase(),p]));
+    const synced=[];
+    for(const profile of profiles){
+      const remote=String(profile.remoteAddress||"").trim();
+      const matchedPool=poolMap.get(remote.toLowerCase());
+      const remoteAddress=matchedPool?.name||remote;
+      const current=await db.query("SELECT * FROM packages WHERE profile_name=$1 OR plan_name=$1 LIMIT 1",[profile.name]);
+      if(current.rows.length){
+        const row=current.rows[0];
+        const updated=await db.query(
+          "UPDATE packages SET pool_name=$1,profile_name=$2,local_address=$3,remote_address=$4,dns_server=$5,change_tcp_mss=$6,rate_limit=$7,updated_at=NOW() WHERE id=$8 RETURNING *",
+          [remoteAddress,profile.name,profile.localAddress||"",remoteAddress,profile.dnsServer||null,profile.changeTcpMss||"default",profile.rateLimit||null,row.id]
+        );
+        synced.push(updated.rows[0]);
+      }else{
+        const inserted=await db.query(
+          "INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss) VALUES($1,$2,$1,$3,0,1,$4,$5,$6,$7) ON CONFLICT(plan_name) DO UPDATE SET profile_name=EXCLUDED.profile_name,rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,dns_server=EXCLUDED.dns_server,change_tcp_mss=EXCLUDED.change_tcp_mss,updated_at=NOW() RETURNING *",
+          [profile.name,remoteAddress,profile.rateLimit||null,profile.localAddress||"",remoteAddress,profile.dnsServer||null,profile.changeTcpMss||"default"]
+        );
+        synced.push(inserted.rows[0]);
+      }
+    }
+    res.json({success:true,count:synced.length,packages:synced});
+  }catch(e){errorResponse(res,e);}
+}
+
+module.exports={list,pools,create,update,remove,sync};

@@ -22,8 +22,13 @@ class MikroTikService {
       await Promise.race([connectPromise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Connection timed out after 5 seconds.")), CONNECTION_TIMEOUT_MS); })]);
       return await operation(connection);
     } catch (error) {
-      const message = error && error.message ? error.message : String(error);
-      const wrapped = new Error("MikroTik " + operationName + " failed: " + message); wrapped.cause = error; wrapped.code = error && error.code ? error.code : "MIKROTIK_ERROR"; throw wrapped;
+      const details=this._extractRouterError(error);
+      const wrapped=new Error(details.message);
+      wrapped.cause=error;
+      wrapped.category=details.category;
+      wrapped.code=error&&error.code?error.code:"MIKROTIK_ERROR";
+      wrapped.operation=operationName;
+      throw wrapped;
     } finally { if (timer) clearTimeout(timer); await this._safeClose(connection); }
   }
   async _safeClose(connection) {
@@ -44,7 +49,7 @@ class MikroTikService {
   async fetchExistingProfiles() {
     return this._withConnection("PPPoE profile sync", async (connection) => {
       const rows = await connection.write("/ppp/profile/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ id: this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), localAddress: this._str(item["local-address"]), remoteAddress: this._str(item["remote-address"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), onlyOne: this._bool(item["only-one"]), changeTcpMss: this._bool(item["change-tcp-mss"]), comment: this._str(item.comment), raw: item })).filter((item) => item.name);
+      return (Array.isArray(rows) ? rows : []).map((item) => ({ id: this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), localAddress: this._str(item["local-address"]), remoteAddress: this._str(item["remote-address"]), dnsServer: this._str(item["dns-server"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), onlyOne: this._bool(item["only-one"]), changeTcpMss: this._str(item["change-tcp-mss"]) || "default", comment: this._str(item.comment), raw: item })).filter((item) => item.name);
     });
   }
   async fetchExistingSecrets() {
@@ -208,16 +213,49 @@ class MikroTikService {
     });
   }
 
+  async getRouterIdentity() {
+    try {
+      return await this._withConnection("MikroTik identity query", async (connection) => {
+        const rows = await connection.write("/system/identity/print");
+        const name = this._str(Array.isArray(rows) ? rows[0]?.name : rows?.name).trim();
+        return name || "MikroTik";
+      });
+    } catch (error) {
+      console.warn("[MikroTik] Router identity unavailable; using fallback:", error?.message || error);
+      return "MikroTik";
+    }
+  }
+
   async getIpPools() {
     return this._withConnection("IP pool query", async (connection) => {
       const rows = await connection.write("/ip/pool/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ id: this._str(item[".id"]), name: this._str(item.name), ranges: this._str(item.ranges), nextPool: this._str(item["next-pool"]), raw: item })).filter((item) => item.name && item.id);
+      return (Array.isArray(rows) ? rows : []).map((item) => ({
+        id: this._str(item[".id"]),
+        name: this._str(item.name),
+        ranges: this._str(item.ranges),
+        nextPool: this._str(item["next-pool"]) || "none",
+        raw: item
+      })).filter((item) => item.name && item.id);
     });
   }
+
   async createIpPool(data) {
-    const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim();
+    const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim() || "none";
     if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
-    return this._withConnection("IP pool creation",async(connection)=>{ await connection.write("/ip/pool/add",this._writeParams({name,ranges,"next-pool":nextPool})); return {name,ranges,nextPool}; });
+    return this._withConnection("IP pool creation",async(connection)=>{
+      await connection.write("/ip/pool/add",this._writeParams({name,ranges,"next-pool":nextPool}));
+      return {name,ranges,nextPool};
+    });
+  }
+
+  _extractRouterError(error) {
+    const candidates=[error,error?.cause,error?.error,error?.response,error?.data].filter(Boolean);
+    for(const item of candidates){
+      const message=this._str(item?.message||item?.["=message"]||item?.error).trim();
+      const category=this._str(item?.category||item?.["=category"]).trim();
+      if(message)return {message,category};
+    }
+    return {message:"MikroTik rejected the IP pool operation.",category:""};
   }
   async _findIpPool(connection,identifier) {
     const key=this._str(identifier).trim(), rows=await connection.write("/ip/pool/print"), items=Array.isArray(rows)?rows:[];
@@ -226,26 +264,110 @@ class MikroTikService {
     if(/^default(?:[-_].*)?$/i.test(this._str(match.name))) throw new Error("The default system IP pool cannot be modified.");
     return match;
   }
-  async updateIpPool(identifier,data) {
-    const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim();
-    if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
-    return this._withConnection("IP pool update",async(connection)=>{ const item=await this._findIpPool(connection,identifier); const params=["=.id="+item[".id"],...this._writeParams({name,ranges})]; params.push(nextPool?"=next-pool="+nextPool:"=next-pool="); await connection.write("/ip/pool/set",params); return {id:this._str(item[".id"]),name,ranges,nextPool}; });
-  }
-  async deleteIpPool(identifier) {
-    return this._withConnection("IP pool deletion",async(connection)=>{ const item=await this._findIpPool(connection,identifier); await connection.write("/ip/pool/remove",["=.id="+item[".id"]]); return {id:this._str(item[".id"]),name:this._str(item.name)}; });
-  }
+  async updateIpPool(originalName,data) {
+     const key=this._str(originalName).trim();
+     const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim();
+     const nextPool=this._str(data.nextPool).trim();
+     if(!key) throw new Error("Pool identifier and ranges are required");
+     if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
+     return this._withConnection("IP pool update",async(connection)=>{
+       // Resolve the current RouterOS ID from this live session.
+       const item=await this._findIpPool(connection,key);
+       const targetId=this._str(item[".id"]).trim();
+       const targetNextPool=nextPool&&nextPool.toLowerCase()!=="none"?nextPool:"none";
+       const params=[
+         "=.id="+targetId,
+         "=name="+name,
+         "=ranges="+ranges,
+         "=next-pool="+targetNextPool
+       ];
+       await connection.write("/ip/pool/set",params);
+       return {id:targetId,name,ranges,nextPool:targetNextPool};
+     });
+   }
+   async deleteIpPool(originalName) {
+     const key=this._str(originalName).trim();
+     if(!key) throw new Error("Pool identifier is required");
+     return this._withConnection("IP pool deletion",async(connection)=>{
+       // Resolve the current RouterOS ID by exact pool name in the same session.
+       const item=await this._findIpPool(connection,key);
+       const targetId=this._str(item[".id"]).trim();
+       await connection.write("/ip/pool/remove",["=.id="+targetId]);
+       return {id:targetId,name:this._str(item.name).trim()};
+     });
+   }
   async createProfile(data) {
-    const name = this._str(data.name).trim(); if (!name) throw new Error("Profile name is required.");
-    return this._withConnection("PPPoE profile creation", async (connection) => {
-      const params = this._writeParams({ name, "rate-limit": data.rateLimit, "local-address": data.localAddress, "remote-address": data.remoteAddress, "session-timeout": data.sessionTimeout, "idle-timeout": data.idleTimeout, "only-one": data.onlyOne ? "yes" : undefined, "change-tcp-mss": data.changeTcpMss ? "yes" : undefined, comment: data.comment });
-      await connection.write("/ppp/profile/add", params); return { name };
+    const name=this._str(data.name).trim();
+    if(!name)throw new Error("Profile name is required.");
+    return this._withConnection("PPPoE profile creation",async(connection)=>{
+      const params=this._writeParams({
+        name,
+        "rate-limit":data.rateLimit,
+        "local-address":data.localAddress,
+        "remote-address":data.remoteAddress,
+        "dns-server":data.dnsServer,
+        "change-tcp-mss":data.changeTcpMss||"default"
+      });
+      await connection.write("/ppp/profile/add",params);
+      return {name};
     });
   }
-  async updateProfile(identifier,data){const key=this._str(identifier).trim();return this._withConnection("PPPoE profile update",async(connection)=>{const rows=await connection.write("/ppp/profile/print"),items=Array.isArray(rows)?rows:[],item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);if(!item||!item[".id"])throw new Error("PPPoE profile not found.");const params=this._writeParams({name:data.name,"rate-limit":data.rateLimit,"remote-address":data.remoteAddress});await connection.write("/ppp/profile/set",["=.id="+item[".id"],...params]);return {id:this._str(item[".id"]),name:data.name};});}
+
+  async updateProfile(identifier,data){
+    const key=this._str(identifier).trim();
+    return this._withConnection("PPPoE profile update",async(connection)=>{
+      const rows=await connection.write("/ppp/profile/print");
+      const items=Array.isArray(rows)?rows:[];
+      const item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);
+      if(!item||!item[".id"])throw new Error("PPPoE profile not found.");
+      const params=[
+        "=.id="+item[".id"],
+        "=name="+this._str(data.name).trim(),
+        "=local-address="+this._str(data.localAddress),
+        "=remote-address="+this._str(data.remoteAddress),
+        "=dns-server="+this._str(data.dnsServer),
+        "=change-tcp-mss="+(this._str(data.changeTcpMss)||"default"),
+        "=rate-limit="+this._str(data.rateLimit)
+      ];
+      await connection.write("/ppp/profile/set",params);
+      return {id:this._str(item[".id"]),name:this._str(data.name).trim()};
+    });
+  }
+
+  async removeProfile(identifier){
+    const key=this._str(identifier).trim();
+    return this._withConnection("PPPoE profile removal",async(connection)=>{
+      const rows=await connection.write("/ppp/profile/print");
+      const items=Array.isArray(rows)?rows:[];
+      const item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);
+      if(!item||!item[".id"])throw new Error("PPPoE profile not found.");
+      const profileName=this._str(item.name);
+      if(/^default$/i.test(profileName))throw new Error('The default MikroTik PPP profile cannot be deleted.');
+      try{
+        await connection.write("/ppp/profile/remove",["=.id="+item[".id"]]);
+      }catch(error){
+        const message=this._str(error?.message||error).trim();
+        if(/used|in use|reference|referenced/i.test(message))throw new Error('MikroTik profile "'+profileName+'" is in use and cannot be deleted. Disconnect or reassign its users first.');
+        throw error;
+      }
+      return {id:this._str(item[".id"]),name:profileName,removed:true};
+    });
+  }
+
   async createSecret(data) {
     const name = this._str(data.username).trim(); const password = this._str(data.password); const profile = this._str(data.profile).trim();
     if (!name || !password || !profile) throw new Error("Username, password, and profile are required.");
     return this._withConnection("PPPoE user creation", async (connection) => { const params = this._writeParams({ name, password, profile, service: "pppoe", "caller-id": data.callerId, comment: data.comment, disabled: data.disabled ? "yes" : undefined }); await connection.write("/ppp/secret/add", params); return { username: name }; });
+  }
+  async removeSecret(username) {
+    const name = this._str(username).trim();
+    if (!name) throw new Error("PPPoE username is required.");
+
+    return this._withConnection("PPPoE user removal", async (connection) => {
+      const secret = await this._findSecret(connection, name);
+      await connection.write("/ppp/secret/remove", ["=.id=" + secret[".id"]]);
+      return { username: name, removed: true };
+    });
   }
   async _findSecret(connection, username) { const rows = await connection.write("/ppp/secret/print"); const match = (Array.isArray(rows) ? rows : []).find((item) => this._str(item.name) === username); if (!match || !match[".id"]) throw new Error("PPPoE user \"" + username + "\" was not found on MikroTik."); return match; }
   async updateSecret(username,data){const name=this._str(username).trim();return this._withConnection("PPPoE user update",async(connection)=>{const secret=await this._findSecret(connection,name);const params=this._writeParams({password:data.password,profile:data.profile,"remote-address":data.remoteAddress,"caller-id":data.callerId,comment:data.comment,disabled:data.disabled?"yes":"no"});await connection.write("/ppp/secret/set",["=.id="+secret[".id"],...params]);return {username:name};});}

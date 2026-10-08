@@ -280,6 +280,29 @@
         .modal-backdrop { z-index: 1040 !important; }
         .modal { z-index: 1055 !important; }
         .modal.show { display: block; }
+        /* IP Pools enterprise UI */
+        .ip-pool-shell{position:relative}
+        .ip-pool-hero{border:1px solid rgba(16,185,129,.16);background:linear-gradient(135deg,#ffffff 0%,#f0fdf8 52%,#ecfdf5 100%);border-radius:20px;padding:22px 24px;box-shadow:0 14px 40px rgba(15,23,42,.06);overflow:hidden}
+        .ip-pool-hero:after{content:"";position:absolute;width:220px;height:220px;right:-90px;top:-110px;border-radius:50%;background:rgba(16,185,129,.12);filter:blur(4px)}
+        .ip-pool-stat{border:1px solid #e2e8f0;background:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+        .ip-pool-stat .value{font-size:22px;font-weight:800;color:#0f172a}
+        .ip-pool-card{border:1px solid #e2e8f0;border-radius:18px;background:#fff;box-shadow:0 14px 34px rgba(15,23,42,.06);overflow:hidden}
+        .ip-pool-table thead th{background:#f8fafc;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:13px 16px}
+        .ip-pool-table tbody td{padding:15px 16px;border-color:#f1f5f9}
+        .ip-pool-row{transition:transform .18s ease,background .18s ease,box-shadow .18s ease}
+        .ip-pool-row:hover{background:#f8fffb;transform:translateY(-1px);box-shadow:inset 3px 0 0 #10b981}
+        .ip-pool-id{font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:3px 7px}
+        .ip-pool-action{width:36px;height:36px;border-radius:10px!important;display:inline-flex;align-items:center;justify-content:center;transition:transform .18s ease,box-shadow .18s ease}
+        .ip-pool-action:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(15,23,42,.12)}
+        .ip-pool-modal .modal-content{border-radius:20px;box-shadow:0 28px 80px rgba(15,23,42,.24);animation:ipPoolModalIn .22s ease-out}
+        .ip-pool-modal .modal-header{padding:18px 22px}
+        .ip-pool-modal .modal-body{padding:22px}
+        .ip-pool-modal .form-control{border-radius:12px;min-height:46px}
+        .ip-pool-modal .form-control:focus{border-color:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}
+        .ip-pool-save{border-radius:11px;box-shadow:0 8px 20px rgba(5,150,105,.18);transition:transform .18s ease,box-shadow .18s ease}
+        .ip-pool-save:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(5,150,105,.25)}
+        @keyframes ipPoolModalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @media(max-width:768px){.ip-pool-hero{padding:18px}.ip-pool-table{min-width:860px}.ip-pool-modal .modal-body{padding:16px}}
     </style>
 </head>
 <body>
@@ -1429,60 +1452,297 @@
         let currentIpPoolEdit = null; let ipPoolCache = {};
 
         function ipPoolDefaultModalHtml() {
-            return '<div class="modal fade" id="ipPoolModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header"><div><h5 class="modal-title fw-bold"><i class="bi bi-diagram-3 text-success me-2"></i><span id="ipPoolModalTitle">Create IP Pool</span></h5><small class="text-muted">Synchronize directly with MikroTik /ip/pool</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="ipPoolForm"><div class="modal-body"><div class="mb-3"><label class="form-label">Pool Name <span class="text-danger">*</span></label><input id="ipPoolName" class="form-control" required maxlength="100" placeholder="pool_10mbps"></div><div class="mb-3"><label class="form-label">IP Ranges <span class="text-danger">*</span></label><input id="ipPoolRanges" class="form-control font-monospace" required maxlength="1000" placeholder="172.16.1.10-172.16.1.100"></div><div class="mb-2"><label class="form-label">Next Pool <span class="text-muted fw-normal">(Optional)</span></label><input id="ipPoolNext" class="form-control" maxlength="100" placeholder="pool_10mbps_backup"></div><div id="ipPoolFormHint" class="form-text"><i class="bi bi-info-circle me-1"></i>Use a single IPv4 subnet/range or comma-separated ranges.</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button id="ipPoolSaveBtn" type="submit" class="btn btn-theme"><i class="bi bi-check2-circle me-1"></i>Save to MikroTik</button></div></form></div></div></div>';
+            return '<div class="modal fade ip-pool-modal" id="ipPoolModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content border-0"><div class="modal-header"><div><h5 class="modal-title fw-bold" id="ipPoolModalTitle">Add IP Pool</h5><small class="text-muted">MikroTik /ip/pool configuration</small></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="ipPoolForm"><div class="modal-body"><input id="ipPoolMikrotikId" type="hidden"><div class="row g-3"><div class="col-md-6"><label class="form-label">Pool Name <span class="text-danger">*</span></label><input id="ipPoolName" class="form-control" required maxlength="100" placeholder="100 mbps"></div><div class="col-md-6"><label class="form-label">Subnet (CIDR)</label><input id="ipPoolSubnet" class="form-control font-monospace" maxlength="50" placeholder="10.81.0.1/24"></div><div class="col-md-6"><label class="form-label">Local Address / Gateway <span class="text-danger">*</span></label><input id="ipPoolLocalAddress" class="form-control font-monospace" required placeholder="10.81.0.1"></div><div class="col-md-6"><label class="form-label">Pool Range (Usable Range) <span class="text-danger">*</span></label><input id="ipPoolRanges" class="form-control font-monospace" required maxlength="1000" placeholder="10.81.0.2-10.81.0.254"></div><div class="col-12"><label class="form-label">Next Pool <span class="text-muted fw-normal">(Optional)</span></label><select id="ipPoolNext" class="form-select"><option value="none">None</option></select><div id="ipPoolFormHint" class="form-text mt-2"><i class="bi bi-magic me-1"></i>Enter a CIDR such as <span class="font-monospace">10.81.0.1/24</span> to auto-fill the gateway and usable range.</div></div></div></div><div class="modal-footer"><button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button><button id="ipPoolSaveBtn" type="submit" class="btn btn-primary px-4 ip-pool-save"><i class="bi bi-check2-circle me-1"></i>Save IP Pool</button></div></form></div></div></div>';
         }
+
         function ensureIpPoolModal() {
             let modal=document.getElementById('ipPoolModal');
-            if(!modal){document.body.insertAdjacentHTML('beforeend',ipPoolDefaultModalHtml());modal=document.getElementById('ipPoolModal');document.getElementById('ipPoolForm').addEventListener('submit',saveIpPool);}
+            if(!modal){
+                document.body.insertAdjacentHTML('beforeend',ipPoolDefaultModalHtml());
+                modal=document.getElementById('ipPoolModal');
+                document.getElementById('ipPoolForm').addEventListener('submit',saveIpPool);
+                document.getElementById('ipPoolSubnet').addEventListener('input',autoFillIpPoolFromSubnet);
+            }
             return modal;
         }
-        function openIpPoolModalById(id){const pool=ipPoolCache[String(id)];if(!pool)return;openIpPoolModal(pool);}
-        function openIpPoolModal(pool) {
+
+        function ipv4Number(value){
+            const parts=String(value||'').trim().split('.');
+            if(parts.length!==4||parts.some(p=>!/^\d{1,3}$/.test(p)||Number(p)>255))return null;
+            return parts.reduce((n,p)=>n*256+Number(p),0);
+        }
+        function ipv4Text(value){
+            const n=Number(value); if(!Number.isInteger(n)||n<0||n>4294967295)return '';
+            return [24,16,8,0].map(s=>(n>>>s)&255).join('.');
+        }
+        function cidrInfo(value){
+            const m=String(value||'').trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/);
+            if(!m)return null;
+            const ip=ipv4Number(m[1]),prefix=Number(m[2]);
+            if(ip===null||prefix<0||prefix>32)return null;
+            const mask=prefix===0?0:(0xffffffff<<(32-prefix))>>>0;
+            const network=(ip&mask)>>>0,size=2**(32-prefix),broadcast=network+size-1;
+            return {local:ipv4Text(network+1),range:prefix<=30?ipv4Text(network+1)+'-'+ipv4Text(broadcast-1):''};
+        }
+        function autoFillIpPoolFromSubnet(){
+            const subnet=document.getElementById('ipPoolSubnet')?.value||'',info=cidrInfo(subnet);
+            if(!info)return;
+            const local=document.getElementById('ipPoolLocalAddress'),range=document.getElementById('ipPoolRanges');
+            if(local&&!local.value.trim())local.value=info.local;
+            if(range&&!range.value.trim()&&info.range)range.value=info.range;
+        }
+
+        async function populateIpPoolNextOptions(selectedName){
+            const select=document.getElementById('ipPoolNext'); if(!select)return;
+            try{
+                const response=await jsonFetch('/api/ip-pools'),pools=Array.isArray(response)?response:(response.pools||[]);
+                const current=String(selectedName||'').toLowerCase();
+                select.innerHTML='<option value="none">None</option>'+pools.filter(p=>String(p.name||'').toLowerCase()!==current).map(p=>'<option value="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+'</option>').join('');
+            }catch(_){select.innerHTML='<option value="none">None</option>';}
+        }
+
+        async function openIpPoolModal(pool) {
             purgeStuckBackdrops(); currentIpPoolEdit=pool||null;
             const modal=ensureIpPoolModal();
-            document.getElementById('ipPoolModalTitle').textContent=pool?'Edit IP Pool':'Create IP Pool';
+            document.getElementById('ipPoolModalTitle').textContent=pool?'Edit IP Pool':'Add IP Pool';
+            document.getElementById('ipPoolMikrotikId').value=pool?.id||'';
             document.getElementById('ipPoolName').value=pool?.name||'';
+            document.getElementById('ipPoolSubnet').value=pool?.subnet||'';
+            document.getElementById('ipPoolLocalAddress').value=pool?.localAddress||'';
             document.getElementById('ipPoolRanges').value=pool?.ranges||'';
-            document.getElementById('ipPoolNext').value=pool?.nextPool||'';
+            await populateIpPoolNextOptions(pool?.name||'');
+            document.getElementById('ipPoolNext').value=pool?.nextPool||'none';
+            if(!pool?.subnet)autoFillIpPoolFromSubnet();
             bootstrap.Modal.getOrCreateInstance(modal).show();
         }
-        async function saveIpPool(event) {
-            event.preventDefault(); const button=document.getElementById('ipPoolSaveBtn'); if(!button)return;
+        function openAddIpPoolModal(){openIpPoolModal();}
+
+        async function saveIpPool(event){
+            event.preventDefault();
+            const button=document.getElementById('ipPoolSaveBtn'); if(!button)return;
             const oldHtml=button.innerHTML; button.disabled=true; button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
             try{
-                const payload={name:document.getElementById('ipPoolName').value.trim(),ranges:document.getElementById('ipPoolRanges').value.trim(),nextPool:document.getElementById('ipPoolNext').value.trim()};
-                if(!payload.name||!payload.ranges)throw new Error('Pool Name and IP Ranges are required.');
-                const endpoint=currentIpPoolEdit?'/api/ip-pools/'+encodeURIComponent(currentIpPoolEdit.id):'/api/ip-pools';
-                await jsonFetch(endpoint,{method:currentIpPoolEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                const payload={
+                    originalName:(currentIpPoolEdit?.name||document.getElementById('ipPoolName').value).trim(),
+                    name:document.getElementById('ipPoolName').value.trim(),
+                    subnet:document.getElementById('ipPoolSubnet').value.trim(),
+                    localAddress:document.getElementById('ipPoolLocalAddress').value.trim(),
+                    ranges:document.getElementById('ipPoolRanges').value.trim(),
+                    nextPool:document.getElementById('ipPoolNext').value||'none'
+                };
+                if(!payload.name||!payload.localAddress||!payload.ranges)throw new Error('Pool Name, Local Address and Pool Range are required.');
+                const endpoint=currentIpPoolEdit?'/api/ip-pools/update':'/api/ip-pools';
+                await jsonFetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
                 const modal=bootstrap.Modal.getInstance(document.getElementById('ipPoolModal')); if(modal)modal.hide();
-                purgeStuckBackdrops(); await loadIpPools();
+                purgeStuckBackdrops(); currentIpPoolEdit=null; await loadIpPools();
             }catch(error){alert(error.message);}finally{button.disabled=false;button.innerHTML=oldHtml;}
         }
-        async function deleteIpPool(id,name) {
-            if(!id)return; if(!confirm('Delete IP Pool "'+name+'" from MikroTik? This cannot be undone.'))return;
-            purgeStuckBackdrops();
-            try{await jsonFetch('/api/ip-pools/'+encodeURIComponent(id),{method:'DELETE'});await loadIpPools();}catch(error){alert(error.message);}
+
+        async function syncIpPoolsFromMikrotik(){
+            const button=document.getElementById('syncIpPoolBtn'); if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';}
+            try{await jsonFetch('/api/ip-pools/sync',{method:'POST'});await loadIpPools();}
+            catch(error){alert(error.message);}
+            finally{if(button){button.disabled=false;button.innerHTML='<i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik';}}
         }
-        async function loadIpPools() {
+
+        async function deleteIpPool(id,name){
+            if(!name||!confirm('Delete IP Pool "'+name+'" from MikroTik? This cannot be undone.'))return;
+            purgeStuckBackdrops();
+            try{await jsonFetch('/api/ip-pools/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({originalName:name,name})});await loadIpPools();}
+            catch(error){alert(error.message);}
+        }
+
+        function initIpPoolActionHandlers(){
+            if(window.__ipPoolActionHandlersReady)return;
+            window.__ipPoolActionHandlersReady=true;
+            document.addEventListener('click',function(event){
+                const editButton=event.target.closest('.edit-pool-btn');
+                if(editButton){event.preventDefault();openIpPoolModal(ipPoolCache[String(editButton.dataset.name).toLowerCase()]||{name:editButton.dataset.name||'',ranges:editButton.dataset.ranges||'',subnet:editButton.dataset.subnet||'',localAddress:editButton.dataset.localAddress||'',nextPool:editButton.dataset.next||'none'});return;}
+                const deleteButton=event.target.closest('.delete-pool-btn');
+                if(deleteButton){event.preventDefault();deleteIpPool('',deleteButton.dataset.name||'');}
+            });
+        }
+        initIpPoolActionHandlers();
+
+        async function loadIpPools(){
             purgeStuckBackdrops(); currentCustomerTitleKey=''; currentPaymentTitleKey=''; setPageTitleSafe('IP Pools');
             hideAdminViews(); removeHotspotView();
             const dynamic=document.getElementById('dynamicPageContent'); if(!dynamic)return; dynamic.style.display='block';
             dynamic.innerHTML='<section class="admin-view"><div class="card card-custom"><div class="card-body text-center py-5"><div class="spinner-border text-success"></div><div class="small text-muted mt-2">Loading MikroTik IP Pools...</div></div></div></section>';
             try{
-                const response=await jsonFetch('/api/ip-pools'); const pools=Array.isArray(response)?response:(response.pools||[]); ipPoolCache={};pools.forEach(function(p){ipPoolCache[String(p.id)]=p;});
-                const rows=pools.map(function(pool,index){
-                    return '<tr><td class="text-muted">'+(index+1)+'</td><td><div class="d-flex align-items-center gap-2"><span class="ip-pool-network-badge badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-diagram-3"></i>IPv4 Pool</span><div><div class="fw-bold">'+escapeHtml(pool.name)+'</div></div></td><td><span class="ip-pool-range">'+escapeHtml(pool.ranges||'-')+'</span></td><td>'+(pool.nextPool?'<span class="badge bg-light text-dark border font-monospace">'+escapeHtml(pool.nextPool)+'</span>':'<span class="text-muted">None</span>')+'</td><td class="text-end"><div class="btn-group btn-group-sm"><button type="button" class="btn btn-outline-success" title="Edit" onclick="openIpPoolModal('+JSON.stringify(pool).replace(/</g,'\\u003c')+')"><i class="bi bi-pencil-square"></i></button><button type="button" class="btn btn-outline-danger" title="Delete" onclick="deleteIpPool('+JSON.stringify(pool.id)+','+JSON.stringify(pool.name)+')"><i class="bi bi-trash3"></i></button></div></td></tr>';
+                const response=await jsonFetch('/api/ip-pools'),pools=Array.isArray(response)?response:(response.pools||[]);
+                ipPoolCache={}; pools.forEach(p=>{ipPoolCache[String(p.name||'').toLowerCase()]=p;});
+                const rows=pools.map(function(pool){
+                    const name=pool.name||'',ranges=pool.ranges||'-',subnet=pool.subnet||'-',local=pool.localAddress||'-',device=pool.deviceName||response.deviceName||'MikroTik';
+                    return '<tr><td class="fw-bold text-dark">'+escapeHtml(name)+'</td><td><span class="badge bg-info text-white font-monospace px-2 py-1">'+escapeHtml(subnet)+'</span></td><td><span class="font-monospace text-secondary">'+escapeHtml(local)+'</span></td><td><span class="font-monospace">'+escapeHtml(ranges)+'</span></td><td><span class="fw-semibold text-secondary">'+escapeHtml(device)+'</span></td><td class="text-end"><button type="button" class="btn btn-sm btn-primary me-2 edit-pool-btn" data-name="'+escapeHtml(name)+'">Edit</button><button type="button" class="btn btn-sm btn-danger delete-pool-btn" data-name="'+escapeHtml(name)+'">Delete</button></td></tr>';
                 }).join('');
-                dynamic.innerHTML='<section class="admin-view"><div class="card card-custom shadow-sm border-0 overflow-hidden"><div class="card-header bg-white border-bottom p-3 p-md-4"><div class="d-flex flex-column flex-lg-row align-items-lg-center gap-3"><div><div class="d-flex align-items-center gap-2"><h5 class="mb-0 fw-bold">IP Pools</h5><span class="badge rounded-pill bg-success">'+pools.length+'</span></div><div class="small text-muted mt-1">MikroTik <span class="font-monospace">/ip/pool</span> · Live synchronized</div></div><div class="ms-lg-auto d-flex flex-wrap gap-2"><button type="button" class="btn btn-theme" onclick="openIpPoolModal()"><i class="bi bi-plus-lg me-1"></i>Create IP Pool</button><button type="button" class="btn btn-outline-success" onclick="loadIpPools()"><i class="bi bi-arrow-repeat me-1"></i>Refresh</button></div></div></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0 ip-pool-table"><thead class="table-light"><tr><th>#</th><th>Pool Name</th><th>IP Ranges</th><th>Next Pool</th><th class="text-end">Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5"><div class="ip-pool-empty"><i class="bi bi-diagram-3 fs-1 mb-2"></i><div>No custom IP pools found.</div></div></td></tr>')+'</tbody></table></div></div></div></section>';
+                dynamic.innerHTML='<section class="admin-view"><div class="d-flex justify-content-between align-items-center mb-3"><h4 class="fw-bold mb-0">IP Pools</h4><div class="d-flex gap-2"><button class="btn btn-success" id="syncIpPoolBtn" onclick="syncIpPoolsFromMikrotik()"><i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik</button><button class="btn btn-primary" onclick="openAddIpPoolModal()"><i class="bi bi-plus-lg me-1"></i> Add IP Pool</button></div></div><div class="card shadow-sm border-0 rounded-3"><div class="card-body p-0"><div class="table-responsive"><table class="table align-middle mb-0"><thead class="table-light"><tr><th class="ps-3 py-3">Name</th><th>Subnet</th><th>Local Address</th><th>Pool Range</th><th>Device</th><th class="text-end pe-3">Actions</th></tr></thead><tbody id="ipPoolTableBody">'+(rows||'<tr><td colspan="6"><div class="ip-pool-empty py-5"><i class="bi bi-diagram-3 fs-1 mb-2"></i><div>No custom IP pools found.</div></td></tr>')+'</tbody></table></div></div></div></section>';
                 if(window.innerWidth<=768&&typeof closeSidebarMobile==='function')closeSidebarMobile();
             }catch(error){dynamic.innerHTML='<section class="admin-view"><div class="alert alert-danger m-3"><i class="bi bi-exclamation-triangle me-2"></i>'+escapeHtml(error.message)+'</div></section>';}
         }
 
-                let currentPackageEdit=null;
-        function ensurePackageModal(){let el=document.getElementById('packageModal');if(!el){document.body.insertAdjacentHTML('beforeend','<div class="modal fade" id="packageModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Create / Edit Plan</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="packageForm"><div class="modal-body"><div class="row g-3"><div class="col-md-6"><label class="form-label">Plan Name *</label><input id="pkgName" class="form-control" required></div><div class="col-md-6"><label class="form-label">Linked IP Pool *</label><select id="pkgPool" class="form-select" required></select></div><div class="col-md-6"><label class="form-label">Bandwidth / Rate Limit *</label><input id="pkgRate" class="form-control" placeholder="100M/100M" required></div><div class="col-md-6"><label class="form-label">Exact Monthly Price (৳) *</label><input id="pkgPrice" type="number" step="0.01" min="0.01" class="form-control" required></div><div class="col-md-6"><label class="form-label">Duration (Calendar Months)</label><input id="pkgDuration" type="number" min="1" value="1" class="form-control" required></div><div class="col-md-6"><label class="form-label">MikroTik PPPoE Profile</label><input id="pkgProfile" class="form-control"></div></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button id="pkgSaveBtn" class="btn btn-theme">Save Plan</button></div></form></div></div></div>');el=document.getElementById('packageModal');document.getElementById('packageForm').addEventListener('submit',savePackage);}return el;}
-        async function openPackageModal(pkg){purgeStuckBackdrops();currentPackageEdit=pkg||null;const el=ensurePackageModal();document.getElementById('pkgName').value=pkg?.plan_name||'';document.getElementById('pkgRate').value=pkg?.rate_limit||'';document.getElementById('pkgPrice').value=pkg?.price||'';document.getElementById('pkgDuration').value=pkg?.duration_months||1;document.getElementById('pkgProfile').value=pkg?.profile_name||pkg?.plan_name||'';const d=await jsonFetch('/api/packages-admin/pools');document.getElementById('pkgPool').innerHTML='<option value="">Select IP Pool</option>'+(d.pools||[]).map(p=>'<option value="'+escapeHtml(p.name)+'">'+escapeHtml(p.name)+' — '+escapeHtml(p.ranges||'')+'</option>').join('');document.getElementById('pkgPool').value=pkg?.pool_name||'';bootstrap.Modal.getOrCreateInstance(el).show();}
-        async function savePackage(e){e.preventDefault();const b=document.getElementById('pkgSaveBtn'),old=b.innerHTML;b.disabled=true;b.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving...';try{const body={planName:pkgName.value.trim(),poolName:pkgPool.value,rateLimit:pkgRate.value.trim(),price:pkgPrice.value,durationMonths:pkgDuration.value,profileName:pkgProfile.value.trim()||pkgName.value.trim()};const url=currentPackageEdit?'/api/packages-admin/'+currentPackageEdit.id:'/api/packages-admin';await jsonFetch(url,{method:currentPackageEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});bootstrap.Modal.getInstance(document.getElementById('packageModal'))?.hide();purgeStuckBackdrops();await loadPlanPackages();}catch(e){alert(e.message);}finally{b.disabled=false;b.innerHTML=old;}}
-        async function loadPlanPackages(){purgeStuckBackdrops();setPageTitleSafe('Plan & Packages');hideAdminViews();removeHotspotView();const d=await jsonFetch('/api/packages-admin'),el=document.getElementById('dynamicPageContent');if(!el)return;el.style.display='block';const rows=(d.packages||[]).map((p,i)=>'<tr><td>'+(i+1)+'</td><td><strong>'+escapeHtml(p.plan_name)+'</strong><div class="small text-muted">'+escapeHtml(p.profile_name)+'</div></td><td><span class="badge bg-success-subtle text-success border">'+escapeHtml(p.pool_name)+'</span><div class="small font-monospace">'+escapeHtml(p.pool_ranges||'')+'</div></td><td class="font-monospace">'+escapeHtml(p.rate_limit)+'</td><td><strong>৳'+Number(p.price).toFixed(2)+'</strong></td><td>'+Number(p.duration_months)+' month(s)</td><td><button class="btn btn-sm btn-outline-success" onclick="openPackageModal('+JSON.stringify(p).replace(/</g,'\\u003c')+')"><i class="bi bi-pencil"></i></button></td></tr>').join('');el.innerHTML='<section class="admin-view"><div class="card card-custom"><div class="card-header bg-white d-flex align-items-center"><h5 class="mb-0">Plan & Packages <span class="badge bg-success">'+(d.packages||[]).length+'</span></h5><div class="ms-auto"><button class="btn btn-theme" onclick="openPackageModal()"><i class="bi bi-plus-lg me-1"></i>Create Plan</button><button class="btn btn-outline-success ms-2" onclick="loadPlanPackages()">Refresh</button></div></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>#</th><th>Plan</th><th>IP Pool</th><th>Rate Limit</th><th>Exact Bill</th><th>Duration</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div></div></section>';}
+                let currentPackageEdit = null;
+
+        function openCreatePlanModal() {
+            openPlanModal(null);
+        }
+
+        function planDataAttr(value) {
+            return escapeHtml(value ?? '');
+        }
+
+        function ensurePlanModal() {
+            let el=document.getElementById('planModal');
+            if(el) return el;
+            document.body.insertAdjacentHTML('beforeend',
+                '<div class="modal fade" id="planModal" tabindex="-1" aria-hidden="true">' +
+                '<div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">' +
+                '<form id="planForm"><div class="modal-header"><div><h5 class="modal-title" id="planModalTitle">Create Plan</h5><div class="small text-muted">MikroTik PPP Profile</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+                '<div class="modal-body"><div class="row g-3">' +
+                '<div class="col-md-6"><label class="form-label">Plan Name *</label><input id="planName" class="form-control" required></div>' +
+                '<div class="col-md-6"><label class="form-label">Exact Monthly Price (৳) *</label><input id="planPrice" type="number" step="0.01" min="0.01" class="form-control" required></div>' +
+                '<div class="col-md-6"><label class="form-label">Duration (Months)</label><input id="planDuration" type="number" min="1" value="1" class="form-control" required></div>' +
+                '<div class="col-md-6"><label class="form-label">Bandwidth / Rate Limit (Optional)</label><input id="planRateLimit" class="form-control" placeholder="e.g. 100M/100M"></div>' +
+                '<div class="col-md-6"><label class="form-label">Local Address (Gateway IP / Pool)</label><input id="planLocalAddress" class="form-control" placeholder="e.g. 10.0.0.1 or local-pool"></div>' +
+                '<div class="col-md-6"><label class="form-label">Remote Address / IP Pool</label><select id="planRemoteAddress" class="form-select"><option value="">No pool / direct address</option></select></div>' +
+                '<div class="col-md-6"><label class="form-label">DNS Servers</label><input id="planDnsServer" class="form-control" placeholder="8.8.8.8, 1.1.1.1"></div>' +
+                '<div class="col-md-6"><label class="form-label">Change TCP MSS</label><select id="planChangeTcpMss" class="form-select"><option value="yes">yes</option><option value="no">no</option><option value="default">default</option></select></div>' +
+                '</div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button id="planSaveBtn" class="btn btn-theme">Save Plan</button></div>' +
+                '</form></div></div></div>'
+            );
+            el=document.getElementById('planModal');
+            el.querySelector('#planForm').addEventListener('submit',savePlan);
+            return el;
+        }
+
+        async function populatePlanPools(selected='') {
+            const select=document.getElementById('planRemoteAddress');
+            if(!select)return;
+            try{
+                const data=await jsonFetch('/api/packages-admin/pools');
+                select.innerHTML='<option value="">No pool / direct address</option>'+(data.pools||[]).map(p=>'<option value="'+planDataAttr(p.name)+'">'+planDataAttr(p.name)+' — '+planDataAttr(p.ranges||'')+'</option>').join('');
+                select.value=selected||'';
+                if(selected&&!select.value){
+                    select.insertAdjacentHTML('beforeend','<option value="'+planDataAttr(selected)+'">'+planDataAttr(selected)+'</option>');
+                    select.value=selected;
+                }
+            }catch(error){
+                select.innerHTML='<option value="">Unable to load IP pools</option>';
+                throw error;
+            }
+        }
+
+        async function openPlanModal(plan=null){
+            purgeStuckBackdrops();
+            currentPackageEdit=plan||null;
+            const el=ensurePlanModal();
+            document.getElementById('planModalTitle').textContent=plan?'Edit Plan':'Create Plan';
+            document.getElementById('planName').value=plan?.plan_name||plan?.name||'';
+            document.getElementById('planPrice').value=plan?.price??'';
+            document.getElementById('planDuration').value=plan?.duration_months||1;
+            document.getElementById('planRateLimit').value=plan?.rate_limit||'';
+            document.getElementById('planLocalAddress').value=plan?.local_address||plan?.localAddress||'';
+            document.getElementById('planDnsServer').value=plan?.dns_server||plan?.dnsServer||'';
+            document.getElementById('planChangeTcpMss').value=plan?.change_tcp_mss||plan?.changeTcpMss||'default';
+            await populatePlanPools(plan?.remote_address||plan?.remoteAddress||plan?.pool_name||'');
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
+
+        async function savePlan(e){
+            e.preventDefault();
+            const button=document.getElementById('planSaveBtn');
+            const old=button.innerHTML;
+            button.disabled=true;
+            button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+            try{
+                const body={
+                    planName:document.getElementById('planName').value.trim(),
+                    price:document.getElementById('planPrice').value,
+                    durationMonths:document.getElementById('planDuration').value,
+                    rateLimit:document.getElementById('planRateLimit').value.trim(),
+                    localAddress:document.getElementById('planLocalAddress').value.trim(),
+                    remoteAddress:document.getElementById('planRemoteAddress').value,
+                    dnsServer:document.getElementById('planDnsServer').value.trim(),
+                    changeTcpMss:document.getElementById('planChangeTcpMss').value
+                };
+                const url=currentPackageEdit?'/api/packages/'+encodeURIComponent(currentPackageEdit.id):'/api/packages';
+                const response=await fetch(url,{method:currentPackageEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+                const data=await response.json().catch(()=>({}));
+                if(!response.ok||data.success===false)throw new Error(data.message||'Failed to save plan.');
+                bootstrap.Modal.getInstance(document.getElementById('planModal'))?.hide();
+                purgeStuckBackdrops();
+                await loadPlanPackages();
+            }catch(error){alert(error.message);}finally{button.disabled=false;button.innerHTML=old;}
+        }
+
+        async function deletePlan(id,name){
+            if(!id)return;
+            if(!confirm('Delete plan "'+(name||'')+'"? This will also remove the matching MikroTik PPP profile.'))return;
+            try{
+                const response=await fetch('/api/packages/'+encodeURIComponent(id),{method:'DELETE'});
+                const data=await response.json().catch(()=>({}));
+                if(!response.ok||data.success===false)throw new Error(data.message||'Failed to delete plan.');
+                await loadPlanPackages();
+            }catch(error){alert(error.message);}
+        }
+
+        async function syncPlansFromMikrotik(){
+            const button=document.getElementById('syncPlansBtn');
+            if(button){button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';}
+            try{
+                const response=await fetch('/api/packages/sync',{method:'POST'});
+                const data=await response.json().catch(()=>({}));
+                if(!response.ok||data.success===false)throw new Error(data.message||'MikroTik profile sync failed.');
+                await loadPlanPackages();
+                alert('Synced '+Number(data.count||0)+' MikroTik PPP profiles.');
+            }catch(error){alert(error.message);}finally{
+                if(button){button.disabled=false;button.innerHTML='<i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik';}
+            }
+        }
+
+        function handlePlanActionClick(event){
+            const edit=event.target.closest('.edit-plan-btn');
+            if(edit){
+                const plan=JSON.parse(edit.getAttribute('data-plan-json')||'{}');
+                openPlanModal(plan);
+                return;
+            }
+            const del=event.target.closest('.delete-plan-btn');
+            if(del)deletePlan(del.dataset.id,del.dataset.name);
+        }
+
+        if(!window.__planPackageEventsBound){
+            document.addEventListener('click',handlePlanActionClick);
+            window.__planPackageEventsBound=true;
+        }
+
+        async function loadPlanPackages(){
+            purgeStuckBackdrops();
+            setPageTitleSafe('Plan & Packages');
+            hideAdminViews();
+            removeHotspotView();
+            const d=await jsonFetch('/api/packages');
+            const el=document.getElementById('dynamicPageContent');
+            if(!el)return;
+            el.style.display='block';
+            const rows=(d.packages||[]).map((p,i)=>{
+                const json=JSON.stringify(p).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
+                return '<tr><td>'+(i+1)+'</td>' +
+                    '<td><strong>'+escapeHtml(p.plan_name||p.name)+'</strong><div class="small text-muted">'+escapeHtml(p.profile_name||p.profile||'')+'</div></td>' +
+                    '<td>'+escapeHtml(p.local_address||p.localAddress||'-')+'</td>' +
+                    '<td><span class="badge bg-success-subtle text-success border">'+escapeHtml(p.remote_address||p.remoteAddress||p.pool_name||'-')+'</span></td>' +
+                    '<td>'+escapeHtml(p.dns_server||p.dnsServer||'-')+'</td>' +
+                    '<td class="font-monospace">'+escapeHtml(p.rate_limit||'')+'</td>' +
+                    '<td><strong>৳'+Number(p.price||0).toFixed(2)+'</strong></td>' +
+                    '<td>'+Number(p.duration_months||1)+' month(s)</td>' +
+                    '<td><span class="badge bg-light text-dark border">'+escapeHtml(p.change_tcp_mss||p.changeTcpMss||'default')+'</span></td>' +
+                    '<td class="text-end pe-3">' +
+                    '<button type="button" class="btn btn-sm btn-primary edit-plan-btn me-1" data-id="'+planDataAttr(p.id)+'" data-name="'+planDataAttr(p.plan_name||p.name)+'" data-price="'+planDataAttr(p.price)+'" data-duration="'+planDataAttr(p.duration_months||1)+'" data-pool="'+planDataAttr(p.pool_name||'')+'" data-ratelimit="'+planDataAttr(p.rate_limit||'')+'" data-localaddress="'+planDataAttr(p.local_address||p.localAddress||'')+'" data-remoteaddress="'+planDataAttr(p.remote_address||p.remoteAddress||'')+'" data-dnsserver="'+planDataAttr(p.dns_server||p.dnsServer||'')+'" data-tcpmss="'+planDataAttr(p.change_tcp_mss||p.changeTcpMss||'default')+'" data-plan-json="'+planDataAttr(json)+'"><i class="bi bi-pencil-square"></i> Edit</button>' +
+                    '<button type="button" class="btn btn-sm btn-danger delete-plan-btn" data-id="'+planDataAttr(p.id)+'" data-name="'+planDataAttr(p.plan_name||p.name)+'"><i class="bi bi-trash3"></i> Delete</button>' +
+                    '</td></tr>';
+            }).join('');
+            el.innerHTML='<section class="admin-view"><div class="card card-custom"><div class="card-header bg-white d-flex align-items-center"><h5 class="mb-0">Plan & Packages <span class="badge bg-success">'+(d.packages||[]).length+'</span></h5><div class="ms-auto d-flex gap-2"><button class="btn btn-success" id="syncPlansBtn" onclick="syncPlansFromMikrotik()"><i class="bi bi-arrow-repeat me-1"></i> Sync from MikroTik</button><button class="btn btn-primary" onclick="openCreatePlanModal()"><i class="bi bi-plus-lg me-1"></i> Create Plan</button></div></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>#</th><th>Plan / Profile</th><th>Local Address</th><th>Remote Address / IP Pool</th><th>DNS Servers</th><th>Rate Limit</th><th>Exact Bill</th><th>Duration</th><th>TCP MSS</th><th class="text-end">Actions</th></tr></thead><tbody>'+(rows||'<tr><td colspan="10" class="text-center py-4 text-muted">No plans found.</td></tr>')+'</tbody></table></div></div></section>';
+        }
         let currentPaymentChannel = '';
         let currentPaymentGateway = 'all';
         let currentPaymentTitleKey = '';
@@ -1771,10 +2031,50 @@
             return translations[lang]?.[key] || translations.en[key] || key;
         }
 
-        function customerStatus(user) {
-            if (user.computed_status === 'expired' || (user.expiry_date && new Date(user.expiry_date).getTime() <= Date.now())) {
-                return { key: 'expired_status', cls: 'bg-danger', online: false };
+        function parseCustomerMetadata(user) {
+            const rawComment = String(user?.comment || user?.full_name || user?.fullName || user?.name || '').trim();
+            let displayName = String(user?.full_name || user?.fullName || user?.name || '-').trim() || '-';
+            let displayPhone = String(user?.phone || user?.phoneNumber || '-').trim() || '-';
+            if (rawComment.includes('|') || /Customer:/i.test(rawComment)) {
+                const nameMatch = rawComment.match(/Customer:\s*([^|]+)/i);
+                const phoneMatch = rawComment.match(/Phone:\s*([^|]+)/i);
+                if (nameMatch?.[1]) displayName = nameMatch[1].trim();
+                if (phoneMatch?.[1] && (displayPhone === '-' || !displayPhone)) displayPhone = phoneMatch[1].trim();
             }
+            return { rawComment, displayName, displayPhone };
+        }
+
+        function formatDhakaExpiration(value, rawComment = '') {
+            let raw = String(value ?? '').trim();
+            if (!raw) {
+                const expMatch = rawComment.match(/EXP:\s*([^|]+)/i);
+                raw = expMatch?.[1]?.trim() || '';
+            }
+            if (!raw) return '-';
+            if (/^(?:EXPIRED_|UNLIMITED)/i.test(raw)) return 'EXP: ' + raw;
+            try {
+                const source = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw + 'T00:00:00+06:00' : raw;
+                const date = new Date(source);
+                if (Number.isNaN(date.getTime())) return 'EXP: ' + raw;
+                const dateFormatted = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Asia/Dhaka', day: '2-digit', month: '2-digit', year: 'numeric'
+                }).format(date);
+                return 'EXP: ' + dateFormatted + ', 12:00 AM';
+            } catch (_) {
+                return 'EXP: ' + raw;
+            }
+        }
+
+        function customerStatus(user) {
+            const expiry = String(user?.expiry_date || '').trim();
+            let expired = false;
+            if (expiry) {
+                try {
+                    const source = /^\d{4}-\d{2}-\d{2}$/.test(expiry) ? expiry + 'T00:00:00+06:00' : expiry;
+                    expired = new Date(source).getTime() <= Date.now();
+                } catch (_) {}
+            }
+            if (user.computed_status === 'expired' || expired) return { key: 'expired_status', cls: 'bg-danger', online: false };
             if (user.online) return { key: 'online_status', cls: 'bg-success', online: true };
             return { key: 'offline_status', cls: 'bg-secondary', online: false };
         }
@@ -1792,7 +2092,6 @@
             const t = translations[lang] || translations.en;
             const content = document.getElementById('dynamicPageContent');
             if (!content) return;
-
             content.innerHTML = `
                 <section id="view-customer-filter" class="admin-view">
                     <div class="card card-custom">
@@ -1815,58 +2114,54 @@
                             <table class="table table-hover mb-0 customer-live-table">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>#</th>
-                                        <th data-key="full_name_phone">${escapeHtml(t.full_name_phone)}</th>
-                                        <th data-key="username">${escapeHtml(t.username)}</th>
-                                        <th data-key="package_profile">${escapeHtml(t.package_profile)}</th>
-                                        <th data-key="ip_caller_id">${escapeHtml(t.ip_caller_id)}</th>
-                                        <th data-key="status_badge">${escapeHtml(t.status_badge)}</th>
-                                        <th data-key="expiry_date">${escapeHtml(t.expiry_date)}</th>
-                                        <th data-key="actions">${escapeHtml(t.actions)}</th>
+                                        <th class="ps-3">#</th>
+                                        <th>Customer Name</th>
+                                        <th>Phone Number</th>
+                                        <th>Username</th>
+                                        <th>Package / Profile</th>
+                                        <th>IP / Caller-ID</th>
+                                        <th>Status</th>
+                                        <th>Expiry Date</th>
+                                        <th class="text-end pe-3">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="customerFilterBody">
-                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
+                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="9" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </section>`;
-
             updateLanguage(lang);
         }
 
         function customerRowHtml(user, index, t) {
             const status = customerStatus(user);
-            const fullName = user.comment || user.raw_config?.['full-name'] || user.raw_config?.name || '-';
-            const phone = user.phone || '-';
+            const metadata = parseCustomerMetadata(user);
             const ip = user.session_ip || user.remote_address || user.remoteAddress || '-';
             const caller = user.session_caller_id || user.caller_id || '-';
-            const expiry = user.expiry_date ? new Date(user.expiry_date).toLocaleString() : '-';
-            const sessionMeta = status.online
-                ? `<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ${escapeHtml(t.uptime)}: ${escapeHtml(user.session_uptime || '-')}</div>`
-                : '';
+            const displayExp = formatDhakaExpiration(user.expiry_date || user.expiration_date, metadata.rawComment);
+            const sessionMeta = status.online ? `<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ${escapeHtml(t.uptime)}: ${escapeHtml(user.session_uptime || '-')}</div>` : '';
             const statusBadge = `<span class="badge ${status.cls} customer-status" data-key="${status.key}">${escapeHtml(t[status.key])}</span>${sessionMeta}`;
             const disabled = Boolean(user.disabled);
             const toggleLabel = disabled ? t.enable : t.disable;
             const toggleIcon = disabled ? 'bi-toggle-on' : 'bi-toggle-off';
             const safeUsername = encodeURIComponent(user.username || '');
             return `<tr data-customer-row>
-                <td>${index}</td>
-                <td><div class="fw-semibold">${escapeHtml(fullName)}</div><div class="text-muted small">${escapeHtml(phone)}</div></td>
+                <td class="ps-3">${index}</td>
+                <td class="fw-semibold">${escapeHtml(metadata.displayName)}</td>
+                <td><span class="text-secondary font-monospace">${escapeHtml(metadata.displayPhone)}</span></td>
                 <td><strong>${escapeHtml(user.username)}</strong></td>
                 <td><span class="badge bg-info text-dark">${escapeHtml(user.profile || 'N/A')}</span></td>
                 <td><div class="customer-ip">${escapeHtml(ip)}</div><div class="text-muted small">${escapeHtml(caller)}</div></td>
                 <td>${statusBadge}</td>
-                <td>${escapeHtml(expiry)}</td>
-                <td>
-                    <div class="btn-group btn-group-sm customer-action-group">
-                        <button class="btn btn-outline-danger" title="${escapeHtml(t.kick)}" onclick="kickCustomerFromSection('${safeUsername}')"><i class="bi bi-power"></i></button>
-                        <button class="btn btn-outline-success" title="${escapeHtml(toggleLabel)}" onclick="toggleCustomerFromSection('${safeUsername}', ${!disabled})"><i class="bi ${toggleIcon}"></i></button>
-                        <button class="btn btn-outline-primary" title="Edit" onclick="editCustomer('${safeUsername}')"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-outline-secondary" title="${escapeHtml(t.view)}" onclick="viewCustomerDetails('${safeUsername}')"><i class="bi bi-eye"></i></button>
-                    </div>
-                </td>
+                <td><span class="badge bg-light text-dark border font-monospace px-2 py-1"><i class="bi bi-calendar-event me-1 text-primary"></i>${escapeHtml(displayExp)}</span></td>
+                <td class="text-end pe-3"><div class="btn-group btn-group-sm customer-action-group">
+                    <button class="btn btn-outline-danger" title="${escapeHtml(t.kick)}" onclick="kickCustomerFromSection('${safeUsername}')"><i class="bi bi-power"></i></button>
+                    <button class="btn btn-outline-success" title="${escapeHtml(toggleLabel)}" onclick="toggleCustomerFromSection('${safeUsername}', ${!disabled})"><i class="bi ${toggleIcon}"></i></button>
+                    <button class="btn btn-outline-primary" title="Edit" onclick="editCustomer('${safeUsername}')"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-outline-secondary" title="${escapeHtml(t.view)}" onclick="viewCustomerDetails('${safeUsername}')"><i class="bi bi-eye"></i></button>
+                </div></td>
             </tr>`;
         }
 
@@ -2122,17 +2417,117 @@
             },0);
         });
 
-        document.getElementById('addCustomerForm').addEventListener('submit', async function(e) {
-            e.preventDefault(); const form=this; if(!form.checkValidity()){form.classList.add('was-validated');return;}
-            const button=document.getElementById('saveCustomerBtn'),oldHtml=button.innerHTML;button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        async function handleCustomerSubmit(e) {
+            if (e) e.preventDefault();
+
+            const form = e?.currentTarget || document.getElementById('addCustomerForm');
+            const submitBtn = document.getElementById('saveCustomerBtn') || document.querySelector('#addCustomerForm button[type="submit"]');
+            const originalText = submitBtn ? submitBtn.innerHTML : 'Save';
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving to MikroTik...';
+            }
+
             try {
-                const select=document.getElementById('packageSelect'),profile=select.value.trim(),option=select.options[select.selectedIndex],editId=document.getElementById('customerEditId').value.trim();
-                const payload={fullName:document.getElementById('fullName').value.trim(),phone:document.getElementById('phoneNumber').value.trim(),connectionDate:document.getElementById('activationDate').value,activationDate:document.getElementById('activationDate').value,expirationDate:document.getElementById('expirationDate').value,username:document.getElementById('username').value.trim(),password:document.getElementById('password').value.trim(),package:option?.textContent?.split(' — ৳')[0]?.trim()||profile,profile,packageProfile:profile,nid:document.getElementById('nidNumber').value.trim(),installationAddress:document.getElementById('installationAddress').value.trim(),fiberBox:document.getElementById('fiberBox').value.trim(),onuMac:document.getElementById('onuMac').value.trim(),remarks:document.getElementById('customerRemarks').value.trim()};
-                const endpoint=editId?'/api/customers/'+encodeURIComponent(editId):'/api/customers';
-                const data=await jsonFetch(endpoint,{method:editId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-                alert(data.message||(editId?'Customer updated successfully':'Customer created successfully')); form.reset();form.classList.remove('was-validated');document.getElementById('customerEditId').value=''; await showAddCustomerForm();switchView('all-customer');
-            }catch(error){alert(error.message);}finally{button.disabled=false;button.innerHTML=oldHtml;}
-        });
+                if (!form) throw new Error('Customer form was not found.');
+
+                if (!form.checkValidity()) {
+                    form.classList.add('was-validated');
+                    throw new Error('Please complete all required customer fields.');
+                }
+
+                const valueOf = (id, fallback = '') => document.getElementById(id)?.value ?? fallback;
+                const select = document.getElementById('packageSelect');
+                const profile = String(valueOf('packageSelect')).trim();
+                const option = select?.options?.[select.selectedIndex] || null;
+                const editId = String(valueOf('customerEditId')).trim();
+
+                const payload = {
+                    fullName: String(valueOf('fullName')).trim(),
+                    phone: String(valueOf('phoneNumber')).trim(),
+                    connectionDate: valueOf('connectionDate'),
+                    activationDate: valueOf('activationDate'),
+                    expirationDate: valueOf('expirationDate'),
+                    username: String(valueOf('username')).trim(),
+                    password: String(valueOf('password')).trim(),
+                    package: option?.textContent?.split(' — ৳')[0]?.trim() || profile,
+                    profile,
+                    packageProfile: profile,
+                    nid: String(valueOf('nidNumber')).trim(),
+                    installationAddress: String(valueOf('installationAddress')).trim(),
+                    fiberBox: String(valueOf('fiberBox')).trim(),
+                    onuMac: String(valueOf('onuMac')).trim(),
+                    remarks: String(valueOf('customerRemarks')).trim()
+                };
+
+                const requiredFields = [
+                    ['fullName', payload.fullName],
+                    ['phoneNumber', payload.phone],
+                    ['connectionDate', payload.connectionDate],
+                    ['username', payload.username],
+                    ['password', payload.password],
+                    ['packageSelect', payload.profile],
+                    ['activationDate', payload.activationDate],
+                    ['expirationDate', payload.expirationDate]
+                ];
+                const missingField = requiredFields.find(([id, value]) =>
+                    !document.getElementById(id) || !String(value || '').trim()
+                );
+
+                if (missingField) {
+                    throw new Error('Customer form field is missing or empty: ' + missingField[0]);
+                }
+
+                const endpoint = editId
+                    ? '/api/customers/' + encodeURIComponent(editId)
+                    : '/api/customers';
+
+                const response = await fetch(endpoint, {
+                    method: editId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.message || data.error || ('Server returned HTTP ' + response.status));
+                }
+
+                const provisioned = data.customer?.provisioningStatus;
+                if (!editId && provisioned !== 'provisioned') {
+                    throw new Error(data.message || 'Customer was saved, but MikroTik provisioning was not confirmed.');
+                }
+
+                alert(data.message || (editId
+                    ? 'Customer updated successfully in MikroTik.'
+                    : 'Customer saved and provisioned successfully in MikroTik.'));
+
+                form.reset();
+                form.classList.remove('was-validated');
+                const editField = document.getElementById('customerEditId');
+                if (editField) editField.value = '';
+
+                if (typeof loadCustomerSection === 'function') {
+                    await loadCustomerSection('all', 'all_customer');
+                } else if (typeof window.loadCustomers === 'function') {
+                    await window.loadCustomers();
+                }
+            } catch (error) {
+                console.error('[CUSTOMER UI] Submission error:', error);
+                alert('Failed to Provision: ' + (error?.message || 'Unknown server or MikroTik error'));
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            }
+        }
+
+        document.getElementById('addCustomerForm')?.addEventListener('submit', handleCustomerSubmit);
+
+
 
         async function fetchPayments(channel = '') {
             const body = document.getElementById('paymentsBody');
@@ -2207,7 +2602,7 @@
                 const current = select.value;
                 if (!select.options.length) select.innerHTML = interfaces.map(i => '<option value="' + escapeHtml(i.name) + '">' + escapeHtml(i.name) + '</option>').join('');
                 if (current) select.value = current;
-                if (select.value) startTrafficPolling();
+                if (select.value) pollTraffic();
             } catch (error) {
                 console.error('[Traffic]', error);
             }
@@ -2247,26 +2642,40 @@
             trafficTimer = setInterval(pollTraffic, 2500);
         }
 
-        document.getElementById('dashboardInterface').addEventListener('change', function() {
-            if (trafficChart) {
-                trafficChart.data.labels = [];
-                trafficChart.data.datasets.forEach(d => d.data = []);
-                trafficChart.update('none');
+        function initializeAdminRuntime() {
+            const dashboardInterface = document.getElementById('dashboardInterface');
+            if (dashboardInterface && !dashboardInterface.dataset.runtimeBound) {
+                dashboardInterface.dataset.runtimeBound = '1';
+                dashboardInterface.addEventListener('change', function() {
+                    if (trafficChart) {
+                        trafficChart.data.labels = [];
+                        trafficChart.data.datasets.forEach(d => d.data = []);
+                        trafficChart.update('none');
+                    }
+                    pollTraffic();
+                });
             }
-            pollTraffic();
-        });
 
-        // Background live metrics: 5-second refresh regardless of current view.
-        metricsTimer = setInterval(() => {
-            loadRouterMetrics();
-            if (document.getElementById('view-dashboard')?.style.display !== 'none') refreshDashboard();
-            if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) refreshHotspotDashboardMetrics();
-            if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) fetchPaymentsSection();
-        }, 5000);
+            // Dashboard is the initial operational view.
+            switchView('dashboard');
+            refreshDashboard();
+            startTrafficPolling();
 
-        // Dashboard is the initial operational view.
-        switchView('dashboard');
-        startTrafficPolling();
+            // Background live metrics: 5-second refresh regardless of current view.
+            if (metricsTimer) clearInterval(metricsTimer);
+            metricsTimer = setInterval(() => {
+                loadRouterMetrics();
+                if (document.getElementById('view-dashboard')?.style.display !== 'none') refreshDashboard();
+                if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) refreshHotspotDashboardMetrics();
+                if (currentPaymentTitleKey && document.getElementById('view-payment-ledger')) fetchPaymentsSection();
+            }, 5000);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeAdminRuntime, { once: true });
+        } else {
+            initializeAdminRuntime();
+        }
     </script>
 </body>
 </html>
