@@ -336,6 +336,104 @@ async function publicCustomerCheck(req,res){
   }catch(error){console.error("[Public Customer Check Error]:",error);return res.status(503).json({success:false,message:"Customer account lookup is temporarily unavailable."});}
 }
 
+async function publicCustomerLogin(req,res){
+  try{
+    const identifier=clean(req.body?.identifier,120);
+    const password=String(req.body?.password??"");
+    if(!identifier||!password){
+      return res.status(400).json({success:false,message:"Username/Phone and password are required."});
+    }
+
+    let dbUser=null;
+    try{
+      const q=await db.query(
+        "SELECT c.*,p.plan_name AS linked_plan_name,p.profile_name AS linked_profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.profile_name)=LOWER(c.profile) OR LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) OR c.phone=$1 LIMIT 1",
+        [identifier]
+      );
+      dbUser=q.rows[0]||null;
+    }catch(error){
+      console.warn("[Public Customer Login DB warning]:",error.message);
+    }
+
+    let mtSecret=null;
+    const candidateUsername=dbUser?.username||identifier;
+    try{
+      mtSecret=await mikrotikService.getPppoeSecret(candidateUsername);
+    }catch(error){
+      console.warn("[Public Customer Login MikroTik warning]:",error.message);
+    }
+
+    if(!dbUser&&!mtSecret){
+      return res.status(401).json({success:false,message:"Invalid Username/Phone or Password"});
+    }
+
+    const storedPassword=String(mtSecret?.password??dbUser?.password??"");
+    if(!storedPassword || storedPassword!==password){
+      return res.status(401).json({success:false,message:"Invalid Username/Phone or Password"});
+    }
+
+    const comment=String(mtSecret?.comment||"");
+    const nameMatch=comment.match(/Customer:\s*([^|]+)/i);
+    const phoneMatch=comment.match(/Phone:\s*([^|]+)/i);
+    const expMatch=comment.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i);
+    const expiration=normalizeDate(dbUser?.expiration_date)||(expMatch?normalizeDate(expMatch[1]):"");
+    const today=bangladeshToday();
+    const remainingDays=expiration?Math.max(0,Math.ceil((Date.parse(expiration+"T00:00:00Z")-Date.parse(today+"T00:00:00Z"))/86400000)):null;
+
+    let online=false,liveIp="",uptime="";
+    try{
+      const sessions=await mikrotikService.getActiveSessions();
+      const target=String(mtSecret?.name||dbUser?.username||candidateUsername).toLowerCase();
+      const session=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").toLowerCase()===target);
+      online=Boolean(session);
+      liveIp=String(session?.address||"");
+      uptime=String(session?.uptime||"");
+    }catch(error){
+      console.warn("[Public Customer Login session warning]:",error.message);
+    }
+
+    const paidUntil=normalizeDate(dbUser?.paid_until);
+    const accountState=String(dbUser?.status||"").trim().toLowerCase();
+    const suspended=Boolean(mtSecret?.disabled)||["expired","suspended","disabled","left","terminated","due"].includes(accountState);
+    const billingStatus=String(dbUser?.billing_status||"").toLowerCase()==="paid" &&
+      Boolean(paidUntil&&paidUntil>=today) && !suspended && dateStatus(expiration)==="active" ? "Paid" : "Unpaid";
+
+    const profile=clean(mtSecret?.profile||dbUser?.profile||dbUser?.linked_profile_name||dbUser?.package_name||"-",100);
+    const packageName=clean(dbUser?.linked_plan_name||dbUser?.package_name||profile,100);
+    const supportPhone=clean(process.env.SUPPORT_PHONE||process.env.CONTACT_PHONE||"01339932887",40);
+    const officeAddress=clean(process.env.OFFICE_ADDRESS||"FAZ NETWORK Office — Please contact support for the current office address.",300);
+    const whatsappNumber=clean(process.env.SUPPORT_WHATSAPP||supportPhone,40).replace(/\D/g,"");
+    const rechargeUrl=String(process.env.RECHARGE_URL||"").trim();
+
+    return res.json({
+      success:true,
+      customer:{
+        customerId:dbUser?.id||null,
+        name:clean(dbUser?.full_name||(nameMatch?nameMatch[1].trim():"")||dbUser?.username||mtSecret?.name||candidateUsername,200),
+        username:clean(mtSecret?.name||dbUser?.username||candidateUsername,100),
+        phone:clean(dbUser?.phone||(phoneMatch?phoneMatch[1].trim():""),40),
+        package:packageName,
+        profile,
+        expirationDate:expiration||null,
+        remainingDays,
+        connectionStatus:online?"Online":"Offline",
+        liveIp:liveIp||null,
+        uptime:uptime||null,
+        billingStatus,
+        paidUntil:paidUntil||null,
+        disabled:Boolean(mtSecret?.disabled),
+        supportPhone,
+        whatsappUrl:whatsappNumber?"https://wa.me/"+(whatsappNumber.startsWith("88")?whatsappNumber:"88"+whatsappNumber.replace(/^0/,"")):"",
+        officeAddress,
+        rechargeUrl:rechargeUrl||null
+      }
+    });
+  }catch(error){
+    console.error("[Public Customer Login Error]:",error);
+    return res.status(503).json({success:false,message:"Customer login is temporarily unavailable."});
+  }
+}
+
 async function markPaid(req,res){
   const username=clean(req.body?.username,100);
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
