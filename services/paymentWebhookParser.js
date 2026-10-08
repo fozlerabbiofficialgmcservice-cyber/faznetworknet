@@ -59,8 +59,8 @@ function extractTransactionId(text){
 function extractAmount(text){
   const t=String(text||"").replace(/\u00a0/g," ");
   const patterns=[
-    /(?:amount|received|payment|paid|cash\s*in|cashin)\s*[:=\-]?\s*(?:tk|taka|৳)\s*([0-9]{1,9}(?:[,.][0-9]{1,2})?)/i,
-    /(?:tk|taka|৳)\s*[:=\-]?\s*([0-9]{1,9}(?:[,.][0-9]{1,2})?)/i
+    /(?:amount|received|payment|paid|cash\s*in|cashin)\s*[:=\-]?\s*(?:tk|taka|৳)\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{1,2})?)/i,
+    /(?:tk|taka|৳)\s*[:=\-]?\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]{1,2})?)/i
   ];
   for(const re of patterns){const m=t.match(re);if(m){const n=normalizeAmount(m[1]);if(Number.isFinite(n)&&n>0)return n;}}
   return NaN;
