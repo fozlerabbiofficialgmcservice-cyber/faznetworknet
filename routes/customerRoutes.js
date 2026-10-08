@@ -3,6 +3,7 @@ const controller=require("../controllers/customerController");
 const router=express.Router();
 
 router.get("/packages",controller.packages);
+router.get("/",controller.listCustomers);
 router.post("/customers",controller.createCustomer);
 router.get("/profile",controller.profile);
 router.get("/:id/profile",controller.getCustomerProfileById);

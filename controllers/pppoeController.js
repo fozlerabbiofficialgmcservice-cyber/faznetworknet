@@ -1,5 +1,6 @@
 const mikrotikService = require("../services/mikrotikService");
 const db = require("../db");
+const {evaluateCustomerBillingStatus}=require("../utils/billingStatus");
 
 function errorResponse(res, error) {
   console.error("[PPPoE API]", error);
@@ -147,21 +148,21 @@ async function users(req, res) {
 
     let users = result.rows.map(user => {
       const session = sessionMap.get(String(user.username || "").trim().toLowerCase());
-      const expiryRaw=String(user.expiry_date||"").slice(0,10);
-      let expired=false;
-      if(/^\d{4}-\d{2}-\d{2}$/.test(expiryRaw)){
-        const expDateObj=new Date(expiryRaw+"T23:59:59.999+06:00");
-        expired=!Number.isNaN(expDateObj.getTime()) && new Date().getTime()>expDateObj.getTime();
-      }
+      const billing=evaluateCustomerBillingStatus({expiration_date:user.expiry_date});
       return {
         ...user,
+        billing_status:billing.status,
+        billing_badge_class:billing.badgeClass,
+        badgeClass:billing.badgeClass,
+        billing_label:billing.label,
+        days_left:billing.daysLeft,
         active: Boolean(session),
         online: Boolean(session),
         session: session || null,
         session_ip: session?.address || null,
         session_uptime: session?.uptime || null,
         session_caller_id: session?.callerId || null,
-        computed_status: expired ? "expired" : (session ? "online" : "offline")
+        computed_status:billing.status
       };
     });
 

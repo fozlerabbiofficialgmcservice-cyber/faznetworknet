@@ -183,6 +183,8 @@ ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_status_check;
 ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK(status IN ('active','inactive','left','expired','suspended'));
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_channel_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_channel_check CHECK(channel IN ('bkash','nagad','rocket','cash'));
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
+ALTER TABLE transactions ADD CONSTRAINT transactions_status_check CHECK(status IN ('processed','unmatched','duplicate','PAID'));
 CREATE INDEX IF NOT EXISTS idx_customers_area_zone ON customers(area_zone);
 
 
