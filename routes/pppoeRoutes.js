@@ -11,5 +11,6 @@ router.post("/users/create",controller.createUser);
 router.post("/update-user",controller.updateUser);
 router.post("/toggle-user",controller.toggleUser);
 router.post("/kick-user",controller.kickUser);
+router.delete("/users/:id",controller.removeUser);
 router.post("/create-profile",controller.createProfile);
 module.exports=router;
