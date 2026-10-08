@@ -632,27 +632,34 @@ async function changeCustomerPackage(req,res){
     const expired=payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired";
     const effective=expired?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(plan.profile_name||plan.plan_name,120);
 
-    // RouterOS rejects an empty/invalid remote-address. Prefer a real static IP,
-    // otherwise use only a pool name that actually exists on the router.
-    const isValidIp=value=>{try{return require("net").isIP(String(value||"").trim())>0;}catch(_){return false;}};
-    const isPlaceholder=value=>{const v=clean(value,100).toLowerCase();return !v||v==="—"||v==="-"||v==="none"||v==="null"||v==="undefined";};
+    // RouterOS /ppp/secret remote-address accepts one IPv4 or an existing pool
+    // name. IP ranges must never be sent to the secret.
+    const isSingleIp=value=>{
+      const val=clean(value,100);
+      if(!/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(val))return false;
+      return val.split(".").every(octet=>Number(octet)>=0&&Number(octet)<=255);
+    };
+    const isPlaceholder=value=>{
+      const val=clean(value,100).toLowerCase();
+      return !val||val==="—"||val==="none"||val==="default"||val==="null"||val==="undefined";
+    };
+    const isValidPoolName=value=>{
+      const val=clean(value,100);
+      return Boolean(val)&&!/[\\s-]/.test(val)&&/^[A-Za-z0-9_.:]+$/.test(val);
+    };
+
     let remoteAddress="";
     const configuredRemote=clean(plan.remote_address,100);
     const configuredPool=clean(plan.pool_name,100);
-    if(!isPlaceholder(configuredRemote)&&isValidIp(configuredRemote)){
+
+    // A configured static IP is valid. Anything containing '-' (including
+    // 10.20.30.2-10.20.30.254) is explicitly rejected.
+    if(!isPlaceholder(configuredRemote)&&!configuredRemote.includes("-")&&isSingleIp(configuredRemote)){
       remoteAddress=configuredRemote;
-    }else if(!isPlaceholder(configuredPool)){
+    }else if(!isPlaceholder(configuredPool)&&!configuredPool.includes("-")&&isValidPoolName(configuredPool)){
       try{
         const pools=await mikrotikService.getIpPools();
         const match=(Array.isArray(pools)?pools:[]).find(x=>clean(x?.name,100).toLowerCase()===configuredPool.toLowerCase());
-        if(match)remoteAddress=clean(match.name,100);
-      }catch(poolError){
-        console.warn("[CUSTOMER PACKAGE] IP pool validation skipped:",poolError.message);
-      }
-    }else if(!isPlaceholder(configuredRemote)){
-      try{
-        const pools=await mikrotikService.getIpPools();
-        const match=(Array.isArray(pools)?pools:[]).find(x=>clean(x?.name,100).toLowerCase()===configuredRemote.toLowerCase());
         if(match)remoteAddress=clean(match.name,100);
       }catch(poolError){
         console.warn("[CUSTOMER PACKAGE] IP pool validation skipped:",poolError.message);
@@ -662,10 +669,17 @@ async function changeCustomerPackage(req,res){
     const secretData={
       password:payload.customer.password,
       profile:effective,
-      comment:buildExpirationComment(payload.customer.name,payload.customer.phone,payload.customer.expirationDate||bangladeshToday(),payload.customer.remarks),
+      comment:buildExpirationComment(
+        payload.customer.name,
+        payload.customer.phone,
+        payload.customer.expirationDate||bangladeshToday(),
+        payload.customer.remarks
+      ),
       disabled:expired
     };
-    // Deliberately omit remoteAddress when no valid IP/pool is configured.
+
+    // Standard PPPoE uses the pool from /ppp/profile. If there is no dedicated
+    // static IP, do not send remote-address at all.
     if(remoteAddress)secretData.remoteAddress=remoteAddress;
 
     await mikrotikService.updateSecret(payload.customer.username,secretData);
@@ -680,11 +694,47 @@ async function changeCustomerPackage(req,res){
     }
 
     const dbRemoteAddress=remoteAddress||null;
-    await db.query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,remote_address=$4,status=$5,updated_at=NOW() WHERE id=$6",[plan.plan_name,plan.profile_name,plan.price,dbRemoteAddress,expired?"expired":"active",payload.customer.id]);
-    await db.query("UPDATE pppoe_users SET profile=$1,remote_address=$2,status=$3,disabled=$4,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($5)",[effective,dbRemoteAddress,expired?"expired":"active",expired,payload.customer.username]);
+    await db.query(
+      "UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,remote_address=$4,status=$5,updated_at=NOW() WHERE id=$6",
+      [plan.plan_name,plan.profile_name,plan.price,dbRemoteAddress,expired?"expired":"active",payload.customer.id]
+    );
+    await db.query(
+      "UPDATE pppoe_users SET profile=$1,remote_address=$2,status=$3,disabled=$4,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($5)",
+      [effective,dbRemoteAddress,expired?"expired":"active",expired,payload.customer.username]
+    );
 
-    await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"CHANGE_PACKAGE",details:{message:`Package changed to ${plan.plan_name}`,previousPackage:payload.customer.packageName,previousProfile:payload.customer.profile,newPackage:plan.plan_name,newProfile:plan.profile_name,newPool:plan.pool_name,newRemoteAddress:remoteAddress||null,newRateLimit:plan.rate_limit,sessionDisconnected:disconnected},ipAddress:getIpAddress(req)});
-    return res.json({success:true,package:{id:plan.id,name:plan.plan_name,profileName:plan.profile_name,price:Number(plan.price||0),rateLimit:plan.rate_limit,poolName:plan.pool_name,remoteAddress:remoteAddress||null},sessionDisconnected:disconnected,message:"Customer package changed successfully."});
+    await logAuditAction({
+      customerId:payload.customer.id,
+      adminId:getAdminId(req),
+      action:"CHANGE_PACKAGE",
+      details:{
+        message:`Package changed to ${plan.plan_name}`,
+        previousPackage:payload.customer.packageName,
+        previousProfile:payload.customer.profile,
+        newPackage:plan.plan_name,
+        newProfile:plan.profile_name,
+        newPool:plan.pool_name,
+        newRemoteAddress:remoteAddress||null,
+        newRateLimit:plan.rate_limit,
+        sessionDisconnected:disconnected
+      },
+      ipAddress:getIpAddress(req)
+    });
+
+    return res.json({
+      success:true,
+      package:{
+        id:plan.id,
+        name:plan.plan_name,
+        profileName:plan.profile_name,
+        price:Number(plan.price||0),
+        rateLimit:plan.rate_limit,
+        poolName:plan.pool_name,
+        remoteAddress:remoteAddress||null
+      },
+      sessionDisconnected:disconnected,
+      message:"Customer package changed successfully."
+    });
   }catch(error){return errorResponse(res,error);}
 }
 
