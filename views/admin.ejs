@@ -162,7 +162,37 @@
             border-color: var(--accent-color);
             box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
         }
-        .customer-live-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
+        .customer-live-table {
+            --customer-border: #e7edf4;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: #fff;
+        }
+        .customer-live-table th { white-space: nowrap; font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .065em; background: #f8fafc; border-bottom: 1px solid #dfe7ef; padding: 13px 12px; }
+        .customer-live-table td { vertical-align: middle; font-size: 13px; padding: 14px 12px; border-bottom: 1px solid #edf2f7; background: #fff; }
+        .customer-live-table tbody tr { transition: background .15s ease-in-out, box-shadow .15s ease-in-out; }
+        .customer-live-table tbody tr:hover td { background: #f8fafc; }
+        .customer-live-table .customer-identity-cell { border-left: 3px solid #bae6fd; border-right: 1px solid #edf2f7; }
+        .customer-live-table .customer-pppoe-cell { border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+        .customer-live-table .customer-status-cell { border-left: 1px solid #ede9fe; border-right: 1px solid #ede9fe; }
+        .customer-live-table .customer-validity-cell { border-right: 1px solid #edf2f7; }
+        .customer-avatar { width: 38px; height: 38px; flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: #e0f2fe; color: #0369a1; font-size: 12px; font-weight: 800; letter-spacing: .02em; }
+        .customer-profile-link { color: #0f172a !important; } .customer-profile-link:hover { color: #0369a1 !important; }
+        .customer-phone { color: #64748b; font-size: 12px; line-height: 1.35; } .customer-phone i { color: #94a3b8; }
+        .customer-username { display: inline-flex; align-items: center; max-width: 180px; padding: 5px 8px; border: 1px solid #e2e8f0; border-radius: 7px; background: #f8fafc; color: #334155; font: 600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .customer-package { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid #ddd6fe; border-radius: 999px; background: #f5f3ff; color: #6d28d9; font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .customer-connection-value { font: 600 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #334155; } .customer-connection-meta { color: #94a3b8; font-size: 11px; margin-top: 3px; }
+        .customer-status-badge { display: inline-flex; align-items: center; gap: 5px; border: 1px solid currentColor; border-radius: 999px; padding: 5px 9px; font-size: 11px; font-weight: 800; }
+        .customer-status-badge.status-paid { color: #047857; background: #ecfdf5; border-color: #a7f3d0; box-shadow: 0 0 0 3px rgba(16,185,129,.06); }
+        .customer-status-badge.status-unpaid, .customer-status-badge.status-expired { color: #b91c1c; background: #fef2f2; border-color: #fecaca; box-shadow: 0 0 0 3px rgba(239,68,68,.05); }
+        .customer-validity-date { display: block; color: #334155; font-size: 12px; font-weight: 700; }
+        .customer-days-pill { display: inline-flex; margin-top: 4px; padding: 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 800; }
+        .customer-days-pill.days-positive { background:#ecfdf5; color:#047857; } .customer-days-pill.days-today { background:#fff7ed; color:#c2410c; } .customer-days-pill.days-expired { background:#fef2f2; color:#b91c1c; }
+        .customer-action-group { display: inline-flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+        .customer-action-group .btn { min-width: 34px; min-height: 32px; border-radius: 7px !important; display: inline-flex; align-items: center; justify-content: center; } .customer-action-group .btn:hover { transform: translateY(-1px); }
+        .customer-serial { color: #64748b; font: 800 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .customer-live-table .customer-session { font-size: 11px; line-height: 1.35; margin-top: 4px; }
+        .customer-search-wrap { min-width: 260px; } .customer-ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
         .ip-pool-table th { white-space: nowrap; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: .02em; }
         .ip-pool-table td { vertical-align: middle; font-size: 13px; }
         .ip-pool-range { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
@@ -2618,18 +2648,17 @@ async function deletePlan(id,name){
                                 <thead class="table-light">
                                     <tr>
                                         <th class="ps-3">#</th>
-                                        <th>Customer Name</th>
-                                        <th>Phone Number</th>
-                                        <th>Username</th>
+                                        <th>Customer</th>
+                                        <th>PPPoE Username</th>
                                         <th>Package / Profile</th>
-                                        <th>IP / Caller-ID</th>
+                                        <th>Connection</th>
                                         <th>Status</th>
-                                        <th>Expiry Date</th>
+                                        <th>Validity</th>
                                         <th class="text-end pe-3">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="customerFilterBody">
-                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="9" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
+                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
@@ -2639,42 +2668,53 @@ async function deletePlan(id,name){
         }
 
         function customerRowHtml(user, index, t) {
-            const networkStatus=customerStatus(user), metadata=parseCustomerMetadata(user);
-            const billingStatus=String(user?.billing_status||'unpaid').toLowerCase();
-            const billingLabel=String(user?.billing_label||'Unpaid / Expired');
-            const billingClass=String(user?.billing_badge_class||'badge bg-danger');
-            const ip=user.session_ip||user.remote_address||user.remoteAddress||'-';
-            const caller=user.session_caller_id||user.caller_id||'-';
-            const displayExp=formatDhakaExpiration(user.expiry_date||user.expiration_date,metadata.rawComment);
-            const sessionMeta=networkStatus.online?`<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ${escapeHtml(t.uptime)}: ${escapeHtml(user.session_uptime||'-')}</div>`:'';
-            const billingBadge=`<span class="${escapeHtml(billingClass)} customer-billing-badge ms-1">${escapeHtml(billingLabel)}</span>`;
-            const statusBadge=`${billingBadge}${sessionMeta}`;
-            const customerId=user.customer_id||user.id||'';
-            return `<tr data-customer-row data-customer-id="${escapeHtml(customerId)}" data-billing-status="${escapeHtml(billingStatus==='expired'?'unpaid':billingStatus)}" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}">
-                <td class="ps-3">${index}</td>
-                <td>
-    <a href="/admin/customers/${escapeHtml(customerId)}" class="customer-profile-link fw-bold text-decoration-none text-primary d-inline-flex align-items-center gap-1" data-customer-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}" onclick="event.preventDefault(); window.navigateToCustomerProfile('${escapeHtml(customerId)}');">
-        <i class="bi bi-person-circle"></i>
-        <span>${escapeHtml(metadata.displayName)}</span>
-    </a>
-    <div class="small text-muted font-monospace">${escapeHtml(user.username||'')}</div>
-</td>
-                <td><span class="text-secondary font-monospace">${escapeHtml(metadata.displayPhone)}</span></td>
-                <td><strong>${escapeHtml(user.username)}</strong></td>
-                <td><span class="badge bg-info text-dark">${escapeHtml(user.profile||'N/A')}</span></td>
-                <td><div class="customer-ip">${escapeHtml(ip)}</div><div class="text-muted small">${escapeHtml(caller)}</div></td>
-                <td>${statusBadge}</td>
-                <td><span class="badge bg-light text-dark border font-monospace px-2 py-1 customer-expiry-badge"><i class="bi bi-calendar-event me-1 text-primary"></i>${escapeHtml(displayExp)}</span></td>
-                <td class="text-end pe-3 text-nowrap"><div class="d-inline-flex gap-1 align-items-center">
-                    <button type="button" class="btn btn-sm ${billingStatus==='paid' ? 'btn-success text-white' : 'btn-danger text-white'} px-2 py-1 action-paid-btn" data-username="${escapeHtml(user.username||'')}" data-status="${escapeHtml(billingStatus)}" title="${billingStatus==='paid' ? 'Already paid / active' : 'Mark as Paid'}">${billingStatus==='paid' ? 'Paid' : 'Unpaid'}</button>
-                    <button type="button" class="btn btn-sm btn-success px-2 py-1 action-renew-btn" data-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" data-price="${Number(user.monthly_bill||user.monthlyBill||0)}" title="Renew +1 Month" onclick="window.quickRenewCustomer(this.dataset.id, Number(this.dataset.price||0))">Renew</button>
-                    <button type="button" class="btn btn-sm btn-info text-white px-2 py-1 action-view-btn" data-username="${escapeHtml(user.username||'')}" title="View Summary"><i class="bi bi-eye"></i></button>
-                    <button type="button" class="btn btn-sm btn-primary px-2 py-1 action-edit-btn" data-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" title="Edit Customer" onclick="window.openCustomerEditModal(this.dataset.id)"><i class="bi bi-pencil-square"></i></button>
-                    <button type="button" class="btn btn-sm btn-danger px-2 py-1 action-delete-btn" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}" title="Delete from MikroTik & DB" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>
-                </div></td>
-            </tr>`;
+            const serial = Number(index) || 1;
+            const networkStatus = customerStatus(user);
+            const metadata = parseCustomerMetadata(user);
+            const billingStatus = String(user?.billing_status || 'unpaid').toLowerCase();
+            const billingLabel = String(user?.billing_label || 'Unpaid / Expired');
+            const ip = user.session_ip || user.remote_address || user.remoteAddress || '-';
+            const caller = user.session_caller_id || user.caller_id || '-';
+            const expiryRaw = String(user?.expiry_date || user?.expiration_date || '').trim();
+            const displayExp = formatDhakaExpiration(expiryRaw, metadata.rawComment);
+            const expiryDateMatch = expiryRaw.match(/^\d{4}-\d{2}-\d{2}$/);
+            let validityLabel = displayExp.replace(/^EXP:\s*/i, '');
+            let daysLabel = '';
+            let daysClass = 'days-positive';
+            if (expiryDateMatch) {
+                const todayDhaka = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                const todayStart = new Date(todayDhaka + 'T00:00:00+06:00');
+                const expiryEnd = new Date(expiryRaw + 'T23:59:59+06:00');
+                const diffDays = Math.ceil((expiryEnd.getTime() - todayStart.getTime()) / 86400000);
+                validityLabel = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dhaka', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(expiryRaw + 'T00:00:00+06:00'));
+                if (diffDays < 0) { daysLabel = 'Expired'; daysClass = 'days-expired'; }
+                else if (diffDays === 0) { daysLabel = 'Expires today'; daysClass = 'days-today'; }
+                else { daysLabel = diffDays + ' day' + (diffDays === 1 ? '' : 's') + ' left'; }
+            }
+            const initials = metadata.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'CU';
+            const sessionMeta = networkStatus.online ? '<div class="customer-session text-success"><i class="bi bi-broadcast"></i> ' + escapeHtml(t.uptime) + ': ' + escapeHtml(user.session_uptime || '-') + '</div>' : '';
+            const statusLabel = billingStatus === 'paid' ? 'Paid / Active' : (billingStatus === 'expired' ? 'Expired' : billingLabel);
+            const statusClass = billingStatus === 'paid' ? 'status-paid' : (billingStatus === 'expired' ? 'status-expired' : 'status-unpaid');
+            const customerId = user.customer_id || user.id || '';
+            return '<tr data-customer-row data-customer-id="' + escapeHtml(customerId) + '" data-billing-status="' + escapeHtml(billingStatus === 'expired' ? 'unpaid' : billingStatus) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '">' +
+                '<td class="ps-3"><span class="customer-serial">#' + String(serial).padStart(2, '0') + '</span></td>' +
+                '<td class="customer-identity-cell"><div class="d-flex align-items-center gap-2"><span class="customer-avatar" aria-hidden="true">' + escapeHtml(initials) + '</span><div class="min-w-0">' +
+                    '<a href="/admin/customers/' + escapeHtml(customerId) + '" class="customer-profile-link fw-semibold text-decoration-none d-inline-flex align-items-center" data-customer-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" onclick="event.preventDefault(); window.navigateToCustomerProfile(\'' + escapeHtml(customerId) + '\');">' + escapeHtml(metadata.displayName) + '</a>' +
+                    '<div class="customer-phone mt-1"><i class="bi bi-telephone-fill me-1"></i>' + escapeHtml(metadata.displayPhone) + '</div></div></div></td>' +
+                '<td class="customer-pppoe-cell"><span class="customer-username" title="' + escapeHtml(user.username || '') + '"><i class="bi bi-key-fill me-1 text-secondary"></i>' + escapeHtml(user.username || '-') + '</span></td>' +
+                '<td><span class="customer-package"><i class="bi bi-box-seam me-1"></i>' + escapeHtml(user.profile || 'N/A') + '</span></td>' +
+                '<td><div class="customer-connection-value">' + escapeHtml(ip) + '</div><div class="customer-connection-meta"><i class="bi bi-broadcast-pin me-1"></i>' + escapeHtml(caller) + '</div></td>' +
+                '<td class="customer-status-cell"><span class="customer-status-badge ' + statusClass + '"><i class="bi ' + (billingStatus === 'paid' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill') + '"></i>' + escapeHtml(statusLabel) + '</span>' + sessionMeta + '</td>' +
+                '<td class="customer-validity-cell"><span class="customer-validity-date"><i class="bi bi-calendar3 me-1 text-primary"></i>' + escapeHtml(validityLabel) + '</span>' + (daysLabel ? '<span class="customer-days-pill ' + daysClass + '">' + escapeHtml(daysLabel) + '</span>' : '') + '</td>' +
+                '<td class="text-end pe-3 text-nowrap"><div class="customer-action-group">' +
+                    '<button type="button" class="btn btn-sm ' + (billingStatus === 'paid' ? 'btn-success text-white' : 'btn-outline-danger') + ' px-2 py-1 action-paid-btn" data-username="' + escapeHtml(user.username || '') + '" data-status="' + escapeHtml(billingStatus) + '" title="' + (billingStatus === 'paid' ? 'Already paid / active' : 'Mark as Paid') + '">' + (billingStatus === 'paid' ? '<i class="bi bi-check2"></i>' : '<i class="bi bi-cash-coin"></i>') + '</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-success px-2 py-1 action-renew-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" data-price="' + Number(user.monthly_bill || user.monthlyBill || 0) + '" title="Renew +1 Month" onclick="window.quickRenewCustomer(this.dataset.id, Number(this.dataset.price||0))"><i class="bi bi-arrow-repeat"></i></button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-info px-2 py-1 action-view-btn" data-username="' + escapeHtml(user.username || '') + '" title="View Summary"><i class="bi bi-eye"></i></button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-primary px-2 py-1 action-edit-btn" data-id="' + escapeHtml(customerId) + '" data-username="' + escapeHtml(user.username || '') + '" title="Edit Customer" onclick="window.openCustomerEditModal(this.dataset.id)"><i class="bi bi-pencil-square"></i></button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger px-2 py-1 action-delete-btn" data-username="' + escapeHtml(user.username || '') + '" data-id="' + escapeHtml(customerId) + '" title="Delete from MikroTik & DB" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>' +
+                '</div></td>' +
+            '</tr>';
         }
-
         async function openCustomerProfile(username,prefetchedData){
             const name=String(username||'').trim();
             if(!name)return;
