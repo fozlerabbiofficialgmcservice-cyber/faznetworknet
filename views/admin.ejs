@@ -1069,7 +1069,95 @@
         function printHotspotSlip(){
             const card=document.getElementById('hotspotCreatedCredentials'); if(!card)return;
             const w=window.open('', '_blank', 'width=420,height=600'); if(!w)return;
-            w.document.write('<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}</style></head><body><div class="slip">'+card.innerHTML+'</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script></body></html>');
+            w.document.write('<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}</style></head><body><div class="slip">'+card.innerHTML+'</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
+<div class="modal fade" id="customerProfileModal" tabindex="-1" aria-labelledby="modalCustomerTitle" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-light border-bottom">
+        <div class="d-flex align-items-center gap-3 flex-grow-1">
+          <div class="rounded-circle bg-primary-subtle text-primary p-2"><i class="bi bi-person-badge fs-4"></i></div>
+          <div><h5 class="modal-title mb-1 fw-bold" id="modalCustomerTitle">Customer Profile</h5><div class="small text-muted">360° ISP Customer Management Hub</div></div>
+          <span id="modalCustomerLivePill" class="badge bg-secondary rounded-pill px-3 py-2 ms-auto">○ Offline</span>
+        </div>
+        <button type="button" class="btn-close ms-3" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div id="customerProfileLoading" class="position-absolute top-0 start-0 end-0 d-none" style="height:4px;z-index:1060"><div class="progress" style="height:4px"><div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div></div></div>
+      <div class="modal-body bg-light">
+        <ul class="nav nav-pills nav-fill gap-2 mb-3 bg-white rounded-3 p-2 shadow-sm" role="tablist">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#cp-tab-live" type="button">🌐 Live Network & Session</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-billing" type="button">💳 Billing & Validity</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-info" type="button">📍 Customer & Fiber</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#cp-tab-tech" type="button">🔑 PPPoE & Technical</button></li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="cp-tab-live">
+            <div class="row g-3">
+              <div class="col-lg-8"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3"><h6 class="fw-bold mb-0">Live Connection</h6><span id="cpLiveStatus" class="badge bg-secondary">Offline</span></div>
+                <div class="row g-3">
+                  <div class="col-md-4"><div class="small text-muted">Assigned IP</div><div id="cpAssignedIp" class="fw-bold mt-1">—</div></div>
+                  <div class="col-md-4"><div class="small text-muted">Caller ID / MAC</div><div id="cpCallerId" class="fw-bold mt-1 text-break">—</div></div>
+                  <div class="col-md-4"><div class="small text-muted">Uptime</div><div id="cpUptime" class="fw-bold mt-1">—</div></div>
+                  <div class="col-md-6"><div class="small text-muted">RX / Download</div><div id="cpRx" class="fw-bold mt-1">0 B</div></div>
+                  <div class="col-md-6"><div class="small text-muted">TX / Upload</div><div id="cpTx" class="fw-bold mt-1">0 B</div></div>
+                </div>
+              </div></div></div>
+              <div class="col-lg-4"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <h6 class="fw-bold">Quick Network Actions</h6>
+                <button id="cpKickBtn" type="button" class="btn btn-outline-danger w-100 mb-3"><i class="bi bi-plug me-1"></i> Disconnect / Kick Session</button>
+                <div class="form-check form-switch border rounded-3 p-3 ps-5"><input id="cpSecretToggle" class="form-check-input" type="checkbox"><label class="form-check-label fw-semibold" for="cpSecretToggle">Secret Enabled</label><div class="small text-muted">Toggle disabled=yes/no on MikroTik</div></div>
+                <div class="mt-3 small text-muted">Live IP: <span id="cpLiveIp" class="fw-semibold text-dark">—</span></div>
+              </div></div></div>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="cp-tab-billing">
+            <div class="row g-3">
+              <div class="col-lg-7"><div class="card border-0 shadow-sm"><div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-8"><label class="form-label fw-semibold">Current Package / Profile</label><select id="cpPlan" class="form-select"></select></div>
+                  <div class="col-md-4"><label class="form-label fw-semibold">Monthly Bill</label><input id="cpBillAmount" class="form-control fw-bold" readonly></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold">Expiration Date (Bangladesh)</label><input id="cpExpiration" type="date" class="form-control"></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold">Validity Countdown</label><div id="cpRemaining" class="form-control bg-light">—</div></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold">Billing Status</label><select id="cpBillingStatus" class="form-select"><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold">Package</label><div id="cpPackageLabel" class="form-control bg-light">—</div></div>
+                </div>
+              </div></div></div>
+              <div class="col-lg-5"><div class="card border-0 shadow-sm"><div class="card-body"><h6 class="fw-bold mb-3">Recent Payments</h6><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Date</th><th>Amount</th><th>Gateway</th><th>TrxID</th></tr></thead><tbody id="cpPaymentsBody"></tbody></table></div></div></div></div>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="cp-tab-info">
+            <div class="card border-0 shadow-sm"><div class="card-body"><div class="row g-3">
+              <div class="col-md-6"><label class="form-label fw-semibold">Full Legal Name</label><input id="cpFullName" class="form-control"></div>
+              <div class="col-md-5"><label class="form-label fw-semibold">Primary Phone</label><input id="cpPhone" class="form-control"></div>
+              <div class="col-md-1 d-flex align-items-end"><a id="cpWhatsapp" class="btn btn-success w-100" target="_blank" rel="noopener" title="WhatsApp"><i class="bi bi-whatsapp"></i></a></div>
+              <div class="col-md-4"><label class="form-label fw-semibold">Alternative / Emergency Phone</label><input id="cpAltPhone" class="form-control"></div>
+              <div class="col-md-8"><label class="form-label fw-semibold">Installation Address</label><input id="cpAddress" class="form-control"></div>
+              <div class="col-md-4"><label class="form-label fw-semibold">OLT / PON Port</label><input id="cpOltPon" class="form-control" placeholder="OLT-1 / PON-3"></div>
+              <div class="col-md-4"><label class="form-label fw-semibold">Distribution Box / Splitter</label><input id="cpDistribution" class="form-control" placeholder="TJ Box #4 / 1:8 Splitter"></div>
+              <div class="col-md-4"><label class="form-label fw-semibold">ONU MAC</label><input id="cpOnuMac" class="form-control"></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">ONU Serial</label><input id="cpOnuSerial" class="form-control"></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">Fiber Drop Core</label><input id="cpFiberCore" class="form-control" placeholder="Blue / Orange / Green"></div>
+            </div></div></div>
+          </div>
+          <div class="tab-pane fade" id="cp-tab-tech">
+            <div class="card border-0 shadow-sm"><div class="card-body"><div class="row g-3">
+              <div class="col-md-6"><label class="form-label fw-semibold">PPPoE Username</label><input id="cpUsername" class="form-control" readonly></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">PPPoE Password</label><div class="input-group"><input id="cpPassword" type="password" class="form-control"><button id="cpPasswordToggle" type="button" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">Static IP (Remote Address)</label><input id="cpRemoteAddress" class="form-control" placeholder="Optional"></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">Admin Note / Comment</label><input id="cpRemarks" class="form-control" placeholder="Internal memo"></div>
+            </div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer bg-white">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button id="cpRenewBtn" type="button" class="btn btn-success"><i class="bi bi-calendar-plus me-1"></i> Renew +1 Month</button>
+        <button id="cpSaveBtn" type="button" class="btn btn-primary"><i class="bi bi-cloud-arrow-up me-1"></i> Save & Sync to MikroTik</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>');
             w.document.close();
         }
         async function loadAddHotspotUserView(){
@@ -2344,51 +2432,60 @@ async function deletePlan(id,name){
             </tr>`;
         }
 
-        async function openCustomerProfile(username) {
+        async function openCustomerProfile(username){
             const name=String(username||'').trim();
             if(!name)return;
+            const modalEl=document.getElementById('customerProfileModal');
+            if(!modalEl)return;
+            const modal=window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+            const loading=modalEl.querySelector('#customerProfileLoading');
+            if(loading)loading.classList.remove('d-none');
+            modal?.show();
             try{
                 const data=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
-                const customer=data.customer||{};
-                let modalEl=document.getElementById('customerProfileModal');
-                if(!modalEl){
-                    modalEl=document.createElement('div');
-                    modalEl.id='customerProfileModal';
-                    modalEl.className='modal fade';
-                    modalEl.tabIndex=-1;
-                    modalEl.innerHTML='<div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">'+
-                        '<div class="modal-header"><h5 class="modal-title"><i class="bi bi-person-circle text-success me-2"></i>Customer Profile</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>'+
-                        '<div class="modal-body"><div class="row g-3">'+
-                        '<div class="col-md-6"><label class="form-label">Username</label><input id="editCustomerUsername" class="form-control" readonly></div>'+
-                        '<div class="col-md-6"><label class="form-label">Full Name</label><input id="editCustomerFullName" class="form-control" readonly></div>'+
-                        '<div class="col-md-6"><label class="form-label">Phone</label><input id="editCustomerPhone" class="form-control" readonly></div>'+
-                        '<div class="col-md-6"><label class="form-label">Package</label><input id="editCustomerPackage" class="form-control" readonly></div>'+
-                        '<div class="col-md-6"><label class="form-label">Expiry Date</label><input id="editCustomerExpDate" class="form-control" readonly></div>'+
-                        '<div class="col-md-6"><label class="form-label">Billing</label><input id="editCustomerBillingStatus" class="form-control" readonly></div>'+
-                        '</div></div>'+
-                        '<div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="button" class="btn btn-primary" id="customerProfileEditBtn">Edit Customer</button></div>'+
-                        '</div></div>';
-                    document.body.appendChild(modalEl);
+                const customer=data.customer||{},live=data.live||{},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
+                const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
+                const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.value=value??'';};
+                const safeDate=String(customer.expirationDate||customer.expiration_date||'').slice(0,10);
+                const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+                const days=safeDate?Math.ceil((Date.parse(safeDate+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
+                const statusText=live.online?'Online':'Offline';
+                const statusClass=live.online?'bg-success':'bg-secondary';
+                const uptime=String(live.uptime||'');
+                const bytes=(v)=>{const n=Number(v||0);if(!Number.isFinite(n)||n<=0)return '0 B';const u=['B','KB','MB','GB','TB'];const i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return (n/Math.pow(1024,i)).toFixed(i>=3?1:i?1:0)+' '+u[i];};
+                const remaining=days===null?'—':days<0?'Expired '+Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' ago':days===0?'Expires today':'Remaining: '+days+' day'+(days===1?'':'s');
+                const selectedPlan=plans.find(p=>String(p.profileName||'').toLowerCase()===String(customer.profile||'').toLowerCase())||plans.find(p=>String(p.name||'').toLowerCase()===String(customer.package_name||'').toLowerCase());
+                setText('modalCustomerTitle',(customer.fullName||customer.full_name||name)+' · '+(customer.username||name));
+                const pill=modalEl.querySelector('#modalCustomerLivePill');if(pill){pill.className='badge '+statusClass+' rounded-pill px-3 py-2';pill.innerHTML=(live.online?'● Online':'○ Offline')+(live.online&&uptime?' · Uptime: '+escapeHtml(uptime):'');}
+                setText('cpLiveStatus',statusText);const liveBadge=modalEl.querySelector('#cpLiveStatus');if(liveBadge)liveBadge.className='badge '+statusClass;
+                setText('cpAssignedIp',live.ip||customer.remote_address||'—');setText('cpCallerId',live.mac||customer.caller_id||'—');setText('cpUptime',uptime||'—');setText('cpRx',bytes(live.bytesIn));setText('cpTx',bytes(live.bytesOut));
+                setText('cpRemaining',remaining);setText('cpBilling',customer.billing_status||'Unpaid');setText('cpLiveIp',live.ip||'—');
+                const bill=modalEl.querySelector('#cpBillingStatus');if(bill)bill.value=String(customer.billing_status||'Unpaid').toLowerCase();
+                const disabled=Boolean(customer.disabled);const toggle=modalEl.querySelector('#cpSecretToggle');if(toggle){toggle.checked=!disabled;toggle.dataset.username=customer.username||name;}
+                setVal('cpFullName',customer.fullName||customer.full_name||'');setVal('cpPhone',customer.phone||'');setVal('cpAltPhone',customer.alternative_phone||'');
+                setVal('cpAddress',customer.installation_address||'');setVal('cpOltPon',customer.olt_pon_port||'');setVal('cpDistribution',customer.distribution_box||'');
+                setVal('cpOnuMac',customer.onu_mac||'');setVal('cpOnuSerial',customer.onu_serial||'');setVal('cpFiberCore',customer.fiber_drop_core||'');
+                setVal('cpUsername',customer.username||name);setVal('cpPassword',customer.password||'');setVal('cpRemoteAddress',customer.remote_address||'');setVal('cpRemarks',customer.remarks||'');
+                setVal('cpExpiration',safeDate);
+                const planSelect=modalEl.querySelector('#cpPlan');if(planSelect){
+                    planSelect.innerHTML=plans.length?plans.map(p=>'<option value="'+escapeHtml(p.profileName||p.name)+'" data-price="'+Number(p.price||0)+'">'+escapeHtml(p.name||p.profileName||'Plan')+(p.rateLimit?' · '+escapeHtml(p.rateLimit):'')+' — ৳'+Number(p.price||0).toFixed(2)+'</option>').join(''):'<option value="">No plans configured</option>';
+                    planSelect.value=selectedPlan?.profileName||selectedPlan?.name||customer.profile||customer.package_name||'';
+                    if(!planSelect.value&&planSelect.options.length)planSelect.selectedIndex=0;
                 }
-                const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
-                setVal('editCustomerUsername',customer.username||name);
-                setVal('editCustomerFullName',customer.fullName||customer.full_name||'');
-                setVal('editCustomerPhone',customer.phone||'');
-                setVal('editCustomerPackage',customer.package_name||customer.package||customer.profile||'');
-                setVal('editCustomerExpDate',customer.expirationDate?String(customer.expirationDate).split('T')[0]:customer.expiration_date?String(customer.expiration_date).split('T')[0]:'');
-                setVal('editCustomerBillingStatus',String(customer.billing_status||'unpaid').toLowerCase()==='paid'?'Paid':'Unpaid');
-                const editBtn=document.getElementById('customerProfileEditBtn');
-                if(editBtn){
-                    editBtn.onclick=async()=>{
-                        const instance=window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
-                        instance?.hide();
-                        await populateCustomerEditForm(customer,name);
-                    };
-                }
-                if(modalEl && window.bootstrap?.Modal){
-                    window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
-                }
-            }catch(error){console.error('Failed to open profile:',error);alert(error.message||'Could not load customer profile');}
+                const priceEl=modalEl.querySelector('#cpBillAmount');if(priceEl){const p=plans.find(x=>String(x.profileName||x.name)===String(planSelect?.value||''));priceEl.value=p?'৳ '+Number(p.price||0).toFixed(2):'৳ 0.00';}
+                setText('cpPackageLabel',customer.package_name||customer.profile||'—');
+                const wa=modalEl.querySelector('#cpWhatsapp');if(wa){const phone=String(customer.phone||'').replace(/[^0-9]/g,'');wa.href=phone?('https://wa.me/'+(phone.startsWith('880')?phone:'880'+phone.replace(/^0/,''))):'#';wa.classList.toggle('disabled',!phone);}
+                const paymentBody=modalEl.querySelector('#cpPaymentsBody');if(paymentBody)paymentBody.innerHTML=payments.length?payments.map(p=>'<tr><td>'+escapeHtml(p.date?new Date(p.date).toLocaleDateString('en-GB'):'—')+'</td><td>৳'+Number(p.amount||0).toFixed(2)+'</td><td>'+escapeHtml(p.gateway||'—')+'</td><td>'+escapeHtml(p.trxId||'—')+'</td></tr>').join(''):'<tr><td colspan="4" class="text-center text-muted py-3">No recent payments.</td></tr>';
+                modalEl.dataset.username=customer.username||name;
+                modalEl.dataset.customerId=customer.id||'';
+                modalEl.dataset.loaded='1';
+                if(loading)loading.classList.add('d-none');
+            }catch(error){
+                if(loading)loading.classList.add('d-none');
+                console.error('[Customer Hub]',error);
+                alert(error.message||'Could not load customer profile.');
+                modal?.hide();
+            }
         }
 
         async function populateCustomerEditForm(customer,name){
@@ -2406,6 +2503,19 @@ async function deletePlan(id,name){
             await loadCustomerPackages(customer.profile||'');
             const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-save me-1"></i><span>Update & Provision Customer</span>';
             updateCustomerValidityStatus();
+        }
+
+        if(!window.__customerHubBound){
+            window.__customerHubBound=true;
+            const hub=()=>document.getElementById('customerProfileModal');
+            const hubSetText=(id,v)=>{const e=hub()?.querySelector('#'+id);if(e)e.textContent=v??'—';};
+            const hubLoading=(button,on,label)=>{if(!button)return;if(on){button.dataset.originalText=button.innerHTML;button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>'+label;}else{button.disabled=false;button.innerHTML=button.dataset.originalText||label;}};
+            hub()?.querySelector('#cpPasswordToggle')?.addEventListener('click',()=>{const input=hub().querySelector('#cpPassword'),icon=hub().querySelector('#cpPasswordToggle i');if(input.type==='password'){input.type='text';icon.className='bi bi-eye-slash';}else{input.type='password';icon.className='bi bi-eye';}});
+            hub()?.querySelector('#cpPlan')?.addEventListener('change',function(){const option=this.selectedOptions[0],price=Number(option?.dataset.price||0);const e=hub()?.querySelector('#cpBillAmount');if(e)e.value='৳ '+price.toFixed(2);});
+            hub()?.querySelector('#cpKickBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username)return;if(!confirm('Disconnect active session for '+username+'?'))return;const b=m.querySelector('#cpKickBtn');hubLoading(b,true,'Disconnecting...');try{const d=await jsonFetch('/api/customers/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Active session disconnected.');await openCustomerProfile(username);}catch(e){alert(e.message||'Unable to disconnect session.');}finally{hubLoading(b,false,'Disconnect');}});
+            hub()?.querySelector('#cpSecretToggle')?.addEventListener('change',async function(){const m=hub(),username=m?.dataset.username;if(!username)return;const enabled=this.checked;try{await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,disabled:!enabled})});}catch(e){this.checked=!enabled;alert(e.message||'Unable to update secret state.');}});
+            hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:m.querySelector('#cpPhone').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,expirationDate:m.querySelector('#cpExpiration').value,password:m.querySelector('#cpPassword').value,remoteAddress:m.querySelector('#cpRemoteAddress').value.trim(),remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,disabled:!m.querySelector('#cpSecretToggle').checked};const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
+            hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for one calendar month?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
         window.openCustomerProfile=openCustomerProfile;
