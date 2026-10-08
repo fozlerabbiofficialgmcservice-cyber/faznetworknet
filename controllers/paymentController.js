@@ -119,11 +119,13 @@ async function verifyTrx(req,res){
   const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
   const amount=Number(tx.amount),requestedAmount=Number(req.body.amount||0);
   if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
-  const packages=await db.query("SELECT id,plan_name,profile_name,price,duration_months FROM packages WHERE price=$1 ORDER BY id ASC",[amount]);
-  if(!packages.rows.length)return res.status(400).json({success:false,error:"No package is mapped to this payment amount."});
-  const distinctProfiles=[...new Set(packages.rows.map(row=>String(row.profile_name||row.plan_name||"").trim()).filter(Boolean))];
-  if(distinctProfiles.length!==1)return res.status(400).json({success:false,error:"Payment amount maps to multiple Hotspot profiles. Configure one unique package/profile for this amount."});
-  const profile=distinctProfiles[0], hotspotProfiles=await mikrotikService.getHotspotProfiles();
+  const savedSettings=await db.query("SELECT key,value FROM app_settings WHERE key IN ('hotspot_price_profile_map','hotspot_default_profile')");
+  const settings=Object.fromEntries((savedSettings.rows||[]).map(row=>[row.key,row.value]));
+  let mapping={};try{mapping=JSON.parse(settings.hotspot_price_profile_map||"{}");}catch(_){}
+  if(!mapping||typeof mapping!=="object"||Array.isArray(mapping))mapping={};
+  const mappedProfile=String(mapping[amount.toFixed(2)]||mapping[String(amount)]||"").trim();
+  if(!mappedProfile)return res.status(400).json({success:false,error:"No Hotspot profile is mapped to ৳"+amount.toFixed(2)+". Ask the administrator to configure this amount in Website Settings."});
+  const profile=mappedProfile, hotspotProfiles=await mikrotikService.getHotspotProfiles();
   const hotspotProfile=hotspotProfiles.find(item=>String(item.name||"").trim().toLowerCase()===profile.toLowerCase());
   if(!hotspotProfile)return res.status(400).json({success:false,error:"The mapped Hotspot profile is not available on MikroTik."});
   const validity=String(hotspotProfile.sessionTimeout||"").trim();
