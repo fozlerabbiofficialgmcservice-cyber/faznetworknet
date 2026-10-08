@@ -255,6 +255,18 @@
             body.hotspot-printing .voucher-credential { font-size:15px; }
             body.hotspot-printing .voucher-instruction { font-size:9px; }
         }
+        .customer-add-shell{max-width:1180px;margin:0 auto;padding-bottom:24px}
+        .customer-add-hero{padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;border:1px solid #e2e8f0}
+        .customer-add-icon{width:42px;height:42px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:#ecfdf5;color:#059669;font-size:19px}
+        .customer-add-hero-meta{display:flex;align-items:center;gap:8px;color:#64748b;font-size:13px;white-space:nowrap}
+        .customer-input-group .input-group-text{background:#f8fafc;border-color:#cbd5e1;color:#64748b;min-width:44px;justify-content:center}
+        .customer-input-group .form-control,.customer-input-group .form-select{min-height:44px}
+        .customer-helper-switch{border:1px solid #dbe5df;background:#f8fffb;border-radius:10px;padding:10px 14px;width:100%;min-height:62px}
+        .customer-helper-switch .form-check-input{cursor:pointer}
+        .customer-helper-switch .form-check-label{cursor:pointer;font-size:13px}
+        .customer-textarea{border-color:#cbd5e1;border-radius:8px;resize:vertical}
+        .customer-add-actions{position:sticky;bottom:12px;z-index:20;border:1px solid #e2e8f0}
+        @media(max-width:768px){.customer-add-hero{align-items:flex-start;flex-direction:column}.customer-add-hero-meta{white-space:normal}.customer-add-actions{position:static}.customer-add-shell{padding-bottom:8px}}
         /* Bootstrap modal hardening: keep dynamically-created Hotspot modals above every backdrop. */
         .modal-backdrop { z-index: 1040 !important; }
         .modal { z-index: 1055 !important; }
@@ -509,21 +521,89 @@
 
             <!-- VIEW 2: ADD CUSTOMER -->
             <section id="view-add-customer" class="admin-view" style="display:none">
-                <div class="card card-custom mb-4">
-                    <div class="card-custom-header"><i class="bi bi-person-plus-fill text-success fs-5"></i><span class="fs-5" data-key="add_new_customer">Add New Customer</span></div>
-                    <div class="card-body p-4">
-                        <form id="addCustomerForm">
-                            <div class="row g-3">
-                                <div class="col-md-6"><label for="fullName" class="form-label" data-key="label_fullname">Full Name *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-person"></i></span><input type="text" class="form-control" id="fullName" placeholder="e.g. John Doe" data-placeholder-key="ph_fullname" required></div></div>
-                                <div class="col-md-6"><label for="phoneNumber" class="form-label" data-key="label_phone">Phone Number *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span><input type="tel" class="form-control" id="phoneNumber" placeholder="e.g. 01700000000" data-placeholder-key="ph_phone" required></div></div>
-                                <div class="col-md-6"><label for="username" class="form-label" data-key="label_username">Username *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-at"></i></span><input type="text" class="form-control" id="username" placeholder="pppoe_user" data-placeholder-key="ph_username" required></div></div>
-                                <div class="col-md-6"><label for="password" class="form-label" data-key="label_password">Password *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-key"></i></span><input type="password" class="form-control" id="password" placeholder="••••••••" data-placeholder-key="ph_password" required></div></div>
-                                <div class="col-md-6"><label for="packageSelect" class="form-label" data-key="label_package">Package Selection *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-speedometer"></i></span><select class="form-select" id="packageSelect" required><option value="Profile-10M">Standard - 10 Mbps</option><option value="Profile-20M">Premium - 20 Mbps</option><option value="default">Default</option></select></div></div>
-                                <div class="col-md-6"><label for="billingDuration" class="form-label" data-key="label_billing_duration">Billing Duration *</label><div class="input-group"><span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span><select class="form-select" id="billingDuration" required><option value="1_month" selected data-key="opt_1_month">1 Month (30 Days)</option></select></div></div>
-                                <div class="col-12 mt-4 pt-2 border-top d-flex justify-content-end gap-2"><button type="reset" class="btn btn-light border px-4" data-key="btn_reset">Reset</button><button type="submit" class="btn btn-theme px-4" data-key="btn_save_customer"><i class="bi bi-check2-circle me-1"></i> Save Customer</button></div>
-                            </div>
-                        </form>
+                <div class="customer-add-shell">
+                    <div class="customer-add-hero card-custom mb-4">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-2"><span class="customer-add-icon"><i class="bi bi-person-plus-fill"></i></span><span class="badge bg-success-subtle text-success border border-success-subtle">Broadband / PPPoE</span></div>
+                            <h2 class="h4 fw-bold mb-1">Add Customer</h2>
+                            <p class="text-muted mb-0">Create the customer record, assign a package, and provision the PPPoE account from one workflow.</p>
+                        </div>
+                        <div class="customer-add-hero-meta"><i class="bi bi-shield-check text-success"></i><span>Enterprise onboarding</span></div>
                     </div>
+
+                    <form id="addCustomerForm" novalidate>
+                        <div class="card card-custom mb-4">
+                            <div class="card-custom-header"><i class="bi bi-person-vcard text-success fs-5"></i><div><div class="fw-semibold">Personal &amp; Account Details</div><small class="text-muted fw-normal">Required billing identity and connection date</small></div></div>
+                            <div class="card-body p-4">
+                                <div class="row g-4">
+                                    <div class="col-lg-5">
+                                        <label for="fullName" class="form-label">Full Name <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person"></i></span><input type="text" class="form-control" id="fullName" placeholder="e.g. John Doe" autocomplete="name" required></div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <label for="phoneNumber" class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-telephone"></i></span><input type="tel" class="form-control" id="phoneNumber" placeholder="e.g. 01700000000" autocomplete="tel" required></div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <label for="connectionDate" class="form-label">Connection Date <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar3"></i></span><input type="date" class="form-control" id="connectionDate" required></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card card-custom mb-4">
+                            <div class="card-custom-header"><i class="bi bi-router text-success fs-5"></i><div><div class="fw-semibold">PPPoE Credentials &amp; Package</div><small class="text-muted fw-normal">Profile selection controls the preset monthly bill</small></div></div>
+                            <div class="card-body p-4">
+                                <div class="row g-4">
+                                    <div class="col-lg-4">
+                                        <label for="username" class="form-label">PPPoE Username <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-at"></i></span><input type="text" class="form-control" id="username" placeholder="pppoe_user" autocomplete="username" required></div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <label for="password" class="form-label">PPPoE Password <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-key"></i></span><input type="password" class="form-control" id="password" placeholder="Enter PPPoE password" autocomplete="new-password" required><button type="button" class="btn btn-outline-secondary" id="toggleCustomerPassword" title="Show password"><i class="bi bi-eye"></i></button></div>
+                                    </div>
+                                    <div class="col-lg-4 d-flex align-items-end">
+                                        <div class="form-check form-switch customer-helper-switch mb-1"><input class="form-check-input" type="checkbox" role="switch" id="phoneCredentialHelper"><label class="form-check-label" for="phoneCredentialHelper"><strong>Use phone for credentials</strong><small class="d-block text-muted">Auto-fill username &amp; password from phone</small></label></div>
+                                    </div>
+                                    <div class="col-lg-8">
+                                        <label for="packageSelect" class="form-label">Package / Profile <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-speedometer2"></i></span><select class="form-select" id="packageSelect" required><option value="">Loading packages...</option></select></div>
+                                        <div id="packagePriceHint" class="form-text mt-2"><i class="bi bi-info-circle me-1"></i>Select a package to load its preset price.</div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <label for="monthlyBillInput" class="form-label">Monthly Bill / Amount (৳) <span class="text-danger">*</span></label>
+                                        <div class="input-group customer-input-group"><span class="input-group-text fw-semibold">৳</span><input type="number" class="form-control" id="monthlyBillInput" min="0" max="10000000" step="0.01" placeholder="0.00" required></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card card-custom mb-4">
+                            <div class="card-custom-header p-0">
+                                <button class="btn w-100 text-start px-4 py-3 d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#customerComplianceCollapse" aria-expanded="false" aria-controls="customerComplianceCollapse">
+                                    <i class="bi bi-file-earmark-text text-success fs-5"></i><span><span class="fw-semibold d-block">Optional Compliance &amp; Network Info</span><small class="text-muted fw-normal">NID, installation and network reference details</small></span><i class="bi bi-chevron-down ms-auto"></i>
+                                </button>
+                            </div>
+                            <div class="collapse" id="customerComplianceCollapse">
+                                <div class="card-body p-4">
+                                    <div class="row g-4">
+                                        <div class="col-md-6"><label for="nidNumber" class="form-label">NID / Smart Card Number</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person-vcard"></i></span><input type="text" class="form-control" id="nidNumber" placeholder="Optional"></div></div>
+                                        <div class="col-md-6"><label for="installationAddress" class="form-label">Installation Address / Area / Zone</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-geo-alt"></i></span><input type="text" class="form-control" id="installationAddress" placeholder="House, road, area or zone"></div></div>
+                                        <div class="col-md-6"><label for="fiberBox" class="form-label">Fiber Box / Splitter / ONU MAC</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-diagram-3"></i></span><input type="text" class="form-control" id="fiberBox" placeholder="Optional network reference"></div></div>
+                                        <div class="col-md-6"><label for="onuMac" class="form-label">ONU MAC Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-hdd-network"></i></span><input type="text" class="form-control" id="onuMac" placeholder="AA:BB:CC:DD:EE:FF"></div></div>
+                                        <div class="col-12"><label for="customerRemarks" class="form-label">Remarks / Note</label><textarea class="form-control customer-textarea" id="customerRemarks" rows="3" placeholder="Optional customer or installation notes"></textarea></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="customer-add-actions card-custom p-3 p-md-4 d-flex flex-column flex-sm-row justify-content-end gap-2">
+                            <button type="reset" class="btn btn-outline-secondary px-4"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset Form</button>
+                            <button type="submit" class="btn btn-success px-4" id="saveCustomerBtn"><i class="bi bi-person-plus-fill me-1"></i><span>Save &amp; Provision Customer</span></button>
+                        </div>
+                    </form>
                 </div>
             </section>
 
@@ -1827,26 +1907,139 @@
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
 
+        function localDateValue() {
+            const now = new Date();
+            const offset = now.getTimezoneOffset();
+            return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+        }
+
+        async function loadCustomerPackages(selectedProfile = '') {
+            const select = document.getElementById('packageSelect');
+            if (!select) return;
+            select.innerHTML = '<option value="">Loading packages...</option>';
+            try {
+                const data = await jsonFetch('/api/packages');
+                const packages = data.packages || [];
+                if (!packages.length) {
+                    select.innerHTML = '<option value="">No packages configured</option>';
+                    applyCustomerPackagePrice();
+                    return;
+                }
+                select.innerHTML = '<option value="">Select a package / profile</option>' + packages.map(pkg => {
+                    const price = Number(pkg.price || 0);
+                    return '<option value="' + escapeHtml(pkg.profile || pkg.name) + '" data-price="' + price.toFixed(2) + '">' +
+                        escapeHtml(pkg.name || pkg.profile) + ' — ৳' + price.toFixed(2) + '</option>';
+                }).join('');
+                if (selectedProfile) select.value = selectedProfile;
+                applyCustomerPackagePrice();
+            } catch (error) {
+                select.innerHTML = '<option value="">Unable to load packages</option>';
+                const hint = document.getElementById('packagePriceHint');
+                if (hint) hint.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + escapeHtml(error.message);
+            }
+        }
+
+        function applyCustomerPackagePrice() {
+            const select = document.getElementById('packageSelect');
+            const input = document.getElementById('monthlyBillInput');
+            const hint = document.getElementById('packagePriceHint');
+            if (!select || !input) return;
+            const option = select.options[select.selectedIndex];
+            const price = option ? Number(option.dataset.price || 0) : 0;
+            if (select.value) {
+                input.value = price.toFixed(2);
+                if (hint) hint.innerHTML = '<i class="bi bi-check-circle-fill me-1 text-success"></i>Preset package price loaded. You can edit it for a custom discount.';
+            } else {
+                input.value = '';
+                if (hint) hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>Select a package to load its preset price.';
+            }
+        }
+
+        async function showAddCustomerForm() {
+            purgeStuckBackdrops();
+            switchView('add-customer');
+            const dateInput = document.getElementById('connectionDate');
+            if (dateInput && !dateInput.value) dateInput.value = localDateValue();
+            await loadCustomerPackages();
+            if (window.innerWidth <= 768 && typeof closeSidebarMobile === 'function') closeSidebarMobile();
+        }
+
+        function applyPhoneCredentials() {
+            const helper = document.getElementById('phoneCredentialHelper');
+            const phone = document.getElementById('phoneNumber');
+            const username = document.getElementById('username');
+            const password = document.getElementById('password');
+            if (!helper || !phone || !username || !password || !helper.checked) return;
+            const value = phone.value.trim();
+            if (value) {
+                username.value = value;
+                password.value = value;
+            }
+        }
+
+        document.getElementById('packageSelect')?.addEventListener('change', applyCustomerPackagePrice);
+        document.getElementById('phoneCredentialHelper')?.addEventListener('change', function(){ if(this.checked) applyPhoneCredentials(); });
+        document.getElementById('phoneNumber')?.addEventListener('input', applyPhoneCredentials);
+        document.getElementById('toggleCustomerPassword')?.addEventListener('click', function(){
+            const input=document.getElementById('password');
+            if(!input) return;
+            const visible=input.type==='text';
+            input.type=visible?'password':'text';
+            this.innerHTML='<i class="bi '+(visible?'bi-eye':'bi-eye-slash')+'"></i>';
+        });
+
+        document.getElementById('addCustomerForm').addEventListener('reset', function(){
+            setTimeout(function(){
+                const dateInput=document.getElementById('connectionDate');
+                if(dateInput) dateInput.value=localDateValue();
+                applyCustomerPackagePrice();
+            },0);
+        });
+
         document.getElementById('addCustomerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const button = this.querySelector('button[type="submit"]');
-            button.disabled = true;
+            const form=this;
+            if(!form.checkValidity()){ form.classList.add('was-validated'); return; }
+            const button=document.getElementById('saveCustomerBtn');
+            const oldHtml=button.innerHTML;
+            button.disabled=true;
+            button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...';
             try {
-                const payload = {
-                    username: document.getElementById('username').value.trim(),
-                    password: document.getElementById('password').value.trim(),
-                    phone: document.getElementById('phoneNumber').value.trim(),
-                    profile: document.getElementById('packageSelect').value
+                const packageSelect=document.getElementById('packageSelect');
+                const profile=packageSelect.value.trim();
+                const selectedOption=packageSelect.options[packageSelect.selectedIndex];
+                const payload={
+                    fullName:document.getElementById('fullName').value.trim(),
+                    phone:document.getElementById('phoneNumber').value.trim(),
+                    connectionDate:document.getElementById('connectionDate').value,
+                    username:document.getElementById('username').value.trim(),
+                    password:document.getElementById('password').value.trim(),
+                    package:selectedOption?.textContent?.split(' — ৳')[0]?.trim() || profile,
+                    profile,
+                    bill:document.getElementById('monthlyBillInput').value,
+                    nid:document.getElementById('nidNumber').value.trim(),
+                    installationAddress:document.getElementById('installationAddress').value.trim(),
+                    fiberBox:document.getElementById('fiberBox').value.trim(),
+                    onuMac:document.getElementById('onuMac').value.trim(),
+                    remarks:document.getElementById('customerRemarks').value.trim()
                 };
-                await jsonFetch('/api/pppoe/users/create', {
-                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
-                });
-                alert('Customer created and synced with MikroTik!');
-                this.reset();
+                const data=await jsonFetch('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                alert(data.message || 'Customer created successfully');
+                form.reset();
+                form.classList.remove('was-validated');
+                const dateInput=document.getElementById('connectionDate');
+                if(dateInput) dateInput.value=localDateValue();
+                await loadCustomerPackages();
                 switchView('all-customer');
-            } catch (error) { alert(error.message); }
-            finally { button.disabled = false; }
+            } catch(error) {
+                alert(error.message);
+            } finally {
+                button.disabled=false;
+                button.innerHTML=oldHtml;
+            }
         });
+
+
 
         async function fetchPayments(channel = '') {
             const body = document.getElementById('paymentsBody');
