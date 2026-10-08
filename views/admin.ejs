@@ -2433,13 +2433,44 @@ async function deletePlan(id,name){
             const id=String(customerId||'').trim(), name=String(username||'').trim();
             if(!id && !name)return;
             if(!confirm('Are you sure you want to permanently delete "'+name+'" from MikroTik and Database?'))return;
-            const row=Array.from(document.querySelectorAll('#customerFilterBody tr[data-customer-row]')).find(function(el){return String(el.dataset.id||'')===id;});
+            const row=Array.from(document.querySelectorAll('#customerFilterBody tr[data-customer-row]')).find(function(el){
+                return String(el.dataset.customerId||el.dataset.id||'')===id;
+            });
             const button=row?.querySelector('.action-delete-btn');
             if(button?.disabled)return;
             if(button)button.disabled=true;
             try{
-                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id||name),{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:name})});
-                if(row)row.remove();
+                // Await the server transaction completely before mutating local state.
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id||name),{
+                    method:'DELETE',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({username:name})
+                });
+
+                if(!(data&&data.success!==false))throw new Error(data?.message||'Customer deletion failed.');
+
+                window.__deletedCustomerIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
+                window.__deletedCustomerUsernames = window.__deletedCustomerUsernames instanceof Set ? window.__deletedCustomerUsernames : new Set();
+                if(id)window.__deletedCustomerIds.add(id);
+                if(name)window.__deletedCustomerUsernames.add(name.toLowerCase());
+
+                currentCustomerUsers = (currentCustomerUsers||[]).filter(function(user){
+                    return String(user?.customer_id||user?.id||'')!==id && String(user?.username||'').toLowerCase()!==name.toLowerCase();
+                });
+                if(Array.isArray(window.cachedCustomers)){
+                    window.cachedCustomers = window.cachedCustomers.filter(function(user){
+                        return String(user?.customer_id||user?.id||'')!==id && String(user?.username||'').toLowerCase()!==name.toLowerCase();
+                    });
+                }
+
+                // Remove the exact row immediately; the deleted-id guard also blocks
+                // a stale in-flight polling response from rendering it again.
+                document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(function(el){
+                    const rowId=String(el.dataset.customerId||el.dataset.id||'');
+                    const rowUsername=String(el.dataset.username||'').toLowerCase();
+                    if((id&&rowId===id)||(name&&rowUsername===name.toLowerCase()))el.remove();
+                });
+
                 if(typeof showCustomerActionToast==='function')showCustomerActionToast(data.message||'Customer deleted successfully.');
                 else alert(data.message||'Customer deleted successfully.');
             }catch(error){
@@ -2543,10 +2574,19 @@ async function deletePlan(id,name){
             filterCustomerRows(document.getElementById('customerLiveSearch')?.value||'');
         }
         function renderCustomerTable(users) {
-            currentCustomerUsers = users || [];
+            const sourceUsers = Array.isArray(users) ? users : [];
+            const deletedIds = window.__deletedCustomerIds instanceof Set ? window.__deletedCustomerIds : new Set();
+            const deletedUsernames = window.__deletedCustomerUsernames instanceof Set ? window.__deletedCustomerUsernames : new Set();
+            const visibleUsers = sourceUsers.filter(function(user) {
+                const id = String(user?.customer_id || user?.id || '').trim();
+                const username = String(user?.username || '').trim().toLowerCase();
+                return !deletedIds.has(id) && !deletedUsernames.has(username);
+            });
+            currentCustomerUsers = visibleUsers;
+            window.cachedCustomers = visibleUsers.slice();
             const lang = localStorage.getItem('faz_preferred_lang') || 'en';
             const t = translations[lang] || translations.en;
-            const counts=customerBillingCounts(users);
+            const counts=customerBillingCounts(visibleUsers);
             const content = document.getElementById('dynamicPageContent');
             if (!content) return;
             content.innerHTML = `
@@ -2556,7 +2596,7 @@ async function deletePlan(id,name){
                             <div class="d-flex align-items-center gap-2">
                                 <i class="bi bi-people text-success fs-5"></i>
                                 <span data-key="customer_table">${escapeHtml(t.customer_table)}</span>
-                                <span class="badge bg-success">${users.length}</span>
+                                <span class="badge bg-success">${visibleUsers.length}</span>
                                 <span class="badge bg-light text-success border"><i class="bi bi-broadcast"></i> <span data-key="router_live">${escapeHtml(t.router_live)}</span></span>
                             </div>
                             <div class="customer-search-wrap ms-auto mt-2 mt-md-0">
@@ -2610,7 +2650,7 @@ async function deletePlan(id,name){
             const billingBadge=`<span class="${escapeHtml(billingClass)} customer-billing-badge ms-1">${escapeHtml(billingLabel)}</span>`;
             const statusBadge=`${billingBadge}${sessionMeta}`;
             const customerId=user.customer_id||user.id||'';
-            return `<tr data-customer-row data-billing-status="${escapeHtml(billingStatus==='expired'?'unpaid':billingStatus)}" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}">
+            return `<tr data-customer-row data-customer-id="${escapeHtml(customerId)}" data-billing-status="${escapeHtml(billingStatus==='expired'?'unpaid':billingStatus)}" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}">
                 <td class="ps-3">${index}</td>
                 <td>
     <a href="/admin/customers/${escapeHtml(customerId)}" class="customer-profile-link fw-bold text-decoration-none text-primary d-inline-flex align-items-center gap-1" data-customer-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}" onclick="event.preventDefault(); window.navigateToCustomerProfile('${escapeHtml(customerId)}');">
