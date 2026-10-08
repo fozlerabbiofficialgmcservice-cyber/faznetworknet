@@ -172,21 +172,16 @@ async function update(req,res){
 
 async function remove(req,res){
   try{
-    const body=req.body||{}, rawId=req.params.id??body.id, id=clean(rawId,50);
-    let existing;
-    if(id&&!/^(undefined|null)$/i.test(id)) existing=await db.query("SELECT * FROM packages WHERE id=$1::bigint",[id]);
-    else{const name=clean(body.name||body.planName,120);if(!name)return errorResponse(res,new Error("Plan ID or name is required."),400);existing=await db.query("SELECT * FROM packages WHERE plan_name=$1 OR profile_name=$1 LIMIT 1",[name]);}
+    const id=clean(req.params.id,50);
+    const existing=await db.query("SELECT * FROM packages WHERE id=$1",[id]);
     if(!existing.rows.length)return errorResponse(res,new Error("Package not found."),404);
-    const pkg=existing.rows[0],targetName=clean(pkg.profile_name||pkg.plan_name,120);
-    if(/^default$/i.test(targetName))return errorResponse(res,new Error("The default MikroTik PPP profile cannot be deleted."),400);
-    if(await mikrotikService.isProfileInUse(targetName))return errorResponse(res,new Error("Cannot delete: Profile is currently assigned to one or more PPPoE users."),409);
-    const profile=await findProfileByName(targetName);
+    const pkg=existing.rows[0];
+    const profile=await findProfileByName(pkg.profile_name||pkg.plan_name);
     if(profile)await mikrotikService.removeProfile(profile.id);
-    const deleted=await db.query("DELETE FROM packages WHERE id=$1::bigint RETURNING *",[pkg.id]);
-    return res.json({success:true,message:'Plan "'+targetName+'" deleted successfully',package:deleted.rows[0]});
-  }catch(e){return errorResponse(res,e);}
+    const r=await db.query("DELETE FROM packages WHERE id=$1 RETURNING *",[id]);
+    res.json({success:true,package:r.rows[0]});
+  }catch(e){errorResponse(res,e);}
 }
-async function deletePlan(req,res){return remove(req,res);}
 
 async function sync(req,res){
   try{
@@ -222,4 +217,4 @@ async function sync(req,res){
   }catch(e){errorResponse(res,e);}
 }
 
-module.exports={list,pools,create,update,savePlan,remove,deletePlan,sync};
+module.exports={list,pools,create,update,savePlan,remove,sync};

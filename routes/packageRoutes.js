@@ -7,6 +7,5 @@ router.post("/",controller.create);
 router.post("/save",controller.savePlan);
 router.put("/:id",controller.update);
 router.delete("/:id",controller.remove);
-router.post("/delete",controller.deletePlan||controller.remove);
 router.post("/sync",controller.sync);
 module.exports=router;

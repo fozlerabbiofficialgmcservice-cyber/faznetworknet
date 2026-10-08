@@ -4,7 +4,5 @@ const router=express.Router();
 router.get("/",controller.list);
 router.post("/",controller.create);
 router.put("/:id",controller.update);
-router.post("/save",controller.saveOrUpdateIpPool);
-router.post("/update",controller.saveOrUpdateIpPool);
 router.delete("/:id",controller.remove);
 module.exports=router;
