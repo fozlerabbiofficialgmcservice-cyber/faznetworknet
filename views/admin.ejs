@@ -3051,6 +3051,7 @@ async function deletePlan(id,name){
                 const editId = String(valueOf('customerEditId')).trim();
 
                 const payload = {
+                    name: String(valueOf('fullName')).trim(),
                     fullName: String(valueOf('fullName')).trim(),
                     phone: String(valueOf('phoneNumber')).trim(),
                     connectionDate: valueOf('connectionDate'),
@@ -3061,6 +3062,7 @@ async function deletePlan(id,name){
                     package: option?.textContent?.split(' — ৳')[0]?.trim() || profile,
                     profile,
                     packageProfile: profile,
+                    package_id: option?.dataset?.packageId || option?.value || '',
                     nid: String(valueOf('nidNumber')).trim(),
                     installationAddress: String(valueOf('installationAddress')).trim(),
                     fiberBox: String(valueOf('fiberBox')).trim(),
