@@ -2649,6 +2649,12 @@ async function deletePlan(id,name){
             await loadCustomerSection(currentCustomerFilter, currentCustomerTitleKey || 'all_customer');
         }
 
+        // Explicit globals keep inline sidebar/table handlers stable even if bundling/scope changes.
+        window.loadCustomerSection = loadCustomerSection;
+        window.refreshCustomerSection = refreshCustomerSection;
+        window.filterCustomerRows = filterCustomerRows;
+        window.showAddCustomerForm = showAddCustomerForm;
+
         async function kickCustomerFromSection(encodedUsername) {
             const username = decodeURIComponent(encodedUsername);
             if (!confirm('Kick user ' + username + '?')) return;
