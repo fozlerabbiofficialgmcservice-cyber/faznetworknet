@@ -1125,7 +1125,7 @@
             const card=document.getElementById('hotspotCreatedCredentials'); if(!card)return;
             const w=window.open('', '_blank', 'width=420,height=600'); if(!w)return;
             w.document.write(`<!doctype html><html><head><title>FAZ NETWORK Hotspot Slip</title><style>body{font-family:Arial;padding:24px;color:#0a3d2e}.slip{border:2px dashed #0a3d2e;padding:22px;border-radius:10px}.label{font-size:12px;color:#64748b}.value{font-size:20px;font-weight:700;font-family:monospace}</style></head><body><div class="slip">${card.innerHTML}</div><script>window.onload=function(){window.print();setTimeout(function(){window.close()},300)};<\/script>
-<div class="modal fade" id="customerProfileModal" tabindex="-1" aria-labelledby="modalCustomerTitle" aria-hidden="true">
+<div class="modal fade" id="editCustomerModal" tabindex="-1" aria-labelledby="modalCustomerTitle" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow-lg">
       <div class="modal-header bg-light border-bottom">
@@ -2318,15 +2318,25 @@ async function deletePlan(id,name){
             return translations[lang]?.[key] || translations.en[key] || key;
         }
 
+        function formatBdPhoneNumber(phone) {
+            if (!phone) return '—';
+            let clean = phone.toString().replace(/[^0-9]/g, '');
+            if (clean.startsWith('880')) clean = clean.substring(2);
+            else if (clean.startsWith('00880')) clean = clean.substring(4);
+            else if (clean.startsWith('00')) clean = clean.substring(1);
+            if (!clean.startsWith('0') && clean.length === 10) clean = '0' + clean;
+            return clean || '—';
+        }
+
         function parseCustomerMetadata(user) {
             const rawComment = String(user?.comment || user?.full_name || user?.fullName || user?.name || '').trim();
             let displayName = String(user?.full_name || user?.fullName || user?.name || '-').trim() || '-';
-            let displayPhone = String(user?.phone || user?.phoneNumber || '-').trim() || '-';
+            let displayPhone = formatBdPhoneNumber(user?.phone || user?.phoneNumber || '');
             if (rawComment.includes('|') || /Customer:/i.test(rawComment)) {
                 const nameMatch = rawComment.match(/Customer:\s*([^|]+)/i);
                 const phoneMatch = rawComment.match(/Phone:\s*([^|]+)/i);
                 if (nameMatch?.[1]) displayName = nameMatch[1].trim();
-                if (phoneMatch?.[1] && (displayPhone === '-' || !displayPhone)) displayPhone = phoneMatch[1].trim();
+                if (phoneMatch?.[1] && displayPhone === '—') displayPhone = formatBdPhoneNumber(phoneMatch[1].trim());
             }
             return { rawComment, displayName, displayPhone };
         }
@@ -2381,6 +2391,69 @@ async function deletePlan(id,name){
                 row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
             });
         }
+
+        async function openCustomerEditModal(customerId) {
+            const id=String(customerId||'').trim();
+            if(!id)return;
+            try{
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile');
+                const customer=data.customer||{};
+                const username=String(customer.username||'').trim();
+                if(!username)throw new Error('Customer username is missing.');
+                await openCustomerProfile(username,data);
+            }catch(error){ alert(error.message||'Unable to open customer editor.'); }
+        }
+
+        async function deleteCustomer(customerId, username) {
+            const id=String(customerId||'').trim(), name=String(username||'').trim();
+            if(!id && !name)return;
+            if(!confirm('Are you sure you want to permanently delete "'+name+'" from MikroTik and Database?'))return;
+            const row=Array.from(document.querySelectorAll('#customerFilterBody tr[data-customer-row]')).find(function(el){return String(el.dataset.id||'')===id;});
+            const button=row?.querySelector('.action-delete-btn');
+            if(button?.disabled)return;
+            if(button)button.disabled=true;
+            try{
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id||name),{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:name})});
+                if(row)row.remove();
+                alert(data.message||'Customer deleted successfully.');
+            }catch(error){
+                if(button)button.disabled=false;
+                alert(error.message||'Unable to delete customer.');
+            }
+        }
+
+        async function quickRenewCustomer(customerId, packagePrice) {
+            const id=String(customerId||'').trim();
+            if(!id)return;
+            let price=Number(packagePrice||0), name='Customer';
+            const localUser=currentCustomerUsers.find(function(u){return String(u.customer_id||u.id||'')===id;});
+            name=String(localUser?.full_name||localUser?.fullName||localUser?.name||localUser?.username||name);
+            if(!Number.isFinite(price)||price<=0){
+                try{
+                    const details=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile');
+                    price=Number(details.package?.price||details.customer?.monthly_bill||0);
+                    name=String(details.customer?.fullName||details.customer?.name||details.customer?.username||name);
+                }catch(error){ alert(error.message||'Unable to load customer package price.'); return; }
+            }
+            if(!Number.isFinite(price)||price<0){alert('Package price is unavailable.');return;}
+            if(!confirm('Renew '+name+' for 1 Month (৳'+price.toFixed(2)+')?'))return;
+            const row=Array.from(document.querySelectorAll('#customerFilterBody tr[data-customer-row]')).find(function(el){return String(el.dataset.id||'')===id;});
+            const button=row?.querySelector('.action-renew-btn');
+            if(button?.disabled)return;
+            if(button)button.disabled=true;
+            try{
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:price,paymentMethod:'CASH',trxId:'CASH-RENEW-'+Date.now()})});
+                await refreshCustomerSection();
+                alert(data.message||'Customer renewed successfully.');
+            }catch(error){
+                if(button)button.disabled=false;
+                alert(error.message||'Unable to renew customer.');
+            }
+        }
+
+        window.openCustomerEditModal=openCustomerEditModal;
+        window.deleteCustomer=deleteCustomer;
+        window.quickRenewCustomer=quickRenewCustomer;
 
         if(!window.__customerActionDelegationBound){
             document.addEventListener('click',async function(event){
@@ -2562,25 +2635,25 @@ async function deletePlan(id,name){
                 <td><span class="badge bg-light text-dark border font-monospace px-2 py-1 customer-expiry-badge"><i class="bi bi-calendar-event me-1 text-primary"></i>${escapeHtml(displayExp)}</span></td>
                 <td class="text-end pe-3 text-nowrap"><div class="d-inline-flex gap-1 align-items-center">
                     <button type="button" class="btn btn-sm ${billingStatus==='paid' ? 'btn-success text-white' : 'btn-danger text-white'} px-2 py-1 action-paid-btn" data-username="${escapeHtml(user.username||'')}" data-status="${escapeHtml(billingStatus)}" title="${billingStatus==='paid' ? 'Already paid / active' : 'Mark as Paid'}">${billingStatus==='paid' ? 'Paid' : 'Unpaid'}</button>
-                    <button type="button" class="btn btn-sm btn-success px-2 py-1 action-renew-btn" data-username="${escapeHtml(user.username||'')}" data-exp="${escapeHtml(user.expiry_date||'')}" title="Renew +1 Month">Renew</button>
+                    <button type="button" class="btn btn-sm btn-success px-2 py-1 action-renew-btn" data-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" data-price="${Number(user.monthly_bill||user.monthlyBill||0)}" title="Renew +1 Month" onclick="window.quickRenewCustomer(this.dataset.id, Number(this.dataset.price||0))">Renew</button>
                     <button type="button" class="btn btn-sm btn-info text-white px-2 py-1 action-view-btn" data-username="${escapeHtml(user.username||'')}" title="View Summary"><i class="bi bi-eye"></i></button>
-                    <button type="button" class="btn btn-sm btn-primary px-2 py-1 action-edit-btn" data-username="${escapeHtml(user.username||'')}" title="Edit Customer"><i class="bi bi-pencil-square"></i></button>
-                    <button type="button" class="btn btn-sm btn-danger px-2 py-1 action-delete-btn" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}" title="Delete from MikroTik & DB"><i class="bi bi-trash3"></i></button>
+                    <button type="button" class="btn btn-sm btn-primary px-2 py-1 action-edit-btn" data-id="${escapeHtml(customerId)}" data-username="${escapeHtml(user.username||'')}" title="Edit Customer" onclick="window.openCustomerEditModal(this.dataset.id)"><i class="bi bi-pencil-square"></i></button>
+                    <button type="button" class="btn btn-sm btn-danger px-2 py-1 action-delete-btn" data-username="${escapeHtml(user.username||'')}" data-id="${escapeHtml(customerId)}" title="Delete from MikroTik & DB" onclick="window.deleteCustomer(this.dataset.id, this.dataset.username)"><i class="bi bi-trash3"></i></button>
                 </div></td>
             </tr>`;
         }
 
-        async function openCustomerProfile(username){
+        async function openCustomerProfile(username,prefetchedData){
             const name=String(username||'').trim();
             if(!name)return;
-            const modalEl=document.getElementById('customerProfileModal');
+            const modalEl=document.getElementById('editCustomerModal');
             if(!modalEl)return;
             const modal=window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
             const loading=modalEl.querySelector('#customerProfileLoading');
             if(loading)loading.classList.remove('d-none');
             modal?.show();
             try{
-                const data=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
+                const data=prefetchedData||await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
                 const customer=data.customer||{},live=data.live||{},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
                 const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
                 const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.value=value??'';};
@@ -2647,7 +2720,7 @@ async function deletePlan(id,name){
             if(window.__customerHubBound)return;
             window.__customerHubBound=true;
             window.__customerHubBound=true;
-            const hub=()=>document.getElementById('customerProfileModal');
+            const hub=()=>document.getElementById('editCustomerModal');
             const hubSetText=(id,v)=>{const e=hub()?.querySelector('#'+id);if(e)e.textContent=v??'—';};
             const refreshHubLive=async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username||m.getAttribute('aria-hidden')==='true')return;try{const d=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(username));const live=d.live||{},online=Boolean(live.online),pill=m.querySelector('#modalCustomerLivePill'),badge=m.querySelector('#cpLiveStatus');if(pill){pill.className='badge '+(online?'bg-success':'bg-secondary')+' rounded-pill px-3 py-2 ms-auto';pill.textContent=(online?'● Online':'○ Offline')+(online&&live.uptime?' · Uptime: '+live.uptime:'');}if(badge){badge.className='badge '+(online?'bg-success':'bg-secondary');badge.textContent=online?'Online':'Offline';}hubSetText('cpAssignedIp',live.ip||'—');hubSetText('cpCallerId',live.mac||'—');hubSetText('cpUptime',live.uptime||'—');hubSetText('cpRx',(()=>{const n=Number(live.bytesIn||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})());hubSetText('cpTx',(()=>{const n=Number(live.bytesOut||0);if(!n)return'0 B';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1);return(n/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];})());hubSetText('cpLiveIp',live.ip||'—');}catch(_){/* keep last live state */}};
             const modalElement=hub();
@@ -2663,6 +2736,7 @@ async function deletePlan(id,name){
 
         if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initializeCustomerHub,{once:true});else initializeCustomerHub();
         window.openCustomerProfile=openCustomerProfile;
+         window.openCustomerEditModal=openCustomerEditModal;
 
         async function editCustomer(encodedUsername) {
             return openCustomerProfile(decodeURIComponent(encodedUsername||''));
@@ -2773,7 +2847,7 @@ async function deletePlan(id,name){
                     return '<tr>' +
                         '<td><strong>' + escapeHtml(u.username) + '</strong></td>' +
                         '<td><span class="badge bg-info text-dark">' + escapeHtml(u.profile || 'N/A') + '</span></td>' +
-                        '<td>' + escapeHtml(u.phone || '-') + '</td>' +
+                        '<td>' + escapeHtml(formatBdPhoneNumber(u.phone)) + '</td>' +
                         '<td><span class="badge ' + (disabled ? 'bg-danger' : 'bg-success') + '">' + (disabled ? 'Disabled' : 'Active') + '</span></td>' +
                         '<td>' + escapeHtml(u.expiry_date ? new Date(u.expiry_date).toLocaleString() : 'Active') + '</td>' +
                         '<td><button class="btn btn-sm btn-outline-danger" onclick="kickUser(decodeURIComponent(\'' + safeUsername + '\'))">Kick</button></td>' +
