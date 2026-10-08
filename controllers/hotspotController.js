@@ -7,9 +7,54 @@ function validityMs(value){const m=String(value||"").trim().match(/^(\\d+(?:\\.\
 function voucherValidUntil(createdAt,validity){const ms=validityMs(validity);return ms?new Date(new Date(createdAt).getTime()+ms):null;}
 async function page(req,res){res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"});}
 async function profiles(req,res){try{const data=await mikrotikService.getHotspotProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
-async function createProfile(req,res){try{const name=clean(req.body.name,100),rateLimit=clean(req.body.rateLimit,100),sharedUsers=Math.max(1,Number(req.body.sharedUsers)||1),sessionTimeout=clean(req.body.sessionTimeout,50),keepaliveTimeout=clean(req.body.keepaliveTimeout,50);if(!name)return res.status(400).json({success:false,message:"Profile name is required."});const result=await mikrotikService.createHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout,keepaliveTimeout});res.json({success:true,message:"Hotspot profile created successfully in MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
-async function updateProfile(req,res){try{const name=clean(req.body.name,100),rateLimit=clean(req.body.rateLimit,100),sharedUsers=Math.max(1,Number(req.body.sharedUsers)||1);if(!name)return res.status(400).json({success:false,message:"Profile name is required."});const result=await mikrotikService.updateHotspotProfile({name,rateLimit,sharedUsers});res.json({success:true,message:"Hotspot profile updated successfully in MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
-async function deleteProfile(req,res){try{const name=clean(req.body.name,100);if(!name)return res.status(400).json({success:false,message:"Profile name is required."});const result=await mikrotikService.deleteHotspotProfile(name);res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});}catch(e){return errorResponse(res,e);}}
+function buildHotspotOnLoginScript(validity,sharedUsers){
+ const v=String(validity||"").trim();
+ const macLock=Number(sharedUsers||1)===1
+   ? ':local loginMac $"mac-address"; :if ([:len $loginMac] > 0) do={ /ip hotspot user set [find name=$user] mac-address=$loginMac; };'
+   : '';
+ const safeValidity=v.replace(/"/g,'');
+ return ':local validity "'+safeValidity+'"; :local userName $user; '+macLock+' :if ([:len [/system scheduler find name=("hs-exp-" . $userName)]] = 0) do={ /system scheduler add name=("hs-exp-" . $userName) interval=$validity start-time=[/system clock get time] on-event=(":local u \\""+$userName+"\\"; /ip hotspot active remove [find user=$u]; /ip hotspot user disable [find name=$u]; /system scheduler remove [find name=(\\"hs-exp-\\" . $u)];"); };';
+}
+function normalizeProfileValidity(value,unit){
+ const n=Math.max(1,Number(value)||0);
+ const u=String(unit||"d").toLowerCase();
+ if(!Number.isInteger(n)||!["m","h","d"].includes(u)) throw new Error("Validity value and unit must be valid.");
+ return {value:n,unit:u,validity:n+u};
+}
+async function createProfile(req,res){
+ try{
+  const name=clean(req.body.name,100);
+  const rateLimit=clean(req.body.rateLimit,100);
+  const sharedUsers=Math.max(1,Number(req.body.sharedUsers)||1);
+  const validity=normalizeProfileValidity(req.body.validityValue,req.body.validityUnit);
+  if(!name||name.toLowerCase()==="default") return res.status(400).json({success:false,message:"A custom profile name is required."});
+  if(!rateLimit) return res.status(400).json({success:false,message:"Rate limit / speed is required."});
+  const onLogin=buildHotspotOnLoginScript(validity.validity,sharedUsers);
+  const result=await mikrotikService.createHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:validity.validity,keepaliveTimeout:clean(req.body.keepaliveTimeout,50),onLogin});
+  res.json({success:true,message:"Hotspot profile created successfully in MikroTik.",profile:{...result,rateLimit,sharedUsers,validityValue:validity.value,validityUnit:validity.unit,sessionTimeout:validity.validity,onLogin}});
+ }catch(e){return errorResponse(res,e);}
+}
+async function updateProfile(req,res){
+ try{
+  const name=clean(req.body.name,100);
+  const rateLimit=clean(req.body.rateLimit,100);
+  const sharedUsers=Math.max(1,Number(req.body.sharedUsers)||1);
+  const validity=normalizeProfileValidity(req.body.validityValue,req.body.validityUnit);
+  if(!name||name.toLowerCase()==="default") return res.status(400).json({success:false,message:"A custom profile name is required."});
+  if(!rateLimit) return res.status(400).json({success:false,message:"Rate limit / speed is required."});
+  const onLogin=buildHotspotOnLoginScript(validity.validity,sharedUsers);
+  const result=await mikrotikService.updateHotspotProfile({name,rateLimit,sharedUsers,sessionTimeout:validity.validity,keepaliveTimeout:clean(req.body.keepaliveTimeout,50),onLogin});
+  res.json({success:true,message:"Hotspot profile updated successfully in MikroTik.",profile:{...result,rateLimit,sharedUsers,validityValue:validity.value,validityUnit:validity.unit,sessionTimeout:validity.validity,onLogin}});
+ }catch(e){return errorResponse(res,e);}
+}
+async function deleteProfile(req,res){
+ try{
+  const name=clean(req.body.name,100);
+  if(!name||name.toLowerCase()==="default") return res.status(400).json({success:false,message:"The default profile cannot be deleted here."});
+  const result=await mikrotikService.deleteHotspotProfile(name);
+  res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});
+ }catch(e){return errorResponse(res,e);}
+}
 async function serverProfiles(req,res){try{const data=await mikrotikService.getHotspotServerProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
 async function list(req,res){try{
  const filter=normalizeFilter(req.query.filter);
