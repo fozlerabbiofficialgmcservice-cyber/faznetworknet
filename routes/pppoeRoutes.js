@@ -1,9 +1,12 @@
 const express=require("express");
 const controller=require("../controllers/pppoeController");
+const customerController=require("../controllers/customerController");
 const router=express.Router();
 router.get("/",controller.page);
 router.post("/sync",controller.sync);
 router.get("/users",controller.users);
+router.post("/users",customerController.createCustomer);
+router.post("/provision",customerController.createCustomer);
 router.get("/profiles",controller.profiles);
 router.get("/active",controller.active);
 router.post("/create-user",controller.createUser);
