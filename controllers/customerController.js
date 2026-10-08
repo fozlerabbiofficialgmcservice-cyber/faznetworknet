@@ -673,7 +673,7 @@ async function removeCustomer(req,res){
       await client.query("DELETE FROM customers WHERE id=$1",[customerId]);
     });
 
-    return res.json({success:true,message:"Customer deleted successfully",username:resolvedUsername,terminatedSessions:result.terminatedSessions});
+    return res.json({success:true,message:"Customer deleted successfully",username:resolvedUsername,terminatedSessions:routerCleanup?.terminatedSessions||0});
   }catch(error){return errorResponse(res,error);}
 }
 async function updateCustomer(req,res){
