@@ -2459,11 +2459,8 @@ async function deletePlan(id,name){
             document.addEventListener('click',async function(event){
                 const profileLink=event.target.closest('.customer-profile-link');
                 const paidBtn=event.target.closest('.action-paid-btn');
-                const renewBtn=event.target.closest('.action-renew-btn');
                 const viewBtn=event.target.closest('.action-view-btn');
-                const editBtn=event.target.closest('.action-edit-btn');
-                const deleteBtn=event.target.closest('.action-delete-btn');
-                const button=paidBtn||renewBtn||viewBtn||editBtn||deleteBtn;
+                const button=paidBtn||viewBtn;
                 const username=String((profileLink||button)?.dataset?.username||'').trim();
                 if(!username)return;
 
@@ -2471,11 +2468,6 @@ async function deletePlan(id,name){
                     event.preventDefault();
                     const customerId=String(profileLink.dataset.customerId||profileLink.dataset.id||'').trim();
                     if(customerId) window.navigateToCustomerProfile(customerId);
-                    return;
-                }
-                if(editBtn){
-                    event.preventDefault();
-                    await openCustomerProfile(username);
                     return;
                 }
                 if(viewBtn){
@@ -2489,51 +2481,29 @@ async function deletePlan(id,name){
                     if(!confirm('Mark "'+username+'" as paid for the current billing cycle?'))return;
                     if(paidBtn.disabled)return;
                     paidBtn.disabled=true;
-                    const old=paidBtn.innerHTML;
                     try{
                         const data=await jsonFetch('/api/customers/mark-paid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
                         paidBtn.innerHTML='Paid';
                         paidBtn.dataset.status='Paid';
                         paidBtn.title='Already paid for current cycle';
-                        paidBtn.classList.remove('btn-danger','btn-outline-success');paidBtn.classList.add('btn-success','text-white');
+                        paidBtn.classList.remove('btn-danger','btn-outline-success');
+                        paidBtn.classList.add('btn-success','text-white');
                         const billingBadge=paidBtn.closest('tr')?.querySelector('.customer-billing-badge');
-                        if(billingBadge){billingBadge.className='badge bg-success-subtle text-success border customer-billing-badge ms-1';billingBadge.textContent='Paid';}
+                        if(billingBadge){
+                            billingBadge.className='badge bg-success-subtle text-success border customer-billing-badge ms-1';
+                            billingBadge.textContent='Paid';
+                        }
                         if(data.message)console.info(data.message);
-                    }catch(error){alert(error.message||'Unable to mark bill as paid.');}
-                    finally{paidBtn.disabled=false;}
-                    return;
-                }
-                if(renewBtn){
-                    event.preventDefault();
-                    if(!confirm('Renew user "'+username+'" for 1 month?'))return;
-                    if(renewBtn.disabled)return;
-                    renewBtn.disabled=true;
-                    try{
-                        const data=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
-                        const row=renewBtn.closest('tr'),badge=row?.querySelector('.customer-expiry-badge');
-                        if(badge)badge.innerHTML='<i class="bi bi-calendar-event me-1 text-primary"></i>'+escapeHtml(formatDhakaExpiration(data.newExpDate||''));
-                        renewBtn.dataset.exp=data.newExpDate||'';
-                        const status=row?.querySelector('.customer-status');
-                        if(status){status.className='badge bg-success customer-status';status.textContent=(translations[localStorage.getItem('faz_preferred_lang')||'en']||translations.en).online_status||'Active';}
-                        const paid=row?.querySelector('.customer-billing-badge');
-                        if(!paid&&status)status.insertAdjacentHTML('afterend','<span class="badge bg-success-subtle text-success border customer-billing-badge ms-1">Paid</span>');
-                    }catch(error){alert(error.message||'Unable to renew customer.');}
-                    finally{renewBtn.disabled=false;}
-                    return;
-                }
-                if(deleteBtn){
-                    event.preventDefault();
-                    const id=deleteBtn.dataset.id||deleteBtn.closest('tr')?.dataset.id||'';
-                    if(!confirm('Are you sure you want to permanently delete "'+username+'" from MikroTik and Database?'))return;
-                    if(deleteBtn.disabled)return;
-                    deleteBtn.disabled=true;
-                    try{
-                        await jsonFetch('/api/customers/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,id})});
-                        deleteBtn.closest('tr')?.remove();
-                    }catch(error){alert(error.message||'Unable to delete customer.');deleteBtn.disabled=false;}
+                    }catch(error){
+                        alert(error.message||'Unable to mark bill as paid.');
+                    }finally{
+                        paidBtn.disabled=false;
+                    }
                 }
             });
             window.__customerActionDelegationBound=true;
+        }
+
         }
 
         function customerBillingCounts(users) {
