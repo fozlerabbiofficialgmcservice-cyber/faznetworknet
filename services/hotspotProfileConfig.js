@@ -62,8 +62,8 @@ function buildHotspotOnLoginScript(config) {
     return prefix + " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=" + validity.limitBytesTotal + "; };";
   }
 
-  // Use one persistent scheduler per username. Re-login updates the existing
-  // scheduler instead of silently retaining an old expiry interval.
+  // Start validity on first login only. Reconnects must not extend a prepaid
+  // package, so an existing expiry scheduler is deliberately left untouched.
   return prefix +
     " :if ([:len $uid] > 0) do={ /ip hotspot user set $uid limit-bytes-total=0; };" +
     ' :local sched ("faz-exp-" . $u);' +
