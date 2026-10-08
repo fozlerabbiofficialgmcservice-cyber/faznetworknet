@@ -393,6 +393,38 @@ class MikroTikService {
     if (!name || !password || !profile) throw new Error("Username, password, and profile are required.");
     return this._withConnection("PPPoE user creation", async (connection) => { const params = this._writeParams({ name, password, profile, service: "pppoe", "caller-id": data.callerId, comment: data.comment, disabled: data.disabled ? "yes" : undefined }); await connection.write("/ppp/secret/add", params); return { username: name }; });
   }
+  async renewSecret(username, data) {
+    const name = this._str(username).trim();
+    const comment = this._str(data?.comment).trim();
+    if (!name || !comment) throw new Error("PPPoE username and renewal comment are required.");
+    return this._withConnection("PPPoE user renewal", async (connection) => {
+      const secret = await this._findSecret(connection, name);
+      const params = ["=.id=" + secret[".id"], "=comment=" + comment, "=disabled=" + (data?.disabled ? "yes" : "no")];
+      await connection.write("/ppp/secret/set", params);
+      return { username: name, id: this._str(secret[".id"]), disabled: Boolean(data?.disabled), comment };
+    });
+  }
+
+  async removeCustomer(username) {
+    const name = this._str(username).trim();
+    if (!name) throw new Error("PPPoE username is required.");
+    return this._withConnection("PPPoE customer removal", async (connection) => {
+      const secrets = await connection.write("/ppp/secret/print");
+      const secret = (Array.isArray(secrets) ? secrets : []).find(item => this._str(item.name).trim() === name);
+      if (!secret || !secret[".id"]) throw new Error('PPPoE user "' + name + '" was not found on MikroTik.');
+
+      const activeRows = await connection.write("/ppp/active/print");
+      const active = (Array.isArray(activeRows) ? activeRows : []).filter(item =>
+        this._str(item.name).trim() === name && item[".id"]
+      );
+      for (const session of active) {
+        await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]);
+      }
+      await connection.write("/ppp/secret/remove", ["=.id=" + secret[".id"]]);
+      return { username: name, secretId: this._str(secret[".id"]), terminatedSessions: active.length, removed: true };
+    });
+  }
+
   async removeSecret(username) {
     const name = this._str(username).trim();
     if (!name) throw new Error("PPPoE username is required.");
