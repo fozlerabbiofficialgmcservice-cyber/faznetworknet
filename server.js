@@ -1,9 +1,27 @@
 process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
-const path=require("path");const express=require("express");const cors=require("cors");
+const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
 const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const ipPoolRoutes=require("./routes/ipPoolRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
-app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());app.use(express.json());app.use(express.urlencoded({extended:true}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
+app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
+app.use(session({
+  store:new pgSession({
+    pool:db.getPool(),
+    tableName:"session",
+    createTableIfMissing:true
+  }),
+  secret:String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"faz_network_super_secret_session_2026"),
+  resave:false,
+  saveUninitialized:false,
+  rolling:true,
+  cookie:{
+    maxAge:30*24*60*60*1000,
+    httpOnly:true,
+    secure:process.env.NODE_ENV==="production",
+    sameSite:"lax"
+  }
+}));
+app.use(express.json());app.use(express.urlencoded({extended:true}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
 app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",database:db.getStatus(),timestamp:new Date()}));
 app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
 app.get("/login",(req,res)=>{
@@ -15,10 +33,25 @@ app.post("/login",async (req,res)=>{
   const password=String(req.body?.password||"");
   const nextTarget=String(req.body?.next||"/admin");
   if(!(await adminCredentialsValid(username,password))) return res.status(401).render("login",{next:nextTarget,error:"Invalid admin username or password."});
-  setSessionCookie(res,username,req);
-  return res.redirect(nextTarget.startsWith("/")&&!nextTarget.startsWith("//")?nextTarget:"/admin");
+  req.session.isAdmin=true;
+  req.session.adminUser=username;
+  req.session.loginAt=Date.now();
+  return req.session.save(err=>{
+    if(err){
+      console.error("[Session Save Error]:",err);
+      return res.status(500).render("login",{next:nextTarget,error:"Failed to initialize session"});
+    }
+    return res.redirect(nextTarget.startsWith("/")&&!nextTarget.startsWith("//")?nextTarget:"/admin");
+  });
 });
-app.post("/logout",(req,res)=>{clearSessionCookie(res,req);return res.redirect("/");});
+app.post("/logout",(req,res)=>{
+  if(!req.session)return res.redirect("/");
+  req.session.destroy(err=>{
+    if(err)console.error("[Session Destroy Error]:",err);
+    res.clearCookie("connect.sid",{path:"/"});
+    return res.redirect("/");
+  });
+});
 app.get("/portal",(req,res)=>res.render("portal",{title:"FAZ NETWORK Hotspot Portal"}));
 
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected}));
