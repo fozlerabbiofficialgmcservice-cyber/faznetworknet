@@ -355,7 +355,7 @@
 
         <ul class="sidebar-menu">
             <li class="menu-item">
-                <a href="javascript:void(0)" class="active" onclick="switchView('dashboard')"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
+                <a href="javascript:void(0)" class="active" onclick="switchView('dashboard', '', this)"><i class="bi bi-speedometer2"></i> <span data-key="dashboard">Dashboard</span></a>
             </li>
 
             <li class="menu-item">
@@ -365,7 +365,7 @@
                 </button>
                 <ul class="submenu">
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('all', 'all_customer')"><span data-key="all_customer">All Customer</span></a></li>
-                    <li><a href="javascript:void(0)" onclick="showAddCustomerForm()"><span data-key="add_customer">Add Customer</span></a></li>
+                    <li><a href="javascript:void(0)" onclick="showAddCustomerForm(this)"><span data-key="add_customer">Add Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('online', 'online_customer')"><span data-key="online_customer">Online Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('offline', 'offline_customer')"><span data-key="offline_customer">Offline Customer</span></a></li>
                     <li><a href="javascript:void(0)" onclick="loadCustomerSection('active', 'active_customer')"><span data-key="active_customer">Active Customer</span></a></li>
@@ -2061,25 +2061,86 @@ async function deletePlan(id,name){
         let trafficPollInFlight = false;
         let metricsPollInFlight = false;
 
-        function switchView(viewName, channel = '') {
-            purgeStuckBackdrops();
-            currentCustomerTitleKey = '';
-            currentPaymentTitleKey = '';
-            const target = document.getElementById('view-' + viewName) ? viewName : 'dashboard';
-            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
-            document.getElementById('view-' + target).style.display = 'block';
+        function activateView(targetViewId, activeMenuEl) {
+            try {
+                const targetId = String(targetViewId || '').trim();
+                if (!targetId) return false;
 
-            setPageTitleSafe(viewTitles[target] || 'Dashboard');
-            currentPaymentChannel = channel || '';
-            if (target === 'dashboard') {
-                refreshDashboard();
-                startTrafficPolling();
-            } else if (target === 'all-customer') {
-                fetchCustomers();
-            } else if (target === 'payments') {
-                fetchPayments(currentPaymentChannel);
+                const allSections = document.querySelectorAll(
+                    '.admin-view, .content-section, .view-pane, [data-view-pane]'
+                );
+                allSections.forEach(function(sec) {
+                    sec.style.display = 'none';
+                    sec.classList.add('d-none');
+                });
+
+                const dynamicContent = document.getElementById('dynamicPageContent');
+                if (dynamicContent) {
+                    dynamicContent.style.display = 'none';
+                    dynamicContent.classList.add('d-none');
+                }
+
+                const targetSec = document.getElementById(targetId);
+                if (!targetSec) {
+                    console.error('[Admin Navigation] Target view #' + targetId + ' not found in DOM');
+                    return false;
+                }
+
+                targetSec.style.display = 'block';
+                targetSec.classList.remove('d-none');
+
+                document.querySelectorAll(
+                    '.sidebar .nav-link, .sidebar .submenu a, .sidebar .submenu-item, .nav-item a, .menu-item a'
+                ).forEach(function(el) {
+                    el.classList.remove('active');
+                });
+                if (activeMenuEl) activeMenuEl.classList.add('active');
+
+                const pageTitle = document.getElementById('pageTitle') ||
+                    document.querySelector('.main-header h1, .page-title, .breadcrumb-current');
+                if (pageTitle && targetSec.dataset.pageTitle) {
+                    pageTitle.textContent = targetSec.dataset.pageTitle;
+                }
+
+                return true;
+            } catch (navErr) {
+                console.error('[Admin Navigation] Error during view navigation:', navErr);
+                return false;
             }
-            if (window.innerWidth < 768) closeSidebarMobile();
+        }
+
+        function switchView(viewName, channel = '', activeMenuEl = null) {
+            try {
+                purgeStuckBackdrops();
+                currentCustomerTitleKey = '';
+                currentPaymentTitleKey = '';
+
+                const requested = String(viewName || '').trim();
+                const target = document.getElementById('view-' + requested) ? requested : 'dashboard';
+                if (!activateView('view-' + target, activeMenuEl)) {
+                    return false;
+                }
+
+                setPageTitleSafe(viewTitles[target] || 'Dashboard');
+                currentPaymentChannel = channel || '';
+
+                if (target === 'dashboard') {
+                    void Promise.resolve().then(() => refreshDashboard()).catch(err => console.error('[Admin Navigation] dashboard refresh failed:', err));
+                    void Promise.resolve().then(() => startTrafficPolling()).catch(err => console.error('[Admin Navigation] traffic start failed:', err));
+                } else if (target === 'all-customer') {
+                    void Promise.resolve().then(() => fetchCustomers()).catch(err => console.error('[Admin Navigation] customer refresh failed:', err));
+                } else if (target === 'payments') {
+                    void Promise.resolve().then(() => fetchPayments(currentPaymentChannel)).catch(err => console.error('[Admin Navigation] payment refresh failed:', err));
+                }
+
+                if (window.innerWidth < 768 && typeof closeSidebarMobile === 'function') {
+                    closeSidebarMobile();
+                }
+                return true;
+            } catch (navErr) {
+                console.error('[Admin Navigation] switchView failed:', navErr);
+                return false;
+            }
         }
 
         window.switchView = switchView;
@@ -2284,16 +2345,33 @@ async function deletePlan(id,name){
         }
 
         async function loadPaymentsSection(gatewayType, titleKey) {
-            purgeStuckBackdrops();
-            currentPaymentGateway = gatewayType;
-            currentPaymentTitleKey = titleKey;
-            currentPaymentPage = 1;
-            currentCustomerTitleKey = '';
-            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
-            setPageTitleSafe(paymentTitle(titleKey));
-            document.getElementById('dynamicPageContent').innerHTML = '<div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hourglass-split text-success me-2"></i>Loading financial ledger...</div><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div>';
+            try {
+                purgeStuckBackdrops();
+                currentPaymentGateway = gatewayType;
+                currentPaymentTitleKey = titleKey;
+                currentPaymentPage = 1;
+                currentCustomerTitleKey = '';
+                const dynamicContent = document.getElementById('dynamicPageContent');
+                if (!dynamicContent) throw new Error('Payment content container was not found.');
+                document.querySelectorAll('.admin-view, .content-section, .view-pane, [data-view-pane]').forEach(function(view) {
+                    view.style.display = 'none';
+                    view.classList.add('d-none');
+                });
+                dynamicContent.style.display = 'block';
+                dynamicContent.classList.remove('d-none');
+                setPageTitleSafe(paymentTitle(titleKey));
+                dynamicContent.innerHTML = '<div class="card card-custom"><div class="card-custom-header"><i class="bi bi-hourglass-split text-success me-2"></i>Loading financial ledger...</div><div class="card-body text-center py-5"><div class="spinner-border text-success"></div></div></div>';
             await fetchPaymentsSection();
             if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
+            } catch (navigationError) {
+                console.error('[Admin Navigation] payment section failed:', navigationError);
+                const dynamicContent = document.getElementById('dynamicPageContent');
+                if (dynamicContent) {
+                    dynamicContent.style.display = 'block';
+                    dynamicContent.classList.remove('d-none');
+                    dynamicContent.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(navigationError.message || 'Unable to load payment section.') + '</div>';
+                }
+            }
         }
 
         async function fetchPaymentsSection() {
@@ -2832,12 +2910,21 @@ async function deletePlan(id,name){
         }
 
         async function loadCustomerSection(filterType, titleKey) {
-            purgeStuckBackdrops();
-            currentCustomerFilter = filterType;
-            currentCustomerTitleKey = titleKey;
-            document.querySelectorAll('.admin-view').forEach(view => view.style.display = 'none');
-            setPageTitleSafe(customerTitle(titleKey));
-            document.getElementById('dynamicPageContent').innerHTML = `
+            try {
+                purgeStuckBackdrops();
+                currentCustomerFilter = filterType;
+                currentCustomerTitleKey = titleKey;
+                currentPaymentTitleKey = '';
+                const dynamicContent = document.getElementById('dynamicPageContent');
+                if (!dynamicContent) throw new Error('Customer content container was not found.');
+                document.querySelectorAll('.admin-view, .content-section, .view-pane, [data-view-pane]').forEach(function(view) {
+                    view.style.display = 'none';
+                    view.classList.add('d-none');
+                });
+                dynamicContent.style.display = 'block';
+                dynamicContent.classList.remove('d-none');
+                setPageTitleSafe(customerTitle(titleKey));
+                dynamicContent.innerHTML = `
                 <section id="view-customer-filter" class="admin-view">
                     <div class="card card-custom">
                         <div class="card-custom-header"><i class="bi bi-hourglass-split text-success fs-5"></i><span data-key="loading_customers">Loading customers...</span></div>
@@ -2854,6 +2941,15 @@ async function deletePlan(id,name){
                 document.getElementById('dynamicPageContent').innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(error.message) + '</div>';
             }
             if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
+            } catch (navigationError) {
+                console.error('[Admin Navigation] customer section failed:', navigationError);
+                const dynamicContent = document.getElementById('dynamicPageContent');
+                if (dynamicContent) {
+                    dynamicContent.style.display = 'block';
+                    dynamicContent.classList.remove('d-none');
+                    dynamicContent.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + escapeHtml(navigationError.message || 'Unable to load customer section.') + '</div>';
+                }
+            }
         }
 
         async function refreshCustomerSection() {
@@ -3036,14 +3132,22 @@ async function deletePlan(id,name){
             }
         }
 
-        async function showAddCustomerForm() {
-            purgeStuckBackdrops(); switchView('add-customer');
+        async function showAddCustomerForm(activeMenuEl = null) {
+            try {
+                purgeStuckBackdrops();
+                if (!activateView('view-add-customer', activeMenuEl)) return;
+                currentCustomerTitleKey = 'add_customer';
+                currentPaymentTitleKey = '';
+                setPageTitleSafe(customerTitle('add_customer'));
             const form=document.getElementById('addCustomerForm'); if(form){form.reset();form.classList.remove('was-validated');}
             const today=localDateValue(), connection=document.getElementById('connectionDate'), activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'), editId=document.getElementById('customerEditId');
             if(connection)connection.value=today;if(activation)activation.value=today;if(expiration)expiration.value=addCalendarMonths(today,1);if(editId)editId.value='';
             document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();await loadCustomerPackages();
             const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-person-plus-fill me-1"></i><span>Save & Provision Customer</span>';
             if(window.innerWidth<=768&&typeof closeSidebarMobile==='function')closeSidebarMobile();
+            } catch (navigationError) {
+                console.error('[Admin Navigation] add customer view failed:', navigationError);
+            }
         }
 
         function applyPhoneCredentials() {
