@@ -1819,15 +1819,15 @@ async function deletePlan(id,name){
                 const json=JSON.stringify(p).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
                 return '<tr><td>'+(i+1)+'</td>' +
                     '<td><strong>'+escapeHtml(p.plan_name||p.name)+'</strong><div class="small text-muted">'+escapeHtml(p.profile_name||p.profile||'')+'</div></td>' +
-                    '<td>'+escapeHtml(p.local_address||p.localAddress||'-')+'</td>' +
-                    '<td><span class="badge bg-success-subtle text-success border">'+escapeHtml(p.remote_address||p.remoteAddress||p.pool_name||'-')+'</span></td>' +
-                    '<td>'+escapeHtml(p.dns_server||p.dnsServer||'-')+'</td>' +
-                    '<td class="font-monospace">'+escapeHtml(p.rate_limit||'')+'</td>' +
+                    '<td>'+escapeHtml(p.local_address||p.localAddress||p["local-address"]||'-')+'</td>' +
+                    '<td><span class="badge bg-success-subtle text-success border">'+escapeHtml(p.remote_address||p.remoteAddress||p["remote-address"]||p.pool_name||'-')+'</span></td>' +
+                    '<td>'+escapeHtml(p.dns_server||p.dnsServer||p["dns-server"]||'-')+'</td>' +
+                    '<td class="font-monospace">'+escapeHtml(p.rate_limit||p.rateLimit||p["rate-limit"]||'-')+'</td>' +
                     '<td><strong>৳'+Number(p.price||0).toFixed(2)+'</strong></td>' +
-                    '<td>'+Number(p.duration_months||1)+' month(s)</td>' +
-                    '<td><span class="badge bg-light text-dark border">'+escapeHtml(p.change_tcp_mss||p.changeTcpMss||'default')+'</span></td>' +
+                    '<td>'+Number(p.duration_months||p.duration||1)+' month(s)</td>' +
+                    '<td><span class="badge bg-light text-dark border">'+escapeHtml(p.change_tcp_mss||p.changeTcpMss||p["change-tcp-mss"]||'default')+'</span></td>' +
                     '<td class="text-end pe-3">' +
-                    '<button type="button" class="btn btn-sm btn-primary edit-plan-btn me-1" data-id="'+planDataAttr(p.id)+'" data-name="'+planDataAttr(p.plan_name||p.name)+'" data-price="'+planDataAttr(p.price)+'" data-duration="'+planDataAttr(p.duration_months||1)+'" data-pool="'+planDataAttr(p.pool_name||'')+'" data-ratelimit="'+planDataAttr(p.rate_limit||'')+'" data-localaddress="'+planDataAttr(p.local_address||p.localAddress||'')+'" data-remoteaddress="'+planDataAttr(p.remote_address||p.remoteAddress||'')+'" data-dnsserver="'+planDataAttr(p.dns_server||p.dnsServer||'')+'" data-tcpmss="'+planDataAttr(p.change_tcp_mss||p.changeTcpMss||'default')+'" data-plan-json="'+planDataAttr(json)+'"><i class="bi bi-pencil-square"></i> Edit</button>' +
+                    '<button type="button" class="btn btn-sm btn-primary edit-plan-btn me-1" data-id="'+planDataAttr(p.id)+'" data-name="'+planDataAttr(p.plan_name||p.name)+'" data-price="'+planDataAttr(p.price)+'" data-duration="'+planDataAttr(p.duration_months||p.duration||1)+'" data-pool="'+planDataAttr(p.pool_name||'')+'" data-ratelimit="'+planDataAttr(p.rate_limit||p.rateLimit||p["rate-limit"]||'')+'" data-localaddress="'+planDataAttr(p.local_address||p.localAddress||p["local-address"]||'')+'" data-remoteaddress="'+planDataAttr(p.remote_address||p.remoteAddress||p["remote-address"]||'')+'" data-dnsserver="'+planDataAttr(p.dns_server||p.dnsServer||p["dns-server"]||'')+'" data-tcpmss="'+planDataAttr(p.change_tcp_mss||p.changeTcpMss||p["change-tcp-mss"]||'default')+'" data-plan-json="'+planDataAttr(json)+'"><i class="bi bi-pencil-square"></i> Edit</button>' +
                     '<button type="button" class="btn btn-sm btn-danger delete-plan-btn" data-id="'+planDataAttr(p.id)+'" data-name="'+planDataAttr(p.plan_name||p.name)+'"><i class="bi bi-trash3"></i> Delete</button>' +
                     '</td></tr>';
             }).join('');

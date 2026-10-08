@@ -49,7 +49,32 @@ class MikroTikService {
   async fetchExistingProfiles() {
     return this._withConnection("PPPoE profile sync", async (connection) => {
       const rows = await connection.write("/ppp/profile/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ id: this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), localAddress: this._str(item["local-address"]), remoteAddress: this._str(item["remote-address"]), dnsServer: this._str(item["dns-server"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), onlyOne: this._bool(item["only-one"]), changeTcpMss: this._str(item["change-tcp-mss"]) || "default", comment: this._str(item.comment), raw: item })).filter((item) => item.name);
+      return (Array.isArray(rows) ? rows : []).map((item) => {
+        const rateLimit=this._str(item["rate-limit"]);
+        const localAddress=this._str(item["local-address"]);
+        const remoteAddress=this._str(item["remote-address"]);
+        const dnsServer=this._str(item["dns-server"]);
+        const changeTcpMss=this._str(item["change-tcp-mss"]) || "default";
+        return {
+          id:this._str(item[".id"]),
+          name:this._str(item.name),
+          rateLimit,
+          "rate-limit":rateLimit,
+          localAddress,
+          "local-address":localAddress,
+          remoteAddress,
+          "remote-address":remoteAddress,
+          dnsServer,
+          "dns-server":dnsServer,
+          sessionTimeout:this._str(item["session-timeout"]),
+          idleTimeout:this._str(item["idle-timeout"]),
+          onlyOne:this._bool(item["only-one"]),
+          changeTcpMss,
+          "change-tcp-mss":changeTcpMss,
+          comment:this._str(item.comment),
+          raw:item
+        };
+      }).filter((item) => item.name);
     });
   }
   async fetchExistingSecrets() {
@@ -323,11 +348,11 @@ class MikroTikService {
       const params=[
         "=.id="+item[".id"],
         "=name="+this._str(data.name).trim(),
-        "=local-address="+this._str(data.localAddress),
-        "=remote-address="+this._str(data.remoteAddress),
-        "=dns-server="+this._str(data.dnsServer),
-        "=change-tcp-mss="+(this._str(data.changeTcpMss)||"default"),
-        "=rate-limit="+this._str(data.rateLimit)
+        "=local-address="+this._str(data.localAddress??data["local-address"]),
+        "=remote-address="+this._str(data.remoteAddress??data["remote-address"]),
+        "=dns-server="+this._str(data.dnsServer??data["dns-server"]),
+        "=change-tcp-mss="+(this._str(data.changeTcpMss??data["change-tcp-mss"])||"default"),
+        "=rate-limit="+this._str(data.rateLimit??data["rate-limit"])
       ];
       await connection.write("/ppp/profile/set",params);
       return {id:this._str(item[".id"]),name:this._str(data.name).trim()};

@@ -189,7 +189,12 @@ async function sync(req,res){
     const poolMap=new Map(pools.map(p=>[String(p.name).toLowerCase(),p]));
     const synced=[];
     for(const profile of profiles){
-      const remote=String(profile.remoteAddress||"").trim();
+      const raw=profile.raw||{};
+      const remote=String(profile.remoteAddress||raw["remote-address"]||"").trim();
+      const localAddress=String(profile.localAddress||raw["local-address"]||"").trim();
+      const dnsServer=String(profile.dnsServer||raw["dns-server"]||"").trim();
+      const rateLimit=String(profile.rateLimit||raw["rate-limit"]||"").trim();
+      const changeTcpMss=String(profile.changeTcpMss||raw["change-tcp-mss"]||"default").trim()||"default";
       const matchedPool=poolMap.get(remote.toLowerCase());
       const remoteAddress=matchedPool?.name||remote;
       const current=await db.query("SELECT * FROM packages WHERE profile_name=$1 OR plan_name=$1 LIMIT 1",[profile.name]);
@@ -197,13 +202,13 @@ async function sync(req,res){
         const row=current.rows[0];
         const updated=await db.query(
           "UPDATE packages SET pool_name=$1,profile_name=$2,local_address=$3,remote_address=$4,dns_server=$5,change_tcp_mss=$6,rate_limit=$7,updated_at=NOW() WHERE id=$8 RETURNING *",
-          [remoteAddress,profile.name,profile.localAddress||"",remoteAddress,profile.dnsServer||null,profile.changeTcpMss||"default",profile.rateLimit||null,row.id]
+          [remoteAddress,profile.name,localAddress,remoteAddress,dnsServer||null,changeTcpMss,rateLimit||null,row.id]
         );
         synced.push(updated.rows[0]);
       }else{
         const inserted=await db.query(
           "INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss) VALUES($1,$2,$1,$3,0,1,$4,$5,$6,$7) ON CONFLICT(plan_name) DO UPDATE SET profile_name=EXCLUDED.profile_name,rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,dns_server=EXCLUDED.dns_server,change_tcp_mss=EXCLUDED.change_tcp_mss,updated_at=NOW() RETURNING *",
-          [profile.name,remoteAddress,profile.rateLimit||null,profile.localAddress||"",remoteAddress,profile.dnsServer||null,profile.changeTcpMss||"default"]
+          [profile.name,remoteAddress,rateLimit||null,localAddress,remoteAddress,dnsServer||null,changeTcpMss]
         );
         synced.push(inserted.rows[0]);
       }
