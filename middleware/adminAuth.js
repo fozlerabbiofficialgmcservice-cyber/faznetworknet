@@ -27,7 +27,7 @@ function isAdminAuthenticated(req){
 
 function requireAdmin(req,res,next){
   if(isAdminAuthenticated(req))return next();
-  if(req.path.startsWith("/api/"))return res.status(401).json({success:false,message:"Admin authentication required."});
+  if(req.path.startsWith("/api/"))return res.status(401).json({success:false,message:"Session expired",redirect:"/login"});
   return res.redirect("/login?next="+encodeURIComponent(req.originalUrl||"/admin"));
 }
 
