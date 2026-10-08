@@ -21,6 +21,10 @@ function parseSms(body,headers){
 }
 function errorResponse(res,error,code=400){console.error("[Payment API]",error);const message=error?.message||"Payment operation failed.";return res.status(code).json({success:false,users:[],profiles:[],transactions:[],message,error:message});}
 
+function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
+function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;const day=d.getUTCDate(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Number(months),1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(day,last));return t.toISOString().slice(0,10);}
+async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
+async function renewCustomer(c){const expiration=addCalendarMonths(new Date().toISOString().slice(0,10),Math.max(1,Number(c.duration_months||1))),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,remoteAddress:pool,comment,disabled:false});await mikrotikService.kickActiveUser(c.username);await db.query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,profile,c.price,expiration,c.id]);await db.query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[profile,pool,expiration,comment,c.username]);return expiration;}
 async function webhook(req,res){
  const expected=String(process.env.MACRODROID_WEBHOOK_KEY||"");
  const provided=String(req.get("x-webhook-token")||req.get("x-macrodroid-token")||"");
@@ -39,13 +43,7 @@ async function webhook(req,res){
    user=found.rows[0]||null;
   }
   let status="unmatched";
-  if(user){
-   await db.query("UPDATE pppoe_users SET status='active',disabled=false,expiry_date=CASE WHEN expiry_date>NOW() THEN expiry_date+INTERVAL '30 days' ELSE NOW()+INTERVAL '30 days' END,updated_at=NOW() WHERE username=$1",[user.username]);
-   await mikrotikService.toggleSecret(user.username,false);
-   await mikrotikService.kickActiveUser(user.username);
-   status="processed";
-   console.log(`[PPPoE AUTO-RENEW] User: ${user.username} renewed for 30 days. TrxID: ${payment.trxId} | Amount: ${payment.amount}`);
-  }
+  if(user){const customer=await getCustomerPackage(user.username);if(customer&&customer.plan_name){const expected=Number(customer.price||0);if(moneyCents(payment.amount)!==moneyCents(expected)){await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'unmatched',$5,$6,false)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expected.toFixed(2)} is required to activate or renew service.`,expectedAmount:expected,paidAmount:payment.amount});}await renewCustomer(customer);status="processed";} }
   await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,user?user.username:null,payment.rawSms,Boolean(user)]);
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount});
  }catch(error){return errorResponse(res,error,400);}
@@ -94,21 +92,13 @@ async function manualMatch(req,res){
   const user=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
   if(!user.rows.length)return res.status(404).json({success:false,error:"PPPoE customer not found."});
 
-  await db.query("UPDATE pppoe_users SET status='active',disabled=false,expiry_date=CASE WHEN expiry_date>NOW() THEN expiry_date+INTERVAL '30 days' ELSE NOW()+INTERVAL '30 days' END,updated_at=NOW() WHERE LOWER(username)=LOWER($1)",[username]);
-  await mikrotikService.toggleSecret(username,false);
-  await mikrotikService.kickActiveUser(username);
-  await db.query("UPDATE transactions SET status='processed',matched_username=$1,used=true WHERE id=$2",[user.rows[0].username,tx.id]);
-
-  return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,message:"Payment matched, customer renewed for 30 days, and MikroTik user activated."});
+  const customer=await getCustomerPackage(user.rows[0].username);if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});const expected=Number(customer.price||0);if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expected.toFixed(2)} is required to activate or renew service.`,expectedAmount:expected,paidAmount:Number(tx.amount)});const expiration=await renewCustomer(customer);await db.query("UPDATE transactions SET status='processed',matched_username=$1,used=true WHERE id=$2",[user.rows[0].username,tx.id]);return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){return errorResponse(res,e,503);}
 }
 async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status='processed') AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:recent.rows});}catch(e){return errorResponse(res,e,503);}}
 
 const verifyBuckets=new Map();
 function rateLimit(key){const now=Date.now();const bucket=verifyBuckets.get(key)||{start:now,count:0};if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}bucket.count++;verifyBuckets.set(key,bucket);return bucket.count<=10;}
-const PACKAGE_PROFILES={10:"Profile-1Hour",15:"Profile-12Hour",20:"Profile-1Day",40:"Profile-3Day",60:"Profile-7Day",90:"Profile-15Day",150:"Profile-30Day",200:"Profile-100GB",350:"Profile-300GB"};
-const PACKAGE_VALIDITY={10:"1h",15:"12h",20:"1d",40:"3d",60:"7d",90:"15d",150:"30d",200:"100GB",350:"300GB"};
-function credential(){return"FAZ"+Date.now().toString(36).slice(-6).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();}
 async function verifyTrx(req,res){const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});try{const trx=String(req.body.trxId||req.body.trxid||req.body.txnId||req.body.txnid||"").trim().toUpperCase();if(!trx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});const q=await db.query("SELECT * FROM transactions WHERE trx_id=$1 LIMIT 1",[trx]);if(!q.rows.length)return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});const amount=Number(tx.amount);const requestedAmount=Number(req.body.amount||0);if(requestedAmount&&requestedAmount!==amount)return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});const profile=PACKAGE_PROFILES[amount];if(!profile)return res.status(400).json({success:false,error:"No hotspot package is mapped to this payment amount."});const username=credential(),password=credential().slice(-8);await mikrotikService.createHotspotUser({username,password,profile,comment:"FAZ PORTAL | TrxID: "+trx+" | Package: "+PACKAGE_VALIDITY[amount]});await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[username,tx.id]);return res.json({success:true,username,password,profile,package:PACKAGE_VALIDITY[amount],amount,loginUrl:req.body.loginUrl||req.body.linkLoginOnly||null});}catch(e){return errorResponse(res,e,503);}}
 
 module.exports={webhook,list,manualMatch,summary,verifyTrx};

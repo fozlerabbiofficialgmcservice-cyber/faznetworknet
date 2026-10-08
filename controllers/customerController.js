@@ -49,44 +49,12 @@ function extractExpirationDate(comment) {
 }
 
 async function resolvePackageDefinition(profile, packageName = "") {
-  const selectedProfile = clean(profile, 100);
-  const selectedPackage = clean(packageName, 100);
-  if (!selectedProfile && !selectedPackage) return null;
-  const result = await db.query(
-    `SELECT name, price, remote_address
-     FROM pppoe_profiles
-     WHERE LOWER(name)=LOWER($1) OR LOWER(name)=LOWER($2)
-     LIMIT 1`,
-    [selectedProfile, selectedPackage]
-  );
-  if (!result.rows.length) return null;
-  const row = result.rows[0];
-  return { name: clean(row.name, 100), price: Number(row.price || 0), remoteAddress: clean(row.remote_address, 100) };
+  const selectedProfile=clean(profile,100),selectedPackage=clean(packageName,100);
+  if(!selectedProfile&&!selectedPackage)return null;
+  const r=await db.query("SELECT id,plan_name,pool_name,rate_limit,price,duration_months,profile_name FROM packages WHERE LOWER(plan_name)=LOWER($1) OR LOWER(profile_name)=LOWER($1) OR LOWER(plan_name)=LOWER($2) OR LOWER(profile_name)=LOWER($2) LIMIT 1",[selectedPackage,selectedProfile]);
+  if(!r.rows.length)return null;const x=r.rows[0];return {id:x.id,name:clean(x.plan_name,100),profileName:clean(x.profile_name,100),price:Number(x.price||0),durationMonths:Math.max(1,Number(x.duration_months||1)),poolName:clean(x.pool_name,100),rateLimit:clean(x.rate_limit,100)};
 }
-
-async function packages(req, res) {
-  try {
-    const result = await db.query(
-      `SELECT name, name AS profile, COALESCE(price, 0) AS price, COALESCE(remote_address, '') AS remote_address
-       FROM pppoe_profiles
-       WHERE NULLIF(TRIM(name), '') IS NOT NULL
-       ORDER BY name ASC`
-    );
-    let pools = [];
-    try { pools = await mikrotikService.getIpPools(); } catch (poolError) {
-      console.warn("[CUSTOMER PACKAGES] IP pool lookup unavailable:", poolError.message);
-    }
-    const poolMap = new Map((Array.isArray(pools) ? pools : []).map(pool => [String(pool.name || "").toLowerCase(), pool]));
-    return res.json({
-      success: true,
-      packages: result.rows.map(row => {
-        const pool = poolMap.get(String(row.remote_address || "").toLowerCase());
-        return { name: row.name, profile: row.profile, price: Number(row.price || 0), poolName: row.remote_address || "", poolRanges: pool?.ranges || "" };
-      })
-    });
-  } catch (error) { return errorResponse(res, error); }
-}
-
+async function packages(req,res){try{const r=await db.query("SELECT plan_name AS name,plan_name AS profile,price,pool_name,rate_limit,duration_months,profile_name FROM packages ORDER BY plan_name ASC");let pools=[];try{pools=await mikrotikService.getIpPools();}catch(e){}const map=new Map((Array.isArray(pools)?pools:[]).map(x=>[String(x.name||"").toLowerCase(),x]));return res.json({success:true,packages:r.rows.map(x=>{const pool=map.get(String(x.pool_name||"").toLowerCase());return {name:x.name,profile:x.profile,profileName:x.profile_name,price:Number(x.price||0),poolName:x.pool_name||"",poolRanges:pool?.ranges||"",rateLimit:x.rate_limit||"",durationMonths:Number(x.duration_months||1)};})});}catch(error){return errorResponse(res,error);}}
 async function createCustomer(req, res) {
   const body = req.body || {};
   const customer = {
@@ -119,7 +87,7 @@ async function createCustomer(req, res) {
     const packageDefinition = await resolvePackageDefinition(customer.profile, customer.packageName);
     if (!packageDefinition) return res.status(400).json({ success: false, message: "Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
-    if (packageDefinition.remoteAddress) customer.poolName = packageDefinition.remoteAddress;
+    customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;customer.poolName=packageDefinition.poolName||"";
 
     const existing = await db.query(
       `SELECT id, username, phone FROM customers
@@ -250,12 +218,13 @@ async function updateCustomer(req, res) {
   };
   customer.effectiveProfile = effectiveProfile(customer.profile, customer.expirationDate);
   if (!id || !customer.fullName || !customer.phone || !customer.activationDate || !customer.expirationDate || !customer.username || !customer.password || !customer.packageName || !customer.profile) {
-    return res.status(400).json({ success:false, message:"Name, phone, activation date, expiration date, username, password, package, and bill are required." });
+    return res.status(400).json({ success:false, message:"Name, phone, activation date, expiration date, username, password, and package/profile are required." });
   }
   try {
     const packageDefinition = await resolvePackageDefinition(customer.profile, customer.packageName);
     if (!packageDefinition) return res.status(400).json({ success:false, message:"Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
+    customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;
     const current = await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1", [id]);
     if (!current.rows.length) return res.status(404).json({ success:false, message:"Customer not found." });
     const customerId = current.rows[0].id;

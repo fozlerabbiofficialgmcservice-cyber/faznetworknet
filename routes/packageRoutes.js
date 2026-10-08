@@ -1,0 +1,1 @@
+const express=require("express");const controller=require("../controllers/packageController");const router=express.Router();router.get("/",controller.list);router.get("/pools",controller.pools);router.post("/",controller.create);router.put("/:id",controller.update);router.delete("/:id",controller.remove);module.exports=router;

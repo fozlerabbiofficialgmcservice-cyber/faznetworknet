@@ -110,3 +110,8 @@ CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
 
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS expiration_date DATE;
 CREATE INDEX IF NOT EXISTS idx_customers_expiration_date ON customers(expiration_date);
+
+CREATE TABLE IF NOT EXISTS packages (id BIGSERIAL PRIMARY KEY,plan_name VARCHAR(120) NOT NULL UNIQUE,pool_name VARCHAR(100) NOT NULL,profile_name VARCHAR(120) NOT NULL,rate_limit VARCHAR(100) NOT NULL,price NUMERIC(12,2) NOT NULL CHECK(price>0),duration_months INTEGER NOT NULL DEFAULT 1 CHECK(duration_months>=1),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_packages_pool_name ON packages(pool_name);
+ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_status_check;
+ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK(status IN ('active','inactive','left','expired'));
