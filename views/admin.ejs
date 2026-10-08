@@ -265,6 +265,9 @@
         .customer-helper-switch .form-check-input{cursor:pointer}
         .customer-helper-switch .form-check-label{cursor:pointer;font-size:13px}
         .customer-textarea{border-color:#cbd5e1;border-radius:8px;resize:vertical}
+        .billing-validity-panel{border:1px solid #dbe5df;background:#f8fffb;border-radius:12px;padding:18px}
+        .billing-presets .billing-preset{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600;transition:.15s}
+        .billing-presets .billing-preset:hover,.billing-presets .billing-preset.active{background:#0a3d2e;color:#fff;border-color:#0a3d2e}
         .customer-add-actions{position:sticky;bottom:12px;z-index:20;border:1px solid #e2e8f0}
         @media(max-width:768px){.customer-add-hero{align-items:flex-start;flex-direction:column}.customer-add-hero-meta{white-space:normal}.customer-add-actions{position:static}.customer-add-shell{padding-bottom:8px}}
         /* Bootstrap modal hardening: keep dynamically-created Hotspot modals above every backdrop. */
@@ -575,6 +578,34 @@
                                     <div class="col-lg-4">
                                         <label for="monthlyBillInput" class="form-label">Monthly Bill / Amount (৳) <span class="text-danger">*</span></label>
                                         <div class="input-group customer-input-group"><span class="input-group-text fw-semibold">৳</span><input type="number" class="form-control" id="monthlyBillInput" min="0" max="10000000" step="0.01" placeholder="0.00" required></div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="billing-validity-panel">
+                                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                                <div><div class="fw-semibold"><i class="bi bi-calendar-range text-success me-1"></i>Billing Duration &amp; Validity</div><small class="text-muted">Choose dates manually or use a calendar-month preset.</small></div>
+                                                <span id="customerStatusPreview" class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">Status: Active</span>
+                                            </div>
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label for="activationDate" class="form-label">Activation Date <span class="text-danger">*</span></label>
+                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-event"></i></span><input type="date" class="form-control" id="activationDate" required></div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label for="expirationDate" class="form-label">Expiration Date <span class="text-danger">*</span></label>
+                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-x"></i></span><input type="date" class="form-control" id="expirationDate" required></div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="small text-muted mb-2">Quick Duration</div>
+                                                    <div class="billing-presets d-flex flex-wrap gap-2">
+                                                        <button type="button" class="billing-preset" data-months="1">1 Month</button>
+                                                        <button type="button" class="billing-preset" data-months="3">3 Months</button>
+                                                        <button type="button" class="billing-preset" data-months="6">6 Months</button>
+                                                        <button type="button" class="billing-preset" data-months="12">1 Year</button>
+                                                    </div>
+                                                    <div class="form-text">Manual expiration date always takes precedence over presets.</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
