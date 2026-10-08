@@ -123,8 +123,9 @@ async function users(req, res) {
     const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
 
     const result = await db.query(`
-      SELECT u.*
+      SELECT u.*, c.id AS customer_id
       FROM pppoe_users u
+      LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username)
       ${whereClause}
       ORDER BY u.username ASC
     `, params);
