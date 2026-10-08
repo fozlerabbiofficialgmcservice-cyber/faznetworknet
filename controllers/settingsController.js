@@ -1,7 +1,15 @@
 const db=require("../db");
 function errorResponse(res,error,status=400){const message=String(error?.message||"Settings operation failed.");return res.status(status).json({success:false,error:message,message});}
 function parseBool(value){return value===true||String(value||"").toLowerCase()==="true"||String(value||"")==="1";}
-function validateUrl(value){const url=String(value||"").trim();if(!url)return "";let parsed;try{parsed=new URL(url);}catch(_){throw new Error("Webhook URL must be a valid HTTP or HTTPS URL.");}if(!["http:","https:"].includes(parsed.protocol))throw new Error("Webhook URL must use HTTP or HTTPS.");return parsed.toString().replace(/\/$/,"");}
+function validateUrl(value){
+  const url=String(value||"").trim();
+  if(!url)return "";
+  if(url.startsWith("/")&&!url.startsWith("//"))return url.replace(/\/$/,"")||"/";
+  let parsed;
+  try{parsed=new URL(url);}catch(_){throw new Error("Webhook URL must be a valid HTTP/HTTPS URL or an absolute path.");}
+  if(!["http:","https:"].includes(parsed.protocol))throw new Error("Webhook URL must use HTTP or HTTPS.");
+  return parsed.toString().replace(/\/$/,"");
+}
 async function readSettings(){const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_url','personal_payment_webhook_secret','personal_payment_webhook_enabled')");const map=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));return {webhookUrl:String(map.personal_payment_webhook_url||""),webhookEnabled:parseBool(map.personal_payment_webhook_enabled),secretConfigured:Boolean(String(map.personal_payment_webhook_secret||""))};}
 async function website(req,res){try{return res.json({success:true,settings:await readSettings()});}catch(error){return errorResponse(res,error,503);}}
 async function saveWebsite(req,res){try{const body=req.body||{},webhookUrl=validateUrl(body.webhookUrl),webhookEnabled=parseBool(body.webhookEnabled),newSecret=String(body.webhookSecret||"").trim();if(webhookEnabled&&!webhookUrl)throw new Error("Webhook URL is required when automation is enabled.");const current=await db.query("SELECT value FROM app_settings WHERE key='personal_payment_webhook_secret' LIMIT 1"),currentSecret=String(current.rows[0]?.value||"");if(webhookEnabled&&!newSecret&&!currentSecret)throw new Error("Webhook Secret Key / Token is required when automation is enabled.");const secret=newSecret||currentSecret;for(const [key,value] of [["personal_payment_webhook_url",webhookUrl],["personal_payment_webhook_enabled",webhookEnabled?"true":"false"],["personal_payment_webhook_secret",secret]])await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,value]);return res.json({success:true,message:"Personal Payment Gateway Webhook settings saved successfully.",settings:await readSettings()});}catch(error){return errorResponse(res,error,400);}}
