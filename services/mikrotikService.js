@@ -86,6 +86,36 @@ class MikroTikService {
       return (Array.isArray(rows) ? rows : []).map((item) => ({ name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), sharedUsers: this._str(item["shared-users"]), idleTimeout: this._str(item["idle-timeout"]), keepaliveTimeout: this._str(item["keepalive-timeout"]), statusAutorefresh: this._str(item["status-autorefresh"]), raw: item })).filter((item) => item.name);
     });
   }
+  async createHotspotProfile(data) {
+    const name=this._str(data.name).trim();
+    if(!name) throw new Error("Hotspot profile name is required.");
+    return this._withConnection("Hotspot profile creation",async(connection)=>{
+      const params=this._writeParams({name,"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout});
+      await connection.write("/ip/hotspot/user/profile/add",params); return {name};
+    });
+  }
+  async updateHotspotProfile(data) {
+    const name=this._str(data.name).trim();
+    if(!name) throw new Error("Hotspot profile name is required.");
+    return this._withConnection("Hotspot profile update",async(connection)=>{
+      const rows=await connection.write("/ip/hotspot/user/profile/print");
+      const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
+      if(!item||!item[".id"]) throw new Error("Hotspot profile \""+name+"\" was not found on MikroTik.");
+      const params=this._writeParams({".id":item[".id"],"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1});
+      await connection.write("/ip/hotspot/user/profile/set",params); return {name,id:this._str(item[".id"])};
+    });
+  }
+  async deleteHotspotProfile(nameValue) {
+    const name=this._str(nameValue).trim();
+    if(!name) throw new Error("Hotspot profile name is required.");
+    return this._withConnection("Hotspot profile deletion",async(connection)=>{
+      const rows=await connection.write("/ip/hotspot/user/profile/print");
+      const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
+      if(!item||!item[".id"]) throw new Error("Hotspot profile \""+name+"\" was not found on MikroTik.");
+      await connection.write("/ip/hotspot/user/profile/remove",["=.id="+item[".id"]]); return {name,id:this._str(item[".id"])};
+    });
+  }
+
   async createHotspotUser(data) {
     const username=this._str(data.username).trim(), password=this._str(data.password), profile=this._str(data.profile).trim();
     if(!username || !password || !profile) throw new Error("Hotspot username, password, and profile are required.");
@@ -113,7 +143,7 @@ class MikroTikService {
   async getActiveHotspotSessions() {
     return this._withConnection("active Hotspot session query", async (connection) => {
       const rows=await connection.write("/ip/hotspot/active/print");
-      return (Array.isArray(rows)?rows:[]).map((item)=>({ id:this._str(item[".id"]), username:this._str(item.user), address:this._str(item.address), macAddress:this._str(item["mac-address"]), uptime:this._str(item.uptime), server:this._str(item.server), profile:this._str(item.profile), bytesIn:this._number(item["bytes-in"]), bytesOut:this._number(item["bytes-out"]), raw:item })).filter((item)=>item.username);
+      return (Array.isArray(rows)?rows:[]).map((item)=>({ id:this._str(item[".id"]), username:this._str(item.user), address:this._str(item.address), macAddress:this._str(item["mac-address"]), uptime:this._str(item.uptime), bytesIn:this._number(item["bytes-in"]), bytesOut:this._number(item["bytes-out"]), sessionTimeLeft:this._str(item["session-time-left"]), server:this._str(item.server), profile:this._str(item.profile), raw:item })).filter((item)=>item.username&&item.id);
     });
   }
 
