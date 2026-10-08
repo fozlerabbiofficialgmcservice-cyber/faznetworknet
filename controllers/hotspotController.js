@@ -55,7 +55,61 @@ async function deleteProfile(req,res){
   res.json({success:true,message:"Hotspot profile deleted successfully from MikroTik.",profile:result});
  }catch(e){return errorResponse(res,e);}
 }
-async function serverProfiles(req,res){try{const data=await mikrotikService.getHotspotServerProfiles();res.json({success:true,profiles:data});}catch(e){return errorResponse(res,e);}}
+async function serverProfiles(req,res){
+  try{
+    const data=await mikrotikService.getHotspotServerProfiles();
+    const profiles=(Array.isArray(data)?data:[]).filter(p=>String(p?.name||'').trim().toLowerCase()!=='default').map(p=>({
+      id:p.id,
+      name:p.name,
+      hotspotAddress:p.hotspotAddress||'',
+      dnsName:p.dnsName||'',
+      htmlDirectory:p.htmlDirectory||'',
+      loginBy:p.loginBy||'',
+      rateLimit:p.rateLimit||'',
+      statusAutorefresh:p.statusAutorefresh||'',
+      sharedUsers:p.sharedUsers||''
+    }));
+    return res.json({success:true,count:profiles.length,profiles});
+  }catch(e){return errorResponse(res,e);}
+}
+function normalizeServerProfilePayload(body){
+  const loginBy=Array.isArray(body.loginBy)?body.loginBy.join(','):clean(body.loginBy,500);
+  const name=clean(body.name,100);
+  if(!name||name.toLowerCase()==='default') throw new Error('A custom server profile name is required.');
+  return {
+    name,
+    hotspotAddress:clean(body.hotspotAddress||body['hotspot-address'],100),
+    dnsName:clean(body.dnsName||body['dns-name'],255),
+    htmlDirectory:clean(body.htmlDirectory||body['html-directory']||'hotspot',255)||'hotspot',
+    loginBy:loginBy||'http-chap',
+    rateLimit:clean(body.rateLimit||body['rate-limit'],100),
+    statusAutorefresh:clean(body.statusAutorefresh||body['status-autorefresh'],50)
+  };
+}
+async function createServerProfile(req,res){
+  try{
+    const payload=normalizeServerProfilePayload(req.body||{});
+    const result=await mikrotikService.createHotspotServerProfile(payload);
+    return res.json({success:true,message:'Hotspot server profile created successfully in MikroTik.',profile:{...payload,...result}});
+  }catch(e){return errorResponse(res,e);}
+}
+async function updateServerProfile(req,res){
+  try{
+    const payload=normalizeServerProfilePayload(req.body||{});
+    const identifier=clean(req.params.id,100);
+    if(!identifier) return res.status(400).json({success:false,message:'Server profile id or name is required.'});
+    const result=await mikrotikService.updateHotspotServerProfile(identifier,payload);
+    return res.json({success:true,message:'Hotspot server profile updated successfully in MikroTik.',profile:{...payload,...result}});
+  }catch(e){return errorResponse(res,e);}
+}
+async function deleteServerProfile(req,res){
+  try{
+    const identifier=clean(req.params.id,100);
+    if(!identifier||identifier.toLowerCase()==='default') return res.status(400).json({success:false,message:'The default server profile cannot be deleted.'});
+    const result=await mikrotikService.deleteHotspotServerProfile(identifier);
+    return res.json({success:true,message:'Hotspot server profile deleted successfully from MikroTik.',profile:result});
+  }catch(e){return errorResponse(res,e);}
+}
 async function list(req,res){
  try{
   const rows=await mikrotikService.getHotspotUsers();
@@ -197,4 +251,4 @@ async function remove(req,res){try{
  await db.query("UPDATE hotspot_vouchers SET status='expired' WHERE username=$1",[username]);
  res.json({success:true,username});
 }catch(e){return errorResponse(res,e);}}
-module.exports={page,profiles,createProfile,updateProfile,deleteProfile,serverProfiles,list,active,disconnectActive,generate,createUser,dashboardMetrics,kick,remove};
+module.exports={page,profiles,createProfile,updateProfile,deleteProfile,serverProfiles,createServerProfile,updateServerProfile,deleteServerProfile,list,active,disconnectActive,generate,createUser,dashboardMetrics,kick,remove};
