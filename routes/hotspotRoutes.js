@@ -10,6 +10,7 @@ router.post("/profiles/delete",controller.deleteProfile);
 router.get("/server-profiles",controller.serverProfiles);
 router.get("/vouchers",controller.list);
 router.get("/active",controller.active);
+router.post("/active/disconnect",controller.disconnectActive);
 router.post("/vouchers/generate",controller.generate);
 router.post("/users/kick",controller.kick);
 router.post("/generate",controller.generate);
