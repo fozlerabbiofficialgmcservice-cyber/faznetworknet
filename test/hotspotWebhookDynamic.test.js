@@ -18,12 +18,11 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
   let profileMetadata={Weekend:{price:10,validityValue:1,validityUnit:"days",validityLabel:"1 Day",limitBytesTotal:0}};
   let rechargePayload=null;
   try{
-    // Simulate the admin saving the profile price change; the legacy map remains stale at Tk 10.
+    // Simulate the admin saving the profile price from Tk 10 to Tk 15 in app_settings.
     profileMetadata={Weekend:{price:15,validityValue:2,validityUnit:"days",validityLabel:"2 Days",limitBytesTotal:0}};
-    db.query=async(sql)=>{
-      if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:71,trx_id:"PRICE15",amount:15,used:false,status:"PAID"}]};
+    db.query=async(sql,params=[])=>{
+      if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:params[0]==="PRICE10"?72:71,trx_id:params[0],amount:params[0]==="PRICE10"?10:15,used:false,status:"PAID"}]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata)}]};
-      if(sql.includes("key='hotspot_price_profile_map'"))return {rows:[{value:JSON.stringify({"10.00":"Weekend"})}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -39,6 +38,12 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     assert.equal(res.body.amount,15);
     assert.equal(rechargePayload.profile,"Weekend");
     assert.equal(rechargePayload.validity,"2d");
+
+    // The old Tk 10 amount must stop matching immediately after the profile price is changed.
+    const oldAmountResponse=responseRecorder();
+    await paymentController.verifyTrx({ip:"test-price-sync-old-10",body:{phone:"01712345678",trxId:"PRICE10"}},oldAmountResponse);
+    assert.equal(oldAmountResponse.statusCode,400);
+    assert.match(oldAmountResponse.body.error,/no active Hotspot profile currently has a price of ৳10\.00/i);
   }finally{
     db.query=originalQuery;
     mikrotik.getHotspotProfiles=originalProfiles;
