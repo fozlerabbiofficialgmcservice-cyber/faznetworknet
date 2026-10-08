@@ -1809,6 +1809,19 @@
             </tr>`;
         }
 
+        async function editCustomer(encodedUsername) {
+            const username=decodeURIComponent(encodedUsername);
+            try {
+                purgeStuckBackdrops();
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(username));
+                const customer=data.customer||{}; switchView('add-customer');
+                document.getElementById('customerEditId').value=username; document.getElementById('fullName').value=customer.full_name||''; document.getElementById('phoneNumber').value=customer.phone||'';
+                const activation=customer.connection_date?String(customer.connection_date).slice(0,10):localDateValue(); document.getElementById('connectionDate').value=activation;document.getElementById('activationDate').value=activation;
+                document.getElementById('expirationDate').value=customer.expiration_date?String(customer.expiration_date).slice(0,10):addCalendarMonths(activation,1);document.getElementById('username').value=customer.username||username;document.getElementById('password').value=customer.password||'';
+                document.getElementById('monthlyBillInput').value=Number(customer.monthly_bill||0).toFixed(2);document.getElementById('nidNumber').value=customer.nid||'';document.getElementById('installationAddress').value=customer.installation_address||'';document.getElementById('fiberBox').value=customer.fiber_box||'';document.getElementById('onuMac').value=customer.onu_mac||'';document.getElementById('customerRemarks').value=customer.remarks||'';
+                await loadCustomerPackages(customer.profile||'');document.getElementById('monthlyBillInput').value=Number(customer.monthly_bill||0).toFixed(2);document.getElementById('saveCustomerBtn').innerHTML='<i class="bi bi-save me-1"></i><span>Update & Provision Customer</span>';updateCustomerValidityStatus();
+            }catch(error){alert(error.message);}
+        }
         async function loadCustomerSection(filterType, titleKey) {
             purgeStuckBackdrops();
             currentCustomerFilter = filterType;
@@ -1943,6 +1956,24 @@
             const offset = now.getTimezoneOffset();
             return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
         }
+        function addCalendarMonths(dateString, months) {
+            const base=new Date(String(dateString||"")+"T00:00:00Z"); if(Number.isNaN(base.getTime())) return "";
+            const day=base.getUTCDate(), target=new Date(Date.UTC(base.getUTCFullYear(),base.getUTCMonth()+Number(months),1));
+            const last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate(); target.setUTCDate(Math.min(day,last));
+            return target.toISOString().slice(0,10);
+        }
+        function updateCustomerValidityStatus() {
+            const input=document.getElementById('expirationDate'), badge=document.getElementById('customerStatusPreview'); if(!input||!badge) return;
+            if(!input.value){badge.className='badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2';badge.textContent='Status: Select expiration date';return;}
+            const expired=input.value<localDateValue(); badge.className=expired?'badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2':'badge bg-success-subtle text-success border border-success-subtle px-3 py-2'; badge.textContent=expired?'Status: Expired / Suspended':'Status: Active';
+        }
+        function applyBillingPreset(months) {
+            const activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'); if(!activation||!expiration)return;
+            if(!activation.value)activation.value=localDateValue(); expiration.value=addCalendarMonths(activation.value,months);
+            document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.months)===Number(months))); updateCustomerValidityStatus();
+        }
+        function syncActivationDate(){const activation=document.getElementById('activationDate'),expiration=document.getElementById('expirationDate');if(!activation||!expiration)return;expiration.value=addCalendarMonths(activation.value||localDateValue(),1);document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();}
+
 
         async function loadCustomerPackages(selectedProfile = '') {
             const select = document.getElementById('packageSelect');
@@ -1987,12 +2018,13 @@
         }
 
         async function showAddCustomerForm() {
-            purgeStuckBackdrops();
-            switchView('add-customer');
-            const dateInput = document.getElementById('connectionDate');
-            if (dateInput && !dateInput.value) dateInput.value = localDateValue();
-            await loadCustomerPackages();
-            if (window.innerWidth <= 768 && typeof closeSidebarMobile === 'function') closeSidebarMobile();
+            purgeStuckBackdrops(); switchView('add-customer');
+            const form=document.getElementById('addCustomerForm'); if(form){form.reset();form.classList.remove('was-validated');}
+            const today=localDateValue(), connection=document.getElementById('connectionDate'), activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'), editId=document.getElementById('customerEditId');
+            if(connection)connection.value=today;if(activation)activation.value=today;if(expiration)expiration.value=addCalendarMonths(today,1);if(editId)editId.value='';
+            document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();await loadCustomerPackages();
+            const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-person-plus-fill me-1"></i><span>Save & Provision Customer</span>';
+            if(window.innerWidth<=768&&typeof closeSidebarMobile==='function')closeSidebarMobile();
         }
 
         function applyPhoneCredentials() {
@@ -2009,6 +2041,9 @@
         }
 
         document.getElementById('packageSelect')?.addEventListener('change', applyCustomerPackagePrice);
+        document.getElementById('activationDate')?.addEventListener('change', syncActivationDate);
+        document.getElementById('expirationDate')?.addEventListener('change', function(){document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();});
+        document.querySelectorAll('.billing-preset').forEach(btn=>btn.addEventListener('click',function(){applyBillingPreset(Number(this.dataset.months));}));
         document.getElementById('phoneCredentialHelper')?.addEventListener('change', function(){ if(this.checked) applyPhoneCredentials(); });
         document.getElementById('phoneNumber')?.addEventListener('input', applyPhoneCredentials);
         document.getElementById('toggleCustomerPassword')?.addEventListener('click', function(){
@@ -2028,49 +2063,16 @@
         });
 
         document.getElementById('addCustomerForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const form=this;
-            if(!form.checkValidity()){ form.classList.add('was-validated'); return; }
-            const button=document.getElementById('saveCustomerBtn');
-            const oldHtml=button.innerHTML;
-            button.disabled=true;
-            button.innerHTML='<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...';
+            e.preventDefault(); const form=this; if(!form.checkValidity()){form.classList.add('was-validated');return;}
+            const button=document.getElementById('saveCustomerBtn'),oldHtml=button.innerHTML;button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
             try {
-                const packageSelect=document.getElementById('packageSelect');
-                const profile=packageSelect.value.trim();
-                const selectedOption=packageSelect.options[packageSelect.selectedIndex];
-                const payload={
-                    fullName:document.getElementById('fullName').value.trim(),
-                    phone:document.getElementById('phoneNumber').value.trim(),
-                    connectionDate:document.getElementById('connectionDate').value,
-                    username:document.getElementById('username').value.trim(),
-                    password:document.getElementById('password').value.trim(),
-                    package:selectedOption?.textContent?.split(' — ৳')[0]?.trim() || profile,
-                    profile,
-                    bill:document.getElementById('monthlyBillInput').value,
-                    nid:document.getElementById('nidNumber').value.trim(),
-                    installationAddress:document.getElementById('installationAddress').value.trim(),
-                    fiberBox:document.getElementById('fiberBox').value.trim(),
-                    onuMac:document.getElementById('onuMac').value.trim(),
-                    remarks:document.getElementById('customerRemarks').value.trim()
-                };
-                const data=await jsonFetch('/api/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-                alert(data.message || 'Customer created successfully');
-                form.reset();
-                form.classList.remove('was-validated');
-                const dateInput=document.getElementById('connectionDate');
-                if(dateInput) dateInput.value=localDateValue();
-                await loadCustomerPackages();
-                switchView('all-customer');
-            } catch(error) {
-                alert(error.message);
-            } finally {
-                button.disabled=false;
-                button.innerHTML=oldHtml;
-            }
+                const select=document.getElementById('packageSelect'),profile=select.value.trim(),option=select.options[select.selectedIndex],editId=document.getElementById('customerEditId').value.trim();
+                const payload={fullName:document.getElementById('fullName').value.trim(),phone:document.getElementById('phoneNumber').value.trim(),connectionDate:document.getElementById('activationDate').value,activationDate:document.getElementById('activationDate').value,expirationDate:document.getElementById('expirationDate').value,username:document.getElementById('username').value.trim(),password:document.getElementById('password').value.trim(),package:option?.textContent?.split(' — ৳')[0]?.trim()||profile,profile,packageProfile:profile,bill:document.getElementById('monthlyBillInput').value,nid:document.getElementById('nidNumber').value.trim(),installationAddress:document.getElementById('installationAddress').value.trim(),fiberBox:document.getElementById('fiberBox').value.trim(),onuMac:document.getElementById('onuMac').value.trim(),remarks:document.getElementById('customerRemarks').value.trim()};
+                const endpoint=editId?'/api/customers/'+encodeURIComponent(editId):'/api/customers';
+                const data=await jsonFetch(endpoint,{method:editId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                alert(data.message||(editId?'Customer updated successfully':'Customer created successfully')); form.reset();form.classList.remove('was-validated');document.getElementById('customerEditId').value=''; await showAddCustomerForm();switchView('all-customer');
+            }catch(error){alert(error.message);}finally{button.disabled=false;button.innerHTML=oldHtml;}
         });
-
-
 
         async function fetchPayments(channel = '') {
             const body = document.getElementById('paymentsBody');
