@@ -21,7 +21,7 @@ function normalizeDate(value) {
   return Number.isNaN(date.getTime()) ? "" : raw;
 }
 
-function normalizeBill(value) {
+function dateStatus(expirationDate) {\n  const today = new Date();\n  today.setUTCHours(0, 0, 0, 0);\n  const expDate = new Date(String(expirationDate || "") + "T00:00:00Z");\n  expDate.setUTCHours(0, 0, 0, 0);\n  return expDate.getTime() < today.getTime() ? "expired" : "active";\n}\n\nfunction effectiveProfile(profile, expirationDate) {\n  return dateStatus(expirationDate) === "expired" ? clean(process.env.EXPIRED_PROFILE_NAME || "EXPIRED", 100) : clean(profile, 100);\n}\n\nfunction buildExpirationComment(fullName, phone, expirationDate, remarks) {\n  const parts = [];\n  if (fullName) parts.push("Customer: " + fullName);\n  if (phone) parts.push("Phone: " + phone);\n  parts.push("EXP: " + expirationDate);\n  if (remarks) parts.push("Note: " + remarks);\n  return parts.join(" | ").slice(0, 500);\n}\n\nfunction extractExpirationDate(comment) {\n  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2})/i);\n  return match ? normalizeDate(match[1]) : "";\n}\n\nfunction normalizeBill(value) {
   const bill = Number(value);
   if (!Number.isFinite(bill) || bill < 0 || bill > 10000000) return null;
   return Number(bill.toFixed(2));
@@ -57,7 +57,9 @@ async function createCustomer(req, res) {
     username: clean(body.username, 100),
     password: clean(body.password, 255),
     packageName: clean(body.package || body.packageName || body.profile, 100),
-    profile: clean(body.profile || body.package || body.packageName, 100),
+    profile: clean(body.packageProfile || body.profile || body.package || body.packageName, 100),
+    activationDate: normalizeDate(body.activationDate || body.connectionDate),
+    expirationDate: normalizeDate(body.expirationDate),
     monthlyBill: normalizeBill(body.bill ?? body.monthlyBill),
     nid: clean(body.nid, 100),
     installationAddress: clean(body.installationAddress || body.address, 500),
@@ -65,8 +67,9 @@ async function createCustomer(req, res) {
     onuMac: clean(body.onuMac, 100),
     remarks: clean(body.remarks || body.note, 1000)
   };
+  customer.effectiveProfile = effectiveProfile(customer.profile, customer.expirationDate);
 
-  if (!customer.fullName || !customer.phone || !customer.connectionDate ||
+  if (!customer.fullName || !customer.phone || !customer.connectionDate || !customer.activationDate || !customer.expirationDate ||
       !customer.username || !customer.password || !customer.packageName ||
       !customer.profile || customer.monthlyBill === null) {
     return res.status(400).json({
@@ -94,15 +97,15 @@ async function createCustomer(req, res) {
     const inserted = await db.query(
       `INSERT INTO customers
        (full_name, phone, connection_date, username, password, package_name, profile,
-        monthly_bill, nid, installation_address, fiber_box, onu_mac, remarks,
+        monthly_bill, nid, installation_address, fiber_box, onu_mac, remarks, expiration_date,
         provisioning_status, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending','active',NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending','active',NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
         customer.password, customer.packageName, customer.profile, customer.monthlyBill,
         customer.nid || null, customer.installationAddress || null, customer.fiberBox || null,
-        customer.onuMac || null, customer.remarks || null
+        customer.onuMac || null, customer.remarks || null, customer.expirationDate
       ]
     );
 
@@ -115,8 +118,8 @@ async function createCustomer(req, res) {
         await require("../services/mikrotikService").createSecret({
           username: customer.username,
           password: customer.password,
-          profile: customer.profile,
-          comment: "Customer: " + customer.fullName + " | Phone: " + customer.phone
+          profile: customer.effectiveProfile,
+          comment: buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks)
         });
         provisioning = "provisioned";
         await db.query(
@@ -134,8 +137,8 @@ async function createCustomer(req, res) {
           [
             customer.username,
             customer.password,
-            customer.profile,
-            "Customer: " + customer.fullName,
+            customer.effectiveProfile,
+            buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
             customer.phone,
             String(process.env.ROUTER_HOST || "")
           ]
@@ -160,7 +163,10 @@ async function createCustomer(req, res) {
         username: customer.username,
         profile: customer.profile,
         monthlyBill: customer.monthlyBill,
-        provisioningStatus: provisioning
+        provisioningStatus: provisioning,
+        expirationDate: customer.expirationDate,
+        status: dateStatus(customer.expirationDate),
+        effectiveProfile: customer.effectiveProfile
       }
     });
   } catch (error) {
