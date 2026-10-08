@@ -1,5 +1,81 @@
-const db=require("../db");const mikrotikService=require("../services/mikrotikService");
-function bangladeshToday(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}
-async function expiredPool(){const wanted=String(process.env.EXPIRED_POOL_NAME||"").trim(),p=await mikrotikService.getIpPools();if(wanted){const x=p.find(y=>String(y.name).toLowerCase()===wanted.toLowerCase());if(x)return x.name;}return p.find(x=>/(expire|expired|suspend|suspended|block|blocked)/i.test(String(x.name||""))&&!/^default/i.test(String(x.name||"")))?.name||"";}
-async function runBillingExpiration(){try{const q=await db.query("SELECT * FROM customers WHERE status='active' AND expiration_date < CURRENT_DATE");if(!q.rows.length)return;const pool=await expiredPool();if(!pool){console.error("[BILLING EXPIRATION] No expired pool found. Set EXPIRED_POOL_NAME.");return;}for(const c of q.rows){const comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: EXPIRED_"+bangladeshToday();await db.query("UPDATE customers SET status='expired',updated_at=NOW() WHERE id=$1",[c.id]);try{await mikrotikService.updateSecret(c.username,{password:c.password,profile:c.profile,remoteAddress:pool,comment,disabled:true});await mikrotikService.kickActiveUser(c.username);await db.query("UPDATE pppoe_users SET status='expired',disabled=true,remote_address=$1,comment=$2,updated_at=NOW() WHERE username=$3",[pool,comment,c.username]);}catch(e){console.error("[BILLING EXPIRATION] "+c.username,e.message);}}}catch(e){console.error("[BILLING EXPIRATION] Worker failed:",e.message);}}
-function startBillingCron(){runBillingExpiration();return setInterval(runBillingExpiration,3600000);}module.exports={runBillingExpiration,startBillingCron};
+const db=require("../db");
+const mikrotikService=require("../services/mikrotikService");
+const {logAuditAction}=require("../utils/auditLogger");
+
+const EXPIRED_PROFILE=String(process.env.EXPIRED_PROFILE_NAME||"EXPIRED").trim()||"EXPIRED";
+
+async function runBillingExpiration(){
+  const startedAt=Date.now();
+  try{
+    // expiration_date is a Bangladesh calendar date. A subscriber is overdue
+    // once that calendar date has fully passed, regardless of router/session state.
+    const q=await db.query(
+      "SELECT id,username,full_name,phone,expiration_date,status FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) <> 'expired' ORDER BY expiration_date ASC,id ASC"
+    );
+    if(!q.rows.length){
+      console.log("[BILLING EXPIRATION] No overdue customers found.");
+      return {checked:0,expired:0,failed:0};
+    }
+
+    let expired=0,failed=0;
+    for(const customer of q.rows){
+      try{
+        // changeSecretProfile resolves the live /ppp/secret .id and emits exactly:
+        // ['/ppp/secret/set', '=.id=<secretId>', '=profile=EXPIRED']
+        await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
+
+        // Force a fresh PPPoE authentication so the EXPIRED profile's pool is used.
+        let disconnected=false;
+        try{
+          const result=await mikrotikService.kickActiveUser(customer.username);
+          disconnected=Boolean(result?.kicked);
+        }catch(kickError){
+          console.warn("[BILLING EXPIRATION] Session reset warning for "+customer.username+":",kickError.message);
+        }
+
+        await db.query(
+          "UPDATE customers SET status='expired',billing_status='unpaid',updated_at=NOW() WHERE id=$1",
+          [customer.id]
+        );
+        await db.query(
+          "UPDATE pppoe_users SET profile=$1,status='expired',disabled=FALSE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
+          [EXPIRED_PROFILE,customer.username]
+        );
+
+        await logAuditAction({
+          customerId:customer.id,
+          adminId:"billing-cron",
+          action:"AUTO_EXPIRE",
+          details:{
+            message:"Auto-expired: Moved to EXPIRED profile due to unpaid bill",
+            username:customer.username,
+            expirationDate:customer.expiration_date,
+            expiredProfile:EXPIRED_PROFILE,
+            sessionDisconnected:disconnected
+          },
+          ipAddress:null
+        });
+        expired++;
+      }catch(error){
+        failed++;
+        console.error("[BILLING EXPIRATION] Failed for "+customer.username+":",error.message);
+      }
+    }
+
+    console.log("[BILLING EXPIRATION] Completed. checked="+q.rows.length+" expired="+expired+" failed="+failed+" durationMs="+(Date.now()-startedAt));
+    return {checked:q.rows.length,expired,failed};
+  }catch(error){
+    console.error("[BILLING EXPIRATION] Worker failed:",error.message);
+    return {checked:0,expired:0,failed:1,error:error.message};
+  }
+}
+
+function startBillingCron(){
+  runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Initial run failed:",error.message));
+  return setInterval(
+    ()=>runBillingExpiration().catch(error=>console.error("[BILLING EXPIRATION] Scheduled run failed:",error.message)),
+    60*60*1000
+  );
+}
+
+module.exports={runBillingExpiration,startBillingCron,EXPIRED_PROFILE};
