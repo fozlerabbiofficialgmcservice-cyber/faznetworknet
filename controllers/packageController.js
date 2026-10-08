@@ -90,33 +90,84 @@ async function syncMikrotikProfile(value,previousProfileName=""){
   return mikrotikService.createProfile(data);
 }
 
-async function create(req,res){
+function normalizePlanId(rawId){
+  const raw=String(rawId??"").trim();
+  if(!raw||/^(undefined|null)$/i.test(raw))return null;
+  if(!/^\\d+$/.test(raw))return null;
+  const id=Number(raw);
+  return Number.isSafeInteger(id)&&id>0?id:null;
+}
+
+async function savePlan(req,res){
   try{
-    const n=await normalize(req.body);
+    const body=req.body||{};
+    const planId=normalizePlanId(body.id);
+    const n=await normalize({
+      planName:body.planName??body.name,
+      price:body.price,
+      durationMonths:body.durationMonths??body.duration,
+      rateLimit:body.rateLimit,
+      localAddress:body.localAddress,
+      remoteAddress:body.remoteAddress,
+      dnsServer:body.dnsServer,
+      changeTcpMss:body.changeTcpMss
+    });
     if(n.error)return errorResponse(res,new Error(n.error),400);
-    await syncMikrotikProfile(n.value);
-    const r=await db.query(
-      "INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss) VALUES($1,$2,$1,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
-      [n.value.planName,n.value.remoteAddress,n.value.rateLimit||null,n.value.price,n.value.durationMonths,n.value.localAddress,n.value.remoteAddress,n.value.dnsServer||null,n.value.changeTcpMss]
-    );
-    res.status(201).json({success:true,package:r.rows[0]});
-  }catch(e){errorResponse(res,e);}
+
+    let existing=null;
+    if(planId!==null){
+      const result=await db.query("SELECT * FROM packages WHERE id=$1::bigint",[planId]);
+      if(!result.rows.length)return errorResponse(res,new Error("Plan not found."),404);
+      existing=result.rows[0];
+    }
+
+    // MikroTik is provisioned first. Database is only changed after RouterOS accepts the profile.
+    await syncMikrotikProfile(n.value,existing?.profile_name||"");
+
+    const values=[
+      n.value.planName,
+      n.value.remoteAddress||null,
+      n.value.rateLimit||null,
+      n.value.price,
+      n.value.durationMonths,
+      n.value.localAddress||null,
+      n.value.remoteAddress||null,
+      n.value.dnsServer||null,
+      n.value.changeTcpMss
+    ];
+
+    let result;
+    if(planId!==null){
+      result=await db.query(
+        "UPDATE packages SET plan_name=$1,pool_name=$2,profile_name=$1,rate_limit=$3,price=$4,duration_months=$5,local_address=$6,remote_address=$7,dns_server=$8,change_tcp_mss=$9,updated_at=NOW() WHERE id=$10::bigint RETURNING *",
+        [...values,planId]
+      );
+    }else{
+      result=await db.query(
+        "INSERT INTO packages(plan_name,pool_name,profile_name,rate_limit,price,duration_months,local_address,remote_address,dns_server,change_tcp_mss) VALUES($1,$2,$1,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(plan_name) DO UPDATE SET pool_name=EXCLUDED.pool_name,profile_name=EXCLUDED.profile_name,rate_limit=EXCLUDED.rate_limit,price=EXCLUDED.price,duration_months=EXCLUDED.duration_months,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,dns_server=EXCLUDED.dns_server,change_tcp_mss=EXCLUDED.change_tcp_mss,updated_at=NOW() RETURNING *",
+        values
+      );
+    }
+
+    return res.json({
+      success:true,
+      message:"Plan \""+n.value.planName+"\" successfully saved and synchronized with MikroTik!",
+      package:result.rows[0]
+    });
+  }catch(e){
+    console.error("[PLAN SAVE ERROR]",e);
+    return errorResponse(res,e);
+  }
+}
+
+async function create(req,res){
+  req.body={...(req.body||{}),id:null};
+  return savePlan(req,res);
 }
 
 async function update(req,res){
-  try{
-    const id=clean(req.params.id,50);
-    const existing=await db.query("SELECT * FROM packages WHERE id=$1",[id]);
-    if(!existing.rows.length)return errorResponse(res,new Error("Package not found."),404);
-    const n=await normalize(req.body);
-    if(n.error)return errorResponse(res,new Error(n.error),400);
-    await syncMikrotikProfile(n.value,existing.rows[0].profile_name);
-    const r=await db.query(
-      "UPDATE packages SET plan_name=$1,pool_name=$2,profile_name=$1,rate_limit=$3,price=$4,duration_months=$5,local_address=$6,remote_address=$7,dns_server=$8,change_tcp_mss=$9,updated_at=NOW() WHERE id=$10 RETURNING *",
-      [n.value.planName,n.value.remoteAddress,n.value.rateLimit||null,n.value.price,n.value.durationMonths,n.value.localAddress,n.value.remoteAddress,n.value.dnsServer||null,n.value.changeTcpMss,id]
-    );
-    res.json({success:true,package:r.rows[0]});
-  }catch(e){errorResponse(res,e);}
+  req.body={...(req.body||{}),id:req.params.id};
+  return savePlan(req,res);
 }
 
 async function remove(req,res){
@@ -161,4 +212,4 @@ async function sync(req,res){
   }catch(e){errorResponse(res,e);}
 }
 
-module.exports={list,pools,create,update,remove,sync};
+module.exports={list,pools,create,update,savePlan,remove,sync};
