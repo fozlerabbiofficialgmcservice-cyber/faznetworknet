@@ -8,7 +8,8 @@ app.use(session({
   store:new pgSession({
     pool:db.getPool(),
     tableName:"session",
-    createTableIfMissing:true
+    createTableIfMissing:true,
+    pruneSessionInterval:60*15
   }),
   secret:String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"faz_network_super_secret_session_2026"),
   resave:false,
@@ -17,7 +18,7 @@ app.use(session({
   cookie:{
     maxAge:30*24*60*60*1000,
     httpOnly:true,
-    secure:process.env.NODE_ENV==="production",
+    secure:false,
     sameSite:"lax"
   }
 }));
