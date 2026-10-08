@@ -231,6 +231,10 @@
             body.hotspot-printing .voucher-credential { font-size:15px; }
             body.hotspot-printing .voucher-instruction { font-size:9px; }
         }
+        /* Bootstrap modal hardening: keep dynamically-created Hotspot modals above every backdrop. */
+        .modal-backdrop { z-index: 1040 !important; }
+        .modal { z-index: 1055 !important; }
+        .modal.show { display: block; }
     </style>
 </head>
 <body>
