@@ -633,10 +633,22 @@ async function removeCustomer(req,res){
     const resolvedUsername=clean(current.rows[0].username||username,100);
     if(!resolvedUsername)return res.status(404).json({success:false,message:"Customer not found."});
 
-    // Remove the live RouterOS account/session first. If MikroTik rejects the
-    // operation, PostgreSQL is left intact so the account can be retried safely.
-    const result=await mikrotikService.removeCustomer(resolvedUsername);
+    // RouterOS cleanup is best-effort only. The database is the system of
+    // record for customer deletion, so a missing/already-deleted MikroTik
+    // secret must NEVER block the PostgreSQL deletion.
+    let routerCleanup={terminatedSessions:0,removed:false};
+    try{
+      routerCleanup=await mikrotikService.removeCustomer(resolvedUsername);
+    }catch(routerErr){
+      console.warn(
+        `[MikroTik Safe Delete] Could not remove ${resolvedUsername} from router (maybe already deleted):`,
+        routerErr?.message||routerErr
+      );
+    }
 
+    // Database cleanup is unconditional and atomic. If RouterOS already lost
+    // the secret, we still remove the local records and create a tombstone so
+    // a later sync cannot resurrect the deleted username.
     await db.withTransaction(async(client)=>{
       // Delete every customer-owned record in one PostgreSQL transaction.
       await client.query("DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",[resolvedUsername]);
