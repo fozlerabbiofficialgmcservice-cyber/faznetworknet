@@ -5,15 +5,22 @@ const OPERATION_TIMEOUT_MS = 4000;
 const DEFAULT_PORT = 8728;
 
 class MikroTikService {
-  _getConfig() {
-    const host = String(process.env.ROUTER_HOST || "").trim();
-    const port = Number.parseInt(process.env.ROUTER_PORT || DEFAULT_PORT, 10);
-    const user = String(process.env.ROUTER_USER || "").trim();
-    const password = String(process.env.ROUTER_PASS || "");
-    if (!host) throw new Error("MikroTik configuration error: ROUTER_HOST is not configured.");
-    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("MikroTik configuration error: ROUTER_PORT must be a valid TCP port.");
-    if (!user) throw new Error("MikroTik configuration error: ROUTER_USER is not configured.");
-    return { host, port, user, password };
+  async _getConfig(override) {
+    const supplied=override&&typeof override==="object"?override:{};
+    let saved={};
+    try {
+      const db=require("../db");
+      const result=await db.query("SELECT key,value FROM app_settings WHERE key IN ('mikrotik_host','mikrotik_port','mikrotik_user','mikrotik_password')");
+      saved=Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));
+    } catch(error) { console.warn("[MikroTik Settings] PostgreSQL settings unavailable; using environment fallback:",error.message); }
+    const host=String(supplied.host??saved.mikrotik_host??process.env.ROUTER_HOST??"").trim();
+    const port=Number.parseInt(String(supplied.port??saved.mikrotik_port??process.env.ROUTER_PORT??DEFAULT_PORT),10);
+    const user=String(supplied.user??saved.mikrotik_user??process.env.ROUTER_USER??"").trim();
+    const password=String(supplied.password??saved.mikrotik_password??process.env.ROUTER_PASS??"");
+    if(!host)throw new Error("MikroTik configuration error: Router Host / IP is not configured.");
+    if(!Number.isInteger(port)||port<1||port>65535)throw new Error("MikroTik configuration error: API Port must be a valid TCP port.");
+    if(!user)throw new Error("MikroTik configuration error: API Username is not configured.");
+    return {host,port,user,password};
   }
   _createConnection(config) {
     const connection = new RouterOSAPI({
@@ -36,8 +43,8 @@ class MikroTikService {
 
     return connection;
   }
-  async _withConnection(operationName, operation) {
-    const connection = this._createConnection(this._getConfig());
+  async _withConnection(operationName, operation, configOverride) {
+    const connection = this._createConnection(await this._getConfig(configOverride));
     let connectTimer;
     try {
       const connectPromise = connection.connect();
@@ -94,7 +101,7 @@ class MikroTikService {
   }
   _writeParams(values) { return Object.entries(values).filter(([, value]) => value !== undefined && value !== null && String(value) !== "").map(([key, value]) => "=" + key + "=" + value); }
 
-  async testConnection() { return this._withConnection("connection test", async (connection) => { const identity = this._firstRow(await connection.write("/system/identity/print"), "identity query"); const resources = this._firstRow(await connection.write("/system/resource/print"), "resource query"); return { routerName: this._str(identity.name) || "Unknown Router", version: this._str(resources.version) || "Unknown" }; }); }
+  async testConnection(configOverride) { return this._withConnection("connection test", async (connection) => { const identity = this._firstRow(await connection.write("/system/identity/print"), "identity query"); const resources = this._firstRow(await connection.write("/system/resource/print"), "resource query"); return { routerName: this._str(identity.name) || "Unknown Router", version: this._str(resources.version) || "Unknown", model:this._str(resources["board-name"])||this._str(resources["platform"])||"RouterOS device" }; },configOverride); }
   async getSystemResources() { return this._withConnection("resource query", async (connection) => { const resource = this._firstRow(await connection.write("/system/resource/print"), "resource query"); const totalMemoryBytes = this._number(resource["total-memory"]); const freeMemoryBytes = this._number(resource["free-memory"]); return { cpuLoad: this._number(resource["cpu-load"]), freeMemoryMb: Number((freeMemoryBytes / 1024 / 1024).toFixed(2)), totalMemoryMb: Number((totalMemoryBytes / 1024 / 1024).toFixed(2)), memoryUsedMb: Number(((Math.max(0, totalMemoryBytes - freeMemoryBytes)) / 1024 / 1024).toFixed(2)), memoryUsagePercent: totalMemoryBytes > 0 ? Number((((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100).toFixed(1)) : 0, uptime: this._str(resource.uptime) || "unknown", version: this._str(resource.version) || "Unknown" }; }); }
   async getInterfaces() { return this._withConnection("interface query", async (connection) => { const rows = await connection.write("/interface/print"); return (Array.isArray(rows) ? rows : []).filter((item) => { const type = this._str(item.type).toLowerCase(); return ["ether","ethernet","sfp","sfp-sfpplus","sfpplus","bridge","vlan","pppoe","lte","bonding"].some((allowed) => type.includes(allowed)); }).map((item) => ({ name: this._str(item.name), type: this._str(item.type) || "unknown", running: this._bool(item.running), disabled: this._bool(item.disabled), comment: this._str(item.comment) })).filter((item) => item.name); }); }
   async getInterfaceTraffic(interfaceName) { const name = String(interfaceName || "").trim(); if (!name || name.length > 100) throw new Error("MikroTik traffic query failed: a valid interface name is required."); return this._withConnection("traffic query for " + name, async (connection) => { const rows = await connection.write("/interface/monitor-traffic", ["=interface=" + name, "=once=true"]); const traffic = this._firstRow(rows, "traffic query"); const rxBitsPerSecond = this._number(traffic["rx-bits-per-second"]); const txBitsPerSecond = this._number(traffic["tx-bits-per-second"]); return { interface: name, rxBitsPerSecond, txBitsPerSecond, rxMbps: Number((rxBitsPerSecond / 1000000).toFixed(3)), txMbps: Number((txBitsPerSecond / 1000000).toFixed(3)), rxKbps: Number((rxBitsPerSecond / 1000).toFixed(1)), txKbps: Number((txBitsPerSecond / 1000).toFixed(1)), timestamp: new Date().toISOString() }; }); }
