@@ -1,18 +1,38 @@
 function parseDateOnlyInDhaka(value) {
   if (value == null || value === "") return null;
-  // PostgreSQL DATE values are ISO YYYY-MM-DD; parse components explicitly
-  // to avoid browser/Node locale ambiguity and UTC day shifts.
+  if (value instanceof Date) { if (Number.isNaN(value.getTime())) return null; const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value); const part = type => parts.find(item => item.type === type)?.value; return new Date(Date.UTC(Number(part("year")), Number(part("month")) - 1, Number(part("day")))); }
   if (typeof value === "string") {
-    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T|\s)/);
-    if (match) {
-      const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const raw = value.trim();
+    // PostgreSQL DATE and ISO timestamp values are year-first.
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) {
+      const year = Number(iso[1]), month = Number(iso[2]), day = Number(iso[3]);
+      const parsed = new Date(Date.UTC(year, month - 1, day));
+      if (parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day) return parsed;
+      return null;
+    }
+    // ISO timestamp strings represent instants and must use Bangladesh's calendar date.
+    if (/^\d{4}-\d{2}-\d{2}[T\s]/.test(raw)) {
+      const instant = new Date(raw);
+      if (Number.isNaN(instant.getTime())) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant);
+      const part = type => parts.find(item => item.type === type)?.value;
+      return new Date(Date.UTC(Number(part("year")), Number(part("month")) - 1, Number(part("day"))));
+    }
+    // Human-entered dates are always day-first. Never pass DD/MM/YYYY to Date().
+    const dayFirst = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s|$)/);
+    if (dayFirst) {
+      const day = Number(dayFirst[1]), month = Number(dayFirst[2]), year = Number(dayFirst[3]);
       const parsed = new Date(Date.UTC(year, month - 1, day));
       if (parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day) return parsed;
       return null;
     }
   }
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (Number.isNaN(parsed.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(parsed);
+  const part = type => parts.find(item => item.type === type)?.value;
+  return new Date(Date.UTC(Number(part("year")), Number(part("month")) - 1, Number(part("day"))));
 }
 
 function evaluateCustomerBillingStatus(customer) {
@@ -25,21 +45,12 @@ function evaluateCustomerBillingStatus(customer) {
   if (!customer?.expiration_date) {
     return { status: "unpaid", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
   }
-
   const expDate = parseDateOnlyInDhaka(customer.expiration_date);
-  if (!expDate) {
-    return { status: "unpaid", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
-  }
+  if (!expDate) return { status: "unpaid", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
 
-  const diffTime = expDate.getTime() - today;
-  const daysLeft = Math.ceil(diffTime / 86400000);
-
-  if (daysLeft < 0) {
-    return { status: "expired", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
-  } else if (daysLeft <= 3) {
-    return { status: "due", badgeClass: "badge bg-warning text-dark", label: `Expiring Soon (${daysLeft}d)`, daysLeft };
-  }
-
+  const daysLeft = Math.floor((expDate.getTime() - today) / 86400000);
+  if (daysLeft < 0) return { status: "expired", badgeClass: "badge bg-danger", label: "Unpaid / Expired", daysLeft: 0 };
+  if (daysLeft <= 3) return { status: "due", badgeClass: "badge bg-warning text-dark", label: `Expiring Soon (${daysLeft}d)`, daysLeft };
   return { status: "paid", badgeClass: "badge bg-success", label: "Paid / Active", daysLeft };
 }
 

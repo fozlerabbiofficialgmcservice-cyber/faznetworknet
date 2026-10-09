@@ -11,7 +11,7 @@ async function runExpiryWarnings(){
     if(!["bulk_sms","personal_device"].includes(String(settings.sms_gateway_mode||"disabled"))||
        !require("../services/appSettings").bool(settings.sms_event_expiry_warning))return {checked:0,sent:0};
     const due=await db.query(
-      "SELECT username,full_name,monthly_bill,phone,expiration_date FROM customers WHERE expiration_date=CURRENT_DATE+3 AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"
+      "SELECT username,full_name,monthly_bill,phone,expiration_date FROM customers WHERE expiration_date=(NOW() AT TIME ZONE 'Asia/Dhaka')::date+3 AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"
     );
     let sent=0;
     for(const customer of due.rows||[]){
@@ -56,7 +56,7 @@ async function runBillingExpiration(){
     // Expiration dates are Bangladesh calendar dates. An explicit migration
     // override allows billing to be marked expired without changing live service.
     const q=await db.query(
-      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
+      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
       [EXPIRED_PROFILE,graceDays]
     );
     if(!q.rows.length){
