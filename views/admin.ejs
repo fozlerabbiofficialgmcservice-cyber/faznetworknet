@@ -3276,14 +3276,17 @@ async function deletePlan(id,name){
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
         async function syncMikrotik(btn) {
+            if (!window.confirm('Sync profiles and PPPoE users from MikroTik into the panel? This operation never deletes or overwrites existing Billing Panel customer records. Previously deleted usernames remain protected.')) return;
             btn.disabled = true;
             const old = btn.innerHTML;
             btn.innerHTML = 'Syncing...';
             try {
-                await jsonFetch('/api/pppoe/sync', {method:'POST'});
+                const result = await jsonFetch('/api/pppoe/sync', {method:'POST', timeout:120000});
                 await fetchCustomers();
                 await refreshDashboard();
-            } catch (error) { alert(error.message); }
+                const summary = result?.message || 'MikroTik sync completed. No Billing Panel customer was deleted.';
+                alert(summary);
+            } catch (error) { alert(error.message || 'MikroTik sync failed. Existing Billing Panel customer records were not deleted by this sync.'); }
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
 
