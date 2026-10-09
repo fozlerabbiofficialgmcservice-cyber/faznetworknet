@@ -404,6 +404,7 @@ class MikroTikService {
       const items=Array.isArray(rows)?rows:[];
       const item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);
       if(!item||!item[".id"])throw new Error("PPPoE profile not found.");
+      if(this._isSystemProfileName(item.name)||this._isSystemProfileName(data?.name))throw new Error("System/internal MikroTik PPP profiles are protected and cannot be edited.");
       const params=[
         "=.id="+item[".id"],
         "=name="+this._str(data.name).trim(),
@@ -436,7 +437,7 @@ class MikroTikService {
       const item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);
       if(!item||!item[".id"])throw new Error("PPPoE profile not found.");
       const profileName=this._str(item.name);
-      if(/^default$/i.test(profileName))throw new Error('The default MikroTik PPP profile cannot be deleted.');
+      if(this._isSystemProfileName(profileName))throw new Error("System/internal MikroTik PPP profiles are protected and cannot be deleted.");
       try{
         await connection.write("/ppp/profile/remove",["=.id="+item[".id"]]);
       }catch(error){
