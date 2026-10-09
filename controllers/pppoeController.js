@@ -75,7 +75,7 @@ async function syncFromRouter() {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < CURRENT_DATE THEN 'expired' ELSE 'active' END,NOW(),NOW())
          ON CONFLICT (username) DO UPDATE SET
            password=COALESCE(EXCLUDED.password, pppoe_users.password), profile=EXCLUDED.profile, service=EXCLUDED.service,
-           caller_id=EXCLUDED.caller_id, disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
+           caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id), disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
            phone=COALESCE(NULLIF(EXCLUDED.phone,''), pppoe_users.phone), local_address=EXCLUDED.local_address,
            remote_address=EXCLUDED.remote_address, router_id=EXCLUDED.router_id, raw_config=EXCLUDED.raw_config, expiry_date=EXCLUDED.expiry_date,
            status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()`,
