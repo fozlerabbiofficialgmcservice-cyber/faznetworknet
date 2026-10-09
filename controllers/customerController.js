@@ -736,12 +736,18 @@ async function removeCustomer(req,res){
 
     if(!username)username=target;
 
-    // MikroTik is best-effort only. Missing secrets/sessions, router errors,
-    // or an unavailable router must NEVER block local database deletion.
+    // RouterOS deletion must be confirmed (or the secret verified absent)
+    // before removing the database record. On connection/API failure, preserve
+    // the customer row so the UI cannot report a false successful deletion.
     try{
       routerCleanup=await mikrotikService.removeCustomer(username);
     }catch(routerErr){
-      console.warn("[MikroTik Safe Delete] Cleanup skipped:",routerErr?.message||routerErr);
+      console.error("[MikroTik Safe Delete] Router cleanup was not confirmed:",routerErr?.message||routerErr);
+      return res.status(503).json({
+        success:false,
+        code:"MIKROTIK_DELETE_UNCONFIRMED",
+        message:"MikroTik deletion could not be verified. The customer was not deleted from PostgreSQL; please retry when the router is reachable."
+      });
     }
 
     await db.withTransaction(async(client)=>{
