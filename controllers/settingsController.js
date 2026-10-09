@@ -88,7 +88,7 @@ async function syncMikrotik(req,res){
 async function saveGeneralSettings(req,res){
  try{
   const body=req.body||{},mfs=body.mfs&&typeof body.mfs==="object"?body.mfs:body,normalized={};
-  for(const [name] of Object.entries(MFS_KEYS)){const value=String(mfs[name]??"").trim();if(value&&!/^[+()\\d\\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
+  for(const [name] of Object.entries(MFS_KEYS)){const value=String(mfs[name]??"").trim();if(value&&!/^[+()\d\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
   for(const [name,key] of Object.entries(MFS_KEYS))await upsertSetting(key,normalized[name]);
   return res.set("Cache-Control","no-store").json({success:true,message:"MFS receiving numbers saved. Customer payment instructions update immediately.",accounts:normalized});
  }catch(error){return errorResponse(res,error,400);}
@@ -120,7 +120,7 @@ function validateSettingValue(key,value,rule){
  if(rule.numberMin!==undefined){const n=Number(value);if(!Number.isInteger(n)||n<rule.numberMin||n>rule.numberMax)throw new Error(key+" must be between "+rule.numberMin+" and "+rule.numberMax+".");return String(n);}
  let out=String(value??"").trim();
  if(out.length>(rule.max||1000))throw new Error(key+" is too long.");
- if(rule.phone&&out&&!/^[+()\\d\\s-]{6,40}$/.test(out))throw new Error("Enter a valid phone number for "+key+".");
+ if(rule.phone&&out&&!/^[+()\d\s-]{6,40}$/.test(out))throw new Error("Enter a valid phone number for "+key+".");
  if(rule.url&&out){let u;try{u=new URL(out);}catch(_){throw new Error(key+" must be a valid HTTP(S) URL.");}if(!["http:","https:"].includes(u.protocol))throw new Error(key+" must use HTTP or HTTPS.");out=u.toString();}
  if(rule.pathOrUrl&&out)out=validateUrl(out);
  return out;
