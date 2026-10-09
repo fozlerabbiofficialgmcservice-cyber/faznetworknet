@@ -77,6 +77,17 @@ INSERT INTO app_settings(key,value) VALUES
  ('personal_payment_webhook_enabled','false')
 ON CONFLICT(key) DO NOTHING;
 
+-- Idempotency ledger for outbound SMS events; contains no payment transaction data.
+CREATE TABLE IF NOT EXISTS sms_notification_log (
+  event_key TEXT PRIMARY KEY,
+  event_type VARCHAR(40) NOT NULL,
+  username VARCHAR(100) NOT NULL,
+  phone VARCHAR(40) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS transactions (
   id BIGSERIAL PRIMARY KEY,
   channel VARCHAR(20) NOT NULL CHECK (channel IN ('bkash','nagad','rocket','upay')),
