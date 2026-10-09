@@ -91,8 +91,8 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     assert.equal(res.body.success,true);
     assert.equal(res.body.username,"01712345678");
     assert.equal(lookupValue,"  aBc-123  ");
-    assert.match(lookupSql,/UPPER\\(TRIM\\(trx_id\\)\\)\\s*=\\s*UPPER\\(TRIM\\(\\$1\\)\\)/i);
-    assert.match(lookupSql,/used\\s*=\\s*false/i);
+    assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*UPPER\(TRIM\(\$1\)\)/i);
+    assert.match(lookupSql,/used\s*=\s*false/i);
     assert.match(lookupSql,/unmatched/i);
     assert.equal(rechargePayload.username,"01712345678");
   }finally{
