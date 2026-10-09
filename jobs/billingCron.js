@@ -59,6 +59,10 @@ async function runBillingExpiration(){
           );
         }
 
+        if(!overridden&&customer.phone){
+          Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Your FAZ NETWORK internet service has expired due to unpaid bill. Please renew to restore service.",event:"line_expiry"})).catch(error=>console.warn("[SMS] Expiry notice failed for "+customer.username+":",error.message));
+        }
+
         await logAuditAction({
           customerId:customer.id,
           adminId:"billing-cron",
