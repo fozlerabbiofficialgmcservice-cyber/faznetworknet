@@ -200,6 +200,26 @@ class MikroTikService {
       })).filter((item) => item.username);
     });
   }
+  async getHotspotUser(usernameValue) {
+    const username=this._str(usernameValue).trim();
+    if(!username||username.length>100) throw new Error("A valid Hotspot username is required.");
+    return this._withConnection("Hotspot user lookup",async(connection)=>{
+      const rows=await connection.write("/ip/hotspot/user/print");
+      const item=(Array.isArray(rows)?rows:[]).find(row=>this._str(row.name).toLowerCase()===username.toLowerCase());
+      if(!item) return null;
+      return {id:this._str(item[".id"]),username:this._str(item.name),password:this._str(item.password),profile:this._str(item.profile),disabled:this._bool(item.disabled),limitUptime:this._str(item["limit-uptime"]),limitBytesTotal:this._number(item["limit-bytes-total"]),comment:this._str(item.comment),bytesIn:this._number(item["bytes-in"]),bytesOut:this._number(item["bytes-out"]),raw:item};
+    });
+  }
+  async getHotspotActiveSession(usernameValue) {
+    const username=this._str(usernameValue).trim();
+    if(!username||username.length>100) throw new Error("A valid Hotspot username is required.");
+    return this._withConnection("Hotspot active session lookup",async(connection)=>{
+      const rows=await connection.write("/ip/hotspot/active/print");
+      const item=(Array.isArray(rows)?rows:[]).find(row=>this._str(row.user).toLowerCase()===username.toLowerCase());
+      if(!item) return null;
+      return {username:this._str(item.user),address:this._str(item.address),uptime:this._str(item.uptime),bytesIn:this._number(item["bytes-in"]),bytesOut:this._number(item["bytes-out"]),mac:this._str(item["mac-address"])};
+    });
+  }
   async getHotspotProfiles() {
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
