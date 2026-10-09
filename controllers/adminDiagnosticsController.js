@@ -2,18 +2,26 @@ const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
 // Read-only diagnostics: SELECT 1 and RouterOS print commands only.
+async function withTimeout(promise, ms, message) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 async function mikrotikTest(req, res) {
   let dbStatus = "unhealthy";
   let router = null;
   let routerError = null;
   try {
-    await db.query("SELECT 1");
+    await withTimeout(db.query("SELECT 1"), 1500, "Database health check timed out");
     dbStatus = "healthy";
   } catch (error) {
     routerError = "Database check failed: " + String(error?.message || "unavailable");
   }
   try {
-    router = await mikrotikService.testConnection();
+    router = await withTimeout(mikrotikService.testConnection(), 3000, "MikroTik diagnostic timed out after 3 seconds");
   } catch (error) {
     routerError = String(error?.message || "MikroTik connection failed");
   }

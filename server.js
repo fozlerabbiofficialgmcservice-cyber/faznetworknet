@@ -1,7 +1,7 @@
 process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
 const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
-const db=require("./db");const publicMikrotikService=require("./services/mikrotikService");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
+const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 app.use(session({
@@ -82,20 +82,24 @@ app.get("/",async (req,res)=>{
     }catch(dbErr){
       console.warn("[Home Route] DB package query warning:",dbErr.message);
     }
+    // Public page rendering must never open a RouterOS socket. Read the last
+    // saved hotspot price/validity metadata from PostgreSQL; live router sync is
+    // reserved for explicit admin actions and background jobs.
     try{
-      const [profileRows,metadataRows]=await Promise.all([
-        publicMikrotikService.getHotspotProfiles(),
-        db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1")
-      ]);
+      const metadataRows=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
       let metadata={};
       try{metadata=JSON.parse(metadataRows.rows[0]?.value||"{}");}catch(_){metadata={};}
-      hotspotPackages=(Array.isArray(profileRows)?profileRows:[]).map(profile=>{
-        const name=String(profile.name||"").trim();
-        const meta=metadata&&typeof metadata==="object"?metadata[name]||{}:{};
-        return {...profile,name,price:Number(meta.price||0),validityLabel:String(meta.validityLabel||meta.validity||""),limitBytesTotal:Number(meta.limitBytesTotal||0)};
-      }).filter(profile=>profile.name&&!isExcludedPublicPlan(profile.name)&&Number(profile.price)>0);
+      hotspotPackages=Object.entries(metadata&&typeof metadata==="object"?metadata:{})
+        .map(([name,meta])=>({
+          ...(meta&&typeof meta==="object"?meta:{}),
+          name:String(name||"").trim(),
+          price:Number(meta?.price||0),
+          validityLabel:String(meta?.validityLabel||meta?.validity||""),
+          limitBytesTotal:Number(meta?.limitBytesTotal||0)
+        }))
+        .filter(profile=>profile.name&&!isExcludedPublicPlan(profile.name)&&Number(profile.price)>0);
     }catch(hotspotErr){
-      console.warn("[Home Route] Hotspot package query warning:",hotspotErr.message);
+      console.warn("[Home Route] Saved hotspot metadata unavailable:",hotspotErr.message);
     }
     return res.render("index",{title:"FAZ NETWORK",officeAddress,helpline,packages,hotspotPackages,error:null,success:null});
   }catch(err){

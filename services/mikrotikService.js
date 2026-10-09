@@ -1,7 +1,7 @@
 const { RouterOSAPI } = require("node-routeros");
 
-const CONNECTION_TIMEOUT_MS = 4000;
-const OPERATION_TIMEOUT_MS = 4000;
+const CONNECTION_TIMEOUT_MS = 3000;
+const OPERATION_TIMEOUT_MS = 3000;
 const DEFAULT_PORT = 8728;
 
 class MikroTikService {
@@ -44,14 +44,18 @@ class MikroTikService {
     return connection;
   }
   async _withConnection(operationName, operation, configOverride) {
-    const connection = this._createConnection(await this._getConfig(configOverride));
+    let connection = null;
     let connectTimer;
     try {
+      // Settings lookup and socket connect both have a hard deadline. A stalled
+      // PostgreSQL settings query must not make a RouterOS request wait forever.
+      const config = await this._executeWithTimeout(this._getConfig(configOverride), CONNECTION_TIMEOUT_MS, "MikroTik configuration lookup");
+      connection = this._createConnection(config);
       const connectPromise = connection.connect();
       await Promise.race([
         connectPromise,
         new Promise((_, reject) => {
-          connectTimer = setTimeout(() => reject(new Error("MikroTik connection timed out after 4 seconds.")), CONNECTION_TIMEOUT_MS);
+          connectTimer = setTimeout(() => reject(new Error("MikroTik connection timed out after 3 seconds.")), CONNECTION_TIMEOUT_MS);
         })
       ]);
       if (connectTimer) clearTimeout(connectTimer);
@@ -66,7 +70,9 @@ class MikroTikService {
       throw wrapped;
     } finally {
       if (connectTimer) clearTimeout(connectTimer);
-      await this._safeClose(connection);
+      // Closing a half-open/unreachable socket must never delay the HTTP response.
+      // _safeClose initiates cleanup and absorbs both sync and async close failures.
+      if (connection) this._safeClose(connection);
     }
   }
   async _executeWithTimeout(promise, ms = OPERATION_TIMEOUT_MS, operationName = "MikroTik call") {
@@ -85,9 +91,15 @@ class MikroTikService {
       if (timer) clearTimeout(timer);
     }
   }
-  async _safeClose(connection) {
+  _safeClose(connection) {
     if (!connection) return;
-    try { if (typeof connection.close === "function") await Promise.resolve(connection.close()); else if (typeof connection.disconnect === "function") await Promise.resolve(connection.disconnect()); else if (typeof connection.destroy === "function") connection.destroy(); } catch (_) {}
+    try {
+      let result;
+      if (typeof connection.close === "function") result = connection.close();
+      else if (typeof connection.disconnect === "function") result = connection.disconnect();
+      else if (typeof connection.destroy === "function") result = connection.destroy();
+      if (result && typeof result.then === "function") result.catch(() => {});
+    } catch (_) {}
   }
   _firstRow(rows, operationName) { if (!Array.isArray(rows) || rows.length === 0) throw new Error("MikroTik " + operationName + " returned no data."); return rows[0]; }
   _number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
