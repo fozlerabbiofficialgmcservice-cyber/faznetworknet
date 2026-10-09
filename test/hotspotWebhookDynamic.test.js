@@ -70,3 +70,34 @@ test("dynamicWebhook catches a custom full-URL path from app_settings",async()=>
     db.query=originalQuery;
   }
 });
+
+
+test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensitive lookup",async()=>{
+  const originalQuery=db.query,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  let lookupSql="",lookupValue="",rechargePayload=null;
+  try{
+    db.query=async(sql,params=[])=>{
+      if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched"}]};}
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.startsWith("UPDATE transactions"))return {rows:[]};
+      throw new Error("Unexpected SQL in test: "+sql);
+    };
+    mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    mikrotik.rechargeHotspotUser=async(payload)=>{rechargePayload=payload;return {username:payload.username};};
+    const req={ip:"test-alias-trim-case",body:{username:" 01712345678 ",trx_id:"  aBc-123  "},query:{}};
+    const res=responseRecorder();
+    await paymentController.verifyTrx(req,res);
+    assert.equal(res.statusCode,200);
+    assert.equal(res.body.success,true);
+    assert.equal(res.body.username,"01712345678");
+    assert.equal(lookupValue,"  aBc-123  ");
+    assert.match(lookupSql,/UPPER\(TRIM\(trx_id\)\)\s*=\s*UPPER\(TRIM\(\$1\)\)/i);
+    assert.match(lookupSql,/used\s*=\s*false/i);
+    assert.match(lookupSql,/unmatched/i);
+    assert.equal(rechargePayload.username,"01712345678");
+  }finally{
+    db.query=originalQuery;
+    mikrotik.getHotspotProfiles=originalProfiles;
+    mikrotik.rechargeHotspotUser=originalRecharge;
+  }
+});
