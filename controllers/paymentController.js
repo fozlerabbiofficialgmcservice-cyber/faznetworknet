@@ -60,6 +60,8 @@ async function webhook(req,res){
      if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
     });
     claimedTransactionId=null;
+    // SMS delivery is best-effort and must never delay or roll back a verified payment.
+    Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Payment received: Tk "+Number(payment.amount).toFixed(2)+". TrxID "+payment.trxId+". Your FAZ NETWORK service has been renewed.",event:"payment_receipt"})).catch(error=>console.warn("[SMS] Payment receipt notification failed:",error.message));
     return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
