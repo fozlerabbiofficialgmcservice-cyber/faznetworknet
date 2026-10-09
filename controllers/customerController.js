@@ -85,7 +85,7 @@ function nextBillingExpiryDate(currentExpiry,cycleValue,durationDaysValue) {
 }
 function validDateOnly(value) {
   const raw=clean(value,20);
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw))return false;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
   const [year,month,day]=raw.split("-").map(Number),date=new Date(Date.UTC(year,month-1,day));
   return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
 }
