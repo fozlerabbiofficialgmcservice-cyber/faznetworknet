@@ -137,6 +137,12 @@ async function verifyTrx(req,res){
   }
   const tx=q.rows[0];
   const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
+  if(tx.matched_username){
+   const linked=await db.query("SELECT 1 FROM pppoe_users WHERE LOWER(username)=LOWER($1) UNION ALL SELECT 1 FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[String(tx.matched_username)]);
+   if(linked.rows.length)return res.status(409).json({success:false,error:"This transaction is linked to a PPPoE customer and cannot be used for Hotspot."});
+  }
+  const pppoePrice=await db.query("SELECT 1 FROM packages WHERE ROUND(price*100)=ROUND($1::numeric*100) LIMIT 1",[amount]);
+  if(pppoePrice.rows.length)return res.status(409).json({success:false,error:"This transaction amount matches a PPPoE billing plan and cannot be claimed by Hotspot. Contact an administrator if this payment was intended for Hotspot."});
   if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
   const metadataResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
