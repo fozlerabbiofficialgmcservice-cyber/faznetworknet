@@ -115,7 +115,7 @@ async function verifyTrx(req,res){
  const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});
  try{
   const phone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
-  if(!/^01\\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
+  if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
   const trx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.trxid||body.txnId||body.txnid||query.trxId||"").trim();
   if(!trx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
   const q=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1)) AND (used = false OR LOWER(TRIM(status)) = 'unmatched') ORDER BY created_at DESC, id DESC LIMIT 1",[trx]);
