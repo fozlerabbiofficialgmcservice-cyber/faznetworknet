@@ -31,7 +31,7 @@ async function login(req,res){
    if(u&&!u.disabled&&u.password===p){subject=u.username;name=u.username;mobile=p;}
    else{const q=await db.query("SELECT username,password,status FROM hotspot_vouchers WHERE username=$1 LIMIT 1",[p]).catch(()=>({rows:[]}));if(!q.rows.length||q.rows[0].status==="expired"||!(await passwordMatches(p,q.rows[0].password)))return res.status(401).json({success:false,message:"Hotspot account not found or mobile-number login is not enabled."});subject=q.rows[0].username;name=subject;mobile=p;}
   }else{
-   const p=phone(identifier),q=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1",[identifier,p]),c=q.rows[0]||null,username=c?.username||identifier;
+   const p=phone(identifier),q=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) OR regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') IN ($2, '880'||substring($2 from 2)) LIMIT 1",[identifier,p]),c=q.rows[0]||null,username=c?.username||identifier;
    const ures=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),u=ures.rows[0]||null;
    let ok=await passwordMatches(password,c?.password)||await passwordMatches(password,u?.password);
    if(!ok){try{const s=await mikrotikService.getPppoeSecret(username);ok=await passwordMatches(password,s?.password)}catch(_){}}
