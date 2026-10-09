@@ -127,7 +127,7 @@ async function manualMatch(req,res){
   if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});
   const expected=Number(customer.price||0);
   if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:"Payment rejected. Exact bill amount of ৳"+expected.toFixed(2)+" is required to activate or renew service.",expectedAmount:expected,paidAmount:Number(tx.amount)});
-  const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND used=false AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
   const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
