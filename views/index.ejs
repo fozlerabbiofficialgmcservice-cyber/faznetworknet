@@ -117,11 +117,19 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
   <div class="border-t border-slate-100 py-5 text-center text-xs text-slate-400">© <%= new Date().getFullYear() %> FAZ NETWORK. All rights reserved.</div>
 </footer>
 
-<div id="customerLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4">
-  <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
-    <div class="flex items-start justify-between"><div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Self-Care</p><h2 class="mt-1 text-2xl font-black">Customer Login</h2></div><button id="closeCustomerLogin" class="text-2xl text-slate-400">×</button></div>
-    <form id="customerLoginForm" class="mt-6 space-y-4"><input id="loginIdentifier" required class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Username or phone number"><input id="loginPassword" required type="password" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Password"><div id="loginError" class="hidden rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></div><button id="loginSubmit" class="w-full rounded-xl bg-cyan-600 px-5 py-3 font-bold text-white">Login to Account</button></form>
-    <div id="customerDashboard" class="mt-6 hidden"></div>
+<div id="customerLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center overflow-y-auto bg-slate-950/70 p-4">
+  <div class="my-auto w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+    <div class="flex items-start justify-between"><div><p class="text-xs font-black uppercase tracking-widest text-cyan-600">Secure Self-Care</p><h2 class="mt-1 text-2xl font-black">Customer Login</h2><p class="mt-1 text-sm text-slate-500">Sign in to view your own account only.</p></div><button id="closeCustomerLogin" type="button" aria-label="Close login" class="rounded-lg px-2 text-2xl text-slate-400 hover:bg-slate-100">×</button></div>
+    <div class="mt-6 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1"><button type="button" data-login-type="pppoe" class="customer-type rounded-xl bg-white px-3 py-3 text-sm font-black text-cyan-700 shadow-sm">PPPoE Subscriber</button><button type="button" data-login-type="hotspot" class="customer-type rounded-xl px-3 py-3 text-sm font-black text-slate-500">Hotspot Subscriber</button></div>
+    <form id="customerLoginForm" class="mt-5 space-y-4">
+      <input id="loginType" type="hidden" value="pppoe">
+      <div><label id="loginIdentifierLabel" for="loginIdentifier" class="mb-1 block text-sm font-bold">Username or registered phone</label><input id="loginIdentifier" required autocomplete="username" maxlength="120" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100" placeholder="PPPoE username or phone number"></div>
+      <div id="loginPasswordWrap"><label for="loginPassword" class="mb-1 block text-sm font-bold">Password</label><input id="loginPassword" required type="password" autocomplete="current-password" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100" placeholder="Your PPPoE password"></div>
+      <p id="hotspotLoginHint" class="hidden rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">Enter your registered 11-digit mobile number. It will be used as both username and password.</p>
+      <div id="loginError" role="alert" class="hidden rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"></div>
+      <button id="loginSubmit" class="w-full rounded-xl bg-cyan-600 px-5 py-3 font-black text-white hover:bg-cyan-700 disabled:opacity-60">Login to Account</button>
+    </form>
+    <p class="mt-5 text-center text-xs leading-5 text-slate-400">Customer access is separate from the administrator login. Never share your password or payment OTP.</p>
   </div>
 </div>
 
@@ -138,6 +146,7 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
   $("closeSupport")?.addEventListener("click",()=>modal("supportModal",false));
   $("supportModal")?.addEventListener("click",e=>{if(e.target.id==="supportModal")modal("supportModal",false)});
   $("customerLoginBtn")?.addEventListener("click",()=>modal("customerLoginModal",true));
+  if(new URLSearchParams(location.search).get("customerLogin")==="1")modal("customerLoginModal",true);
   $("closeCustomerLogin")?.addEventListener("click",()=>modal("customerLoginModal",false));
   $("customerLoginModal")?.addEventListener("click",e=>{if(e.target.id==="customerLoginModal")modal("customerLoginModal",false)});
   document.addEventListener("keydown",e=>{if(e.key==="Escape"){modal("supportModal",false);modal("customerLoginModal",false)}});
@@ -150,14 +159,37 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
     }catch(err){result.innerHTML='<div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">'+esc(err.message)+'</div>'}
   });
 
+  let customerLoginType="pppoe";
+  const setCustomerLoginType=type=>{
+    customerLoginType=type;
+    $("loginType").value=type;
+    document.querySelectorAll(".customer-type").forEach(button=>{
+      const active=button.dataset.loginType===type;
+      button.classList.toggle("bg-white",active);button.classList.toggle("shadow-sm",active);
+      button.classList.toggle("text-cyan-700",active);button.classList.toggle("text-slate-500",!active);
+    });
+    $("loginIdentifierLabel").textContent=type==="hotspot"?"11-digit mobile number":"Username or registered phone";
+    $("loginIdentifier").placeholder=type==="hotspot"?"01XXXXXXXXX":"PPPoE username or phone number";
+    $("loginIdentifier").inputMode=type==="hotspot"?"numeric":"text";
+    $("loginIdentifier").maxLength=type==="hotspot"?11:120;
+    $("loginPasswordWrap").classList.toggle("hidden",type==="hotspot");
+    $("loginPassword").required=type==="pppoe";
+    $("hotspotLoginHint").classList.toggle("hidden",type!=="hotspot");
+    if(type==="hotspot")$("loginPassword").value="";
+  };
+  document.querySelectorAll(".customer-type").forEach(button=>button.addEventListener("click",()=>setCustomerLoginType(button.dataset.loginType)));
+  $("loginIdentifier")?.addEventListener("input",()=>{if(customerLoginType==="hotspot")$("loginPassword").value=$("loginIdentifier").value.trim();});
   $("customerLoginForm")?.addEventListener("submit",async e=>{
-    e.preventDefault();const btn=$("loginSubmit"),errBox=$("loginError"),dash=$("customerDashboard");errBox.classList.add("hidden");btn.disabled=true;btn.textContent="Verifying...";
+    e.preventDefault();const btn=$("loginSubmit"),err=$("loginError");err.classList.add("hidden");btn.disabled=true;btn.textContent="Verifying…";
     try{
-      const r=await fetch("/api/public/customer-login",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({identifier:$("loginIdentifier").value.trim(),password:$("loginPassword").value.trim()})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||"Login failed.");
-      const c=d.customer||{};dash.innerHTML='<div class="rounded-2xl bg-slate-50 p-5"><h3 class="text-xl font-black">'+esc(c.name)+'</h3><div class="mt-4 grid gap-3 sm:grid-cols-2 text-sm"><p><b>Username:</b> '+esc(c.username)+'</p><p><b>Phone:</b> '+esc(c.phone||"—")+'</p><p><b>Package:</b> '+esc(c.package||c.profile||"—")+'</p><p><b>Expiry:</b> '+esc(c.expirationDate||"—")+'</p><p><b>Remaining:</b> '+esc(c.remainingDays??"—")+' days</p><p><b>Status:</b> '+esc(c.connectionStatus||"Offline")+'</p><p><b>Bill:</b> '+esc(c.billingStatus||"Unpaid")+'</p><p><b>Live IP:</b> '+esc(c.liveIp||"—")+'</p></div><div class="mt-5 flex flex-wrap gap-2">'+(c.rechargeUrl?'<a class="rounded-xl bg-cyan-600 px-4 py-2 font-bold text-white" href="'+esc(c.rechargeUrl)+'" target="_blank" rel="noopener">Pay / Recharge</a>':'')+'<a class="rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white" href="https://wa.me/8801339932887" target="_blank" rel="noopener">WhatsApp Support</a></div></div>';
-      $("customerLoginForm").classList.add("hidden");dash.classList.remove("hidden");
-    }catch(ex){errBox.textContent=ex.message;errBox.classList.remove("hidden")}finally{btn.disabled=false;if(btn.disabled===false)btn.textContent="Login to Account"}
-  });
+      const identifier=$("loginIdentifier").value.trim();
+      const payload={type:customerLoginType,identifier,password:customerLoginType==="hotspot"?identifier:$("loginPassword").value};
+      const r=await fetch("/api/customer/login",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(payload)});
+      const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||"Login failed.");
+      location.href=d.redirect||"/customer/dashboard";
+    }catch(ex){err.textContent=ex.message;err.classList.remove("hidden");}
+    finally{btn.disabled=false;btn.textContent="Login to Account";}
+  });;
 })();
 </script>
 </body>
