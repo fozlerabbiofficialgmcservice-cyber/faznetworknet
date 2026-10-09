@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer Self-Care | FAZ NETWORK</title><script src="https://cdn.tailwindcss.com"></script><style>body{font-family:Inter,system-ui,sans-serif;background:linear-gradient(135deg,#ecfeff,#f8fafc 55%,#f0fdf4)}.panel{background:rgba(255,255,255,.94);backdrop-filter:blur(12px)}</style></head>
+<body class="min-h-screen text-slate-800">
+<header class="border-b border-slate-200 bg-white/90"><div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4"><a href="/" class="text-xl font-black">FAZ <span class="text-cyan-600">NETWORK</span></a><div class="flex items-center gap-3"><span id="customerLabel" class="hidden text-sm font-semibold text-slate-500 sm:inline"></span><button id="logoutBtn" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold hover:bg-slate-50">Sign out</button></div></div></header>
+<main class="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+<div class="mb-8"><p class="text-xs font-black uppercase tracking-[.2em] text-cyan-700">Customer Self-Care</p><h1 class="mt-2 text-3xl font-black sm:text-4xl">Your Internet Account</h1><p class="mt-2 text-slate-500">View your service status, usage, billing details and payments.</p></div>
+<div id="loading" class="panel rounded-3xl border border-slate-200 p-8 text-center text-slate-500 shadow-sm">Loading your account securely…</div>
+<div id="errorBox" class="hidden rounded-2xl border border-red-200 bg-red-50 p-5 font-semibold text-red-700"></div>
+<div id="dashboard" class="hidden space-y-6"></div>
+<div class="mt-8 rounded-2xl border border-cyan-100 bg-cyan-50 p-5 text-sm text-cyan-900"><b>Need assistance?</b> Contact FAZ NETWORK support at <a class="font-black underline" href="tel:01339932887">01339932887</a>. Never share your password or payment OTP with anyone.</div>
+</main>
+<script>
+(()=> {
+ const $=id=>document.getElementById(id);
+ const esc=v=>String(v??"—").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const money=v=>"৳"+Number(v||0).toLocaleString("en-BD",{maximumFractionDigits:2});
+ const date=v=>v?esc(String(v).slice(0,10)):"—";
+ const bytes=v=>{const n=Math.max(0,Number(v)||0);if(n<1024)return n+" B";const units=["KB","MB","GB","TB"];let x=n/1024,i=-1;do{x/=i<0?1:1024;i++;}while(x>=1024&&i<3);return x.toFixed(2)+" "+units[i];};
+ const card=(label,value,sub="")=>'<div class="rounded-2xl border border-slate-200 bg-white p-5"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">'+esc(label)+'</p><p class="mt-2 break-words text-xl font-black">'+esc(value)+'</p>'+(sub?'<p class="mt-1 text-xs text-slate-500">'+esc(sub)+'</p>':'')+'</div>';
+ async function load(){
+  try{
+   const r=await fetch("/api/customer/profile",{headers:{Accept:"application/json"}}),d=await r.json();
+   if(r.status===401){location.href="/?customerLogin=1";return;}
+   if(!r.ok||!d.success)throw new Error(d.message||"Unable to load your account.");
+   const c=d.customer||{},hotspot=c.type==="hotspot";$("customerLabel").textContent=c.name||c.username;
+   let html='<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">';
+   html+=card("Subscriber",c.username,c.phone||"");
+   html+=card("Connection status",c.status||"Unknown",c.online?"Currently connected":"");
+   html+=card(hotspot?"Hotspot profile":"Current plan",hotspot?c.profile:c.planName,c.profile||"");
+   html+=card(hotspot?"Package price":"Monthly fee",money(c.price??c.monthlyFee));
+   if(hotspot){
+    html+=card("Active IP",c.ip||"Not connected","Live session");
+    html+=card("Current uptime",c.uptime||"Offline","Live session");
+    if(c.limitUptime)html+=card("Time allowance",c.limitUptime,"Profile time limit");
+    if(c.limitGb!==null&&c.limitGb!==undefined){html+=card("Data allowance",c.limitGb+" GB","Total quota");html+=card("Data consumed",c.usedGb+" GB",bytes(c.usedBytes));html+=card("Data remaining",c.remainingGb+" GB",bytes(c.remainingBytes));}
+   }else{
+    html+=card("Expiry / next due",date(c.expiryDate),c.remainingDays===null?"No expiry date":(c.remainingDays<0?Math.abs(c.remainingDays)+" days overdue":c.remainingDays+" days remaining"));
+    html+=card("Billing status",c.billingStatus||"Unpaid");
+    html+=card("Assigned IP",c.ip||"Offline","Live MikroTik session");
+    html+=card("Session uptime",c.uptime||"Offline","Live MikroTik session");
+    html+=card("Download traffic",Number(c.downloadMbps||0).toFixed(2)+" Mbps",bytes(c.bytesIn)+" received");
+    html+=card("Upload traffic",Number(c.uploadMbps||0).toFixed(2)+" Mbps",bytes(c.bytesOut)+" sent");
+   }
+   html+='</div>';
+   if(!hotspot){
+    html+='<section class="panel rounded-3xl border border-slate-200 p-6 shadow-sm"><div><p class="text-xs font-black uppercase tracking-wider text-cyan-700">Quick bill pay</p><h2 class="mt-1 text-2xl font-black">Renew your PPPoE line</h2><p class="mt-2 text-sm text-slate-500">Send the exact bill amount via bKash, Nagad or Rocket Send Money to <b>01339932887</b>, then enter the TrxID received by FAZ NETWORK.</p></div><form id="renewForm" class="mt-5 flex flex-col gap-3 sm:flex-row"><input id="renewTrx" required maxlength="100" class="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3" placeholder="Payment TrxID"><button id="renewBtn" class="rounded-xl bg-cyan-700 px-5 py-3 font-black text-white hover:bg-cyan-800">Verify & Renew</button></form><div id="renewResult" class="mt-3 hidden rounded-xl p-4 text-sm font-semibold"></div></section>';
+    html+='<section class="panel rounded-3xl border border-slate-200 p-6 shadow-sm"><h2 class="text-2xl font-black">Payment history</h2><div class="mt-4 overflow-x-auto"><table class="w-full min-w-[520px] text-left text-sm"><thead><tr class="border-b text-xs uppercase tracking-wider text-slate-500"><th class="py-3 pr-3">Date</th><th class="py-3 pr-3">TrxID</th><th class="py-3 pr-3">Method</th><th class="py-3 pr-3">Amount</th><th class="py-3">Status</th></tr></thead><tbody>';
+    const payments=Array.isArray(c.payments)?c.payments:[];
+    html+=payments.length?payments.map(p=>'<tr class="border-b border-slate-100"><td class="py-3 pr-3">'+date(p.created_at)+'</td><td class="py-3 pr-3 font-semibold">'+esc(p.trx_id)+'</td><td class="py-3 pr-3">'+esc(p.channel)+'</td><td class="py-3 pr-3">'+money(p.amount)+'</td><td class="py-3"><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">'+esc(p.status)+'</span></td></tr>').join(""):'<tr><td colspan="5" class="py-5 text-center text-slate-500">No payment history found.</td></tr>';
+    html+='</tbody></table></div></section>';
+   }else{
+    html+='<section class="panel rounded-3xl border border-slate-200 p-6 shadow-sm"><p class="text-xs font-black uppercase tracking-wider text-emerald-700">Instant recharge</p><h2 class="mt-1 text-2xl font-black">Recharge Hotspot</h2><p class="mt-2 text-sm text-slate-500">Send the exact price for your configured Hotspot profile to <b>01339932887</b>. Use your 11-digit mobile number and the payment TrxID below.</p><form id="hotspotRechargeForm" class="mt-5 flex flex-col gap-3 sm:flex-row"><input id="hotspotPhone" value="'+esc(c.phone||c.username)+'" readonly class="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3"><input id="hotspotTrx" required maxlength="100" class="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3" placeholder="Payment TrxID"><button id="hotspotRechargeBtn" class="rounded-xl bg-emerald-700 px-5 py-3 font-black text-white">Verify & Recharge</button></form><div id="hotspotRechargeResult" class="mt-3 hidden rounded-xl p-4 text-sm font-semibold"></div></section>';
+   }
+   $("dashboard").innerHTML=html;$("dashboard").classList.remove("hidden");$("loading").classList.add("hidden");
+   $("renewForm")?.addEventListener("submit",async e=>{e.preventDefault();await submitPayment("/api/customer/renew",{trxId:$("renewTrx").value.trim()},"renewResult","renewBtn","Verify & Renew")});
+   $("hotspotRechargeForm")?.addEventListener("submit",async e=>{e.preventDefault();await submitPayment("/api/verify-trx",{username:$("hotspotPhone").value.trim(),trxId:$("hotspotTrx").value.trim()},"hotspotRechargeResult","hotspotRechargeBtn","Verify & Recharge")});
+  }catch(e){$("loading").classList.add("hidden");$("errorBox").textContent=e.message;$("errorBox").classList.remove("hidden");}
+ }
+ async function submitPayment(url,payload,resultId,buttonId,label){
+  const box=$(resultId),btn=$(buttonId);box.className="mt-3 rounded-xl bg-slate-100 p-4 text-sm font-semibold";box.textContent="Verifying payment…";btn.disabled=true;btn.textContent="Please wait…";
+  try{const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(payload)}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||d.error||"Payment verification failed.");box.className="mt-3 rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800";box.textContent=d.message||"Payment verified successfully.";setTimeout(load,1000);}catch(e){box.className="mt-3 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700";box.textContent=e.message;}finally{btn.disabled=false;btn.textContent=label;}
+ }
+ $("logoutBtn").addEventListener("click",async()=>{await fetch("/api/customer/logout",{method:"POST"}).catch(()=>{});location.href="/";});
+ load();
+})();
+</script></body></html>
