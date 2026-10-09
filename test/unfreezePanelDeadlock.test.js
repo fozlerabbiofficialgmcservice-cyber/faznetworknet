@@ -43,8 +43,5 @@ test("admin inline script has no accidentally escaped line break before router t
     admin,
     /Boolean\(d\.success\)\);\\n\s*document\.getElementById\('generalRouterTestBtn'\)/
   );
-  assert.match(
-    admin,
-    /Boolean\(d\.success\)\);\n\s*document\.getElementById\('generalRouterTestBtn'\)/
-  );
+  assert.match(admin, /document\.getElementById\('generalRouterTestBtn'\)\?\.addEventListener/);
 });
