@@ -690,6 +690,9 @@ async function removeCustomer(req,res){
     }
 
     await db.withTransaction(async(client)=>{
+      // Share the per-username advisory lock with PPPoE sync. If sync runs first,
+      // deletion waits and removes its row; if deletion runs first, sync sees the tombstone.
+      await client.query("SELECT pg_advisory_xact_lock(hashtext(LOWER($1)))", [username]);
       await client.query(
         "DELETE FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1)",
         [username]
