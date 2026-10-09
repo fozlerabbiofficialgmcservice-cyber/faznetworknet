@@ -7,10 +7,10 @@ const EXPIRED_PROFILE="EXPIRED-PROFILE";
 async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
-    // expiration_date is a Bangladesh calendar date. Migration overrides still
-    // transition to expired billing status, but the worker preserves the live line.
+    // expiration_date is a Bangladesh calendar date. Expired billing accounts are
+    // quarantined in a throttled PPPoE profile without disabling their secrets.
     const q=await db.query(
-      "SELECT c.id,c.username,c.full_name,c.phone,c.expiration_date,c.status,c.billing_expiry_override,u.profile AS router_profile,u.disabled AS router_disabled FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE c.expiration_date IS NOT NULL AND c.expiration_date < CURRENT_DATE AND LOWER(COALESCE(c.status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(c.status,'')) <> 'expired' OR LOWER(COALESCE(u.profile,'')) <> LOWER($1)) ORDER BY c.expiration_date ASC,c.id ASC",
+      "SELECT c.id,c.username,c.full_name,c.phone,c.expiration_date,c.status FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE c.expiration_date IS NOT NULL AND c.expiration_date < CURRENT_DATE AND LOWER(COALESCE(c.status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(c.status,'')) <> 'expired' OR LOWER(COALESCE(u.profile,'')) <> LOWER($1)) ORDER BY c.expiration_date ASC,c.id ASC",
       [EXPIRED_PROFILE]
     );
     if(!q.rows.length){
