@@ -2,8 +2,8 @@
 const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{};
 const brandName=String(brand.company_name||"FAZ NETWORK");
 const safeOfficeAddress=String(brand.office_address|| (typeof officeAddress!=="undefined"?officeAddress:"FAZ NETWORK, Bangladesh"));
-const safeWhatsapp=String(brand.whatsapp_number||"8801339932887").replace(/\\D/g,"");
-const copyrightText=String(brand.footer_copyright||"© {year} {company_name}. All Rights Reserved.").replace(/\\{year\\}/g,String(new Date().getFullYear())).replace(/\\{company_name\\}/g,brandName);
+const safeWhatsapp=String(brand.whatsapp_number||"8801339932887").replace(/\D/g,"");
+const copyrightText=String(brand.footer_copyright||"© {year} {company_name}. All Rights Reserved.").replace(/\{year\}/g,String(new Date().getFullYear())).replace(/\{company_name\}/g,brandName);
 const safeHelpline=String(typeof helpline!=="undefined"?helpline:"01339932887");
 const isExcludedPublicPlan=value=>/(expired|ex-|disabled|block|default|vpn)/i.test(String(value??""));
 const safePackages=(Array.isArray(typeof packages!=="undefined"?packages:[]) ? packages : []).filter(pkg=>{const name=String(pkg.plan_name||pkg.profile_name||"").trim();return name&&!isExcludedPublicPlan(name)&&Number(pkg.price)>0;});
