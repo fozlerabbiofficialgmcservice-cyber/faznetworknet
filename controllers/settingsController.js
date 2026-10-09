@@ -31,4 +31,67 @@ async function readHotspotProfileSettings(){const result=await db.query("SELECT 
 async function getHotspotProfileSettings(req,res){try{return res.json({success:true,settings:await readHotspotProfileSettings()});}catch(error){return errorResponse(res,error,503);}}
 async function saveHotspotProfileSettings(req,res){try{const body=req.body||{},mapping=body.mapping&&typeof body.mapping==="object"&&!Array.isArray(body.mapping)?body.mapping:{},defaultProfile=String(body.defaultProfile||"").trim();const normalized={};for(const [rawAmount,rawProfile] of Object.entries(mapping)){const amount=Number(rawAmount),profile=String(rawProfile||"").trim();if(!profile)continue;if(!Number.isFinite(amount)||amount<0||amount>1000000)throw new Error("Each mapping must use a valid payment amount.");normalized[amount.toFixed(2)]=profile;}const profiles=await require("../services/mikrotikService").getHotspotProfiles(),available=new Set(profiles.map(p=>String(p.name||"").toLowerCase()));for(const profile of [...Object.values(normalized),...(defaultProfile?[defaultProfile]:[])])if(!available.has(profile.toLowerCase()))throw new Error("Hotspot profile is not available on MikroTik: "+profile);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_price_profile_map',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[JSON.stringify(normalized)]);await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES('hotspot_default_profile',$1,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[defaultProfile]);return res.json({success:true,message:"Hotspot package/profile settings saved successfully.",settings:{mapping:normalized,defaultProfile}});}catch(error){return errorResponse(res,error,400);}}
 async function saveHotspotWebhookSettings(req,res){try{const body=req.body||{},webhookUrl=validateUrl(body.webhookUrl),webhookEnabled=parseBool(body.webhookEnabled),newSecret=String(body.webhookSecret||"").trim();if(webhookEnabled&&!webhookUrl)throw new Error("Webhook URL is required when automation is enabled.");const current=await db.query("SELECT value FROM app_settings WHERE key='personal_payment_webhook_secret' LIMIT 1"),currentSecret=String(current.rows[0]?.value||"");if(webhookEnabled&&!newSecret&&!currentSecret)throw new Error("Webhook Secret Key / Token is required when automation is enabled.");const secret=newSecret||currentSecret;for(const [key,value] of [["personal_payment_webhook_url",webhookUrl],["personal_payment_webhook_enabled",webhookEnabled?"true":"false"],["personal_payment_webhook_secret",secret]])await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,value]);return res.json({success:true,message:"Hotspot Webhook settings saved successfully.",settings:await readSettings()});}catch(error){return errorResponse(res,error,400);}}
-module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings};
+
+const mikrotikService=require("../services/mikrotikService");
+const ROUTER_KEYS=["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"];
+const MFS_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_rocket_number",upay:"mfs_upay_number"};
+async function upsertSetting(key,value){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);}
+async function getSettingsMap(keys){const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));}
+async function generalSettings(req,res){
+ try{
+  const keys=[...ROUTER_KEYS,"personal_payment_webhook_url","personal_payment_webhook_enabled","personal_payment_webhook_secret",...Object.values(MFS_KEYS)];
+  const s=await getSettingsMap(keys);
+  return res.set("Cache-Control","no-store").json({success:true,settings:{
+   router:{host:s.mikrotik_host||process.env.ROUTER_HOST||"",port:Number(s.mikrotik_port||process.env.ROUTER_PORT||8728),user:s.mikrotik_user||process.env.ROUTER_USER||"",passwordConfigured:Boolean(s.mikrotik_password||process.env.ROUTER_PASS),passwordSource:s.mikrotik_password?"database":process.env.ROUTER_PASS?"environment":"unset"},
+   webhook:{url:s.personal_payment_webhook_url||"/api/webhooks/macrodroid-sms",enabled:parseBool(s.personal_payment_webhook_enabled),secretConfigured:Boolean(s.personal_payment_webhook_secret)},
+   mfs:Object.fromEntries(Object.entries(MFS_KEYS).map(([name,key])=>[name,String(s[key]||"")]))
+  }});
+ }catch(error){return errorResponse(res,error,503);}
+}
+async function testMikrotik(req,res){
+ try{
+  const body=req.body||{},current=await getSettingsMap(ROUTER_KEYS);
+  const config={host:String(body.host??current.mikrotik_host??process.env.ROUTER_HOST??"").trim(),port:Number(body.port??current.mikrotik_port??process.env.ROUTER_PORT??8728),user:String(body.user??current.mikrotik_user??process.env.ROUTER_USER??"").trim(),password:String(body.password||current.mikrotik_password||process.env.ROUTER_PASS||"")};
+  const router=await mikrotikService.testConnection(config);
+  return res.set("Cache-Control","no-store").json({success:true,message:"Router connection successful.",router});
+ }catch(error){const message=String(error?.message||"MikroTik connection failed.");return res.status(502).json({success:false,message,error:message});}
+}
+async function syncMikrotikProfilesInternal(){
+ const [pppoeProfiles,hotspotProfiles]=await Promise.all([mikrotikService.fetchExistingProfiles(),mikrotikService.getHotspotProfiles()]);
+ for(const p of pppoeProfiles){
+  await db.query("INSERT INTO pppoe_profiles(name,rate_limit,local_address,remote_address,session_timeout,idle_timeout,only_one,change_tcp_mss,comment,router_id,raw_config,synced_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW(),NOW()) ON CONFLICT(name) DO UPDATE SET rate_limit=EXCLUDED.rate_limit,local_address=EXCLUDED.local_address,remote_address=EXCLUDED.remote_address,session_timeout=EXCLUDED.session_timeout,idle_timeout=EXCLUDED.idle_timeout,only_one=EXCLUDED.only_one,change_tcp_mss=EXCLUDED.change_tcp_mss,comment=EXCLUDED.comment,router_id=EXCLUDED.router_id,raw_config=EXCLUDED.raw_config,synced_at=NOW(),updated_at=NOW()",[p.name,p.rateLimit,p.localAddress,p.remoteAddress,p.sessionTimeout,p.idleTimeout,Boolean(p.onlyOne),String(p.changeTcpMss||"").toLowerCase()==="yes",p.comment||"",p.id||null,JSON.stringify(p.raw||p)]);
+ }
+ const current=await getSettingsMap(["hotspot_profile_metadata"]);let metadata={};try{metadata=JSON.parse(current.hotspot_profile_metadata||"{}");}catch(_){}
+ if(!metadata||typeof metadata!=="object"||Array.isArray(metadata))metadata={};
+ for(const p of hotspotProfiles){const name=String(p.name||"");if(!metadata[name])metadata[name]={};}
+ await upsertSetting("hotspot_profile_metadata",JSON.stringify(metadata));
+ return {pppoeProfiles:pppoeProfiles.length,hotspotProfiles:hotspotProfiles.length,message:"Live MikroTik profiles synced into the local profile cache. Existing prices, profile metadata, and customer records were preserved."};
+}
+async function saveMikrotik(req,res){
+ try{
+  const body=req.body||{},host=String(body.host||"").trim(),user=String(body.user||"").trim(),port=Number(body.port),password=String(body.password||"");
+  if(!host||host.length>253)throw new Error("Enter a valid Router Host / IP.");
+  if(!Number.isInteger(port)||port<1||port>65535)throw new Error("API Port must be between 1 and 65535.");
+  if(!user||user.length>128)throw new Error("Enter a valid API Username.");
+  const existing=await getSettingsMap(ROUTER_KEYS),resolvedPassword=password||String(existing.mikrotik_password||process.env.ROUTER_PASS||"");
+  if(!resolvedPassword)throw new Error("API Password is required for the first save.");
+  const router=await mikrotikService.testConnection({host,port,user,password:resolvedPassword});
+  for(const [key,value] of [["mikrotik_host",host],["mikrotik_port",port],["mikrotik_user",user],["mikrotik_password",resolvedPassword]])await upsertSetting(key,value);
+  const sync=await syncMikrotikProfilesInternal();
+  return res.json({success:true,message:"Router credentials saved and profile sync completed.",router,sync,passwordConfigured:true});
+ }catch(error){return errorResponse(res,error,400);}
+}
+async function syncMikrotik(req,res){
+ try{return res.json({success:true,message:"MikroTik profile synchronization completed.",sync:await syncMikrotikProfilesInternal()});}
+ catch(error){return errorResponse(res,error,502);}
+}
+async function saveMfsAccounts(req,res){
+ try{
+  const body=req.body||{},normalized={};
+  for(const [name] of Object.entries(MFS_KEYS)){const value=String(body[name]??"").trim();if(value&&!/^[+()\\d\\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
+  for(const [name,key] of Object.entries(MFS_KEYS))await upsertSetting(key,normalized[name]);
+  return res.json({success:true,message:"Personal MFS Send Money accounts saved.",accounts:normalized});
+ }catch(error){return errorResponse(res,error,400);}
+}
+
+module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts};
