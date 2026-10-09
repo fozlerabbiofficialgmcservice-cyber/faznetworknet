@@ -16,7 +16,7 @@ async function webhook(req,res){
   if(String(settings.personal_payment_webhook_enabled||"").toLowerCase()!=="true")return res.status(403).json({success:false,error:"Automation disabled",message:"Personal payment webhook automation is disabled in Hotspot Webhook Settings."});
   const expected=String(settings.personal_payment_webhook_secret||"").trim();
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
-  if(!expected||provided!==expected)return res.status(401).json({success:false,error:"Unauthorized webhook."});
+  if(!expected||!provided||Buffer.byteLength(provided)!==Buffer.byteLength(expected)||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(expected)))return res.status(401).json({success:false,error:"Unauthorized webhook."});
   const payment=parseSms(req.body,req.query,req.headers);
   payment.trxId=String(payment.trxId||"").trim().toUpperCase();
   if(!payment.trxId)return res.status(400).json({success:false,error:"A valid TrxID is required."});
