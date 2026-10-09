@@ -130,7 +130,7 @@ async function manualMatch(req,res){
   const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND used=false AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
-  const renewal=await renewCustomer(customer,{persist:false});routerSucceeded=true;
+  const renewal=await renewCustomer(customer,{persist:false,onRouterMutation:()=>{routerSucceeded=true;}});
   await db.withTransaction(async client=>{
    await persistCustomerRenewal(client.query.bind(client),customer,renewal);
    const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
