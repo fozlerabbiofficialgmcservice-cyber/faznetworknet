@@ -1,7 +1,15 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
 
-// Read-only diagnostics: SELECT 1 and RouterOS print commands only.\nasync function withTimeout(promise, ms, message) {\n  let timer;\n  try {\n    return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]);\n  } finally {\n    if (timer) clearTimeout(timer);\n  }\n}
+// Read-only diagnostics: SELECT 1 and RouterOS print commands only.
+async function withTimeout(promise, ms, message) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 async function mikrotikTest(req, res) {
   let dbStatus = "unhealthy";
   let router = null;
