@@ -732,7 +732,11 @@ async function renew(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 async function removeCustomer(req,res){
-  const target=clean(req.params?.id||req.body?.id||req.body?.username,100);
+  // When the client provides a username, it is the authoritative identity.
+  // Never resolve a numeric pppoe_users.id against customers.id: those sequences
+  // are independent, and that collision could delete a different panel customer.
+  const requestedUsername=clean(req.body?.username,100);
+  const target=requestedUsername||clean(req.params?.id||req.body?.id||req.body?.username,100);
   if(!target)return res.status(400).json({success:false,message:"Customer identifier is required"});
 
   let username=null;
@@ -740,20 +744,17 @@ async function removeCustomer(req,res){
   let routerCleanup={terminatedSessions:0,removed:false};
 
   try{
-    // Resolve the target from either customers or pppoe_users. pppoe_users
-    // does not rely on a customer_id column, so username is the durable join key.
-    const customerResult=await db.query(
-      "SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",
-      [target]
-    );
+    // Username is the durable join key across customers and pppoe_users.
+    const customerResult=requestedUsername
+      ? await db.query("SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[requestedUsername])
+      : await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[target]);
     if(customerResult.rows.length){
       customerId=customerResult.rows[0].id;
       username=clean(customerResult.rows[0].username,100)||null;
     }else{
-      const pppoeResult=await db.query(
-        "SELECT id,username FROM pppoe_users WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",
-        [target]
-      );
+      const pppoeResult=requestedUsername
+        ? await db.query("SELECT id,username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[requestedUsername])
+        : await db.query("SELECT id,username FROM pppoe_users WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[target]);
       if(pppoeResult.rows.length){
         username=clean(pppoeResult.rows[0].username,100)||null;
         const linkedCustomer=await db.query(
