@@ -807,17 +807,19 @@ async function resolveCustomer360(idValue){
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
-  const [routerResult,sessionResult,packageResult,paymentResult]=await Promise.allSettled([
+  const [routerResult,sessionResult,packageResult,paymentResult,callerIdResult]=await Promise.allSettled([
     mikrotikService.getPppoeSecret(username),
     mikrotikService.getActiveSessions(),
     db.query("SELECT id,plan_name AS name,profile_name AS profileName,pool_name AS poolName,price,duration_months AS durationMonths,rate_limit AS rateLimit,remote_address AS remoteAddress FROM packages ORDER BY price ASC,plan_name ASC"),
-    db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)])
+    db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
+    db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username])
   ]);
   const secret=routerResult.status==="fulfilled"?routerResult.value:null;
   const sessions=sessionResult.status==="fulfilled"&&Array.isArray(sessionResult.value)?sessionResult.value:[];
   const session=sessions.find(x=>String(x.username||"").toLowerCase()===username.toLowerCase())||null;
   const plans=packageResult.status==="fulfilled"?packageResult.value.rows:[];
   const payments=paymentResult.status==="fulfilled"?paymentResult.value.rows:[];
+  const storedMac=callerIdResult.status==="fulfilled"?clean(callerIdResult.value.rows[0]?.caller_id,100):"";
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
   const today=bangladeshToday();
@@ -828,7 +830,7 @@ async function resolveCustomer360(idValue){
   const status=disabled?(String(customer.status||"").toLowerCase()==="suspended"?"suspended":"inactive"):(expiration&&dateStatus(expiration)==="expired"?"expired":"active");
   return {
     customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),alternativePhone:formatBdPhoneNumber(customer.alternative_phone),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remoteAddress||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
-    live:{isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||"",100),uptime:clean(session?.uptime||"",100),bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||"0",lastDisconnectReason:clean(customer.last_disconnect_reason,255)},
+    live:{isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),uptime:clean(session?.uptime||"",100),bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||"0",lastDisconnectReason:clean(customer.last_disconnect_reason,255)},
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
     payments:payments.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),method:clean(x.method,30),date:x.created_at,status:clean(x.status,30),packageName:clean(customer.package_name||customer.profile,120)}))
@@ -842,6 +844,13 @@ async function getCustomerLiveSession(req,res){
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const live=await mikrotikService.getPppoeLiveTraffic(customer.username);
+    const storedResult=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
+    const storedMac=clean(storedResult.rows[0]?.caller_id,100);
+    if(live.online&&live.mac){
+      await db.query("UPDATE pppoe_users SET caller_id=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[live.mac,customer.username]);
+    }else{
+      live.mac=storedMac;
+    }
     return res.json({success:true,live});
   }catch(error){
     console.warn("[Customer live session] Traffic lookup failed:",error.message);
