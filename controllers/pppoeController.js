@@ -132,7 +132,12 @@ async function users(req, res) {
     const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
 
     const result = await db.query(`
-      SELECT u.*, c.id AS customer_id, c.created_at AS customer_created_at
+      SELECT u.*,
+             c.id AS customer_id, c.created_at AS customer_created_at,
+             c.expiration_date AS customer_expiration_date,
+             c.package_name AS customer_package_name,
+             c.profile AS customer_profile,
+             c.status AS customer_billing_state
       FROM pppoe_users u
       LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username)
       ${whereClause}
@@ -155,9 +160,17 @@ async function users(req, res) {
 
     let users = result.rows.map(user => {
       const session = sessionMap.get(String(user.username || "").trim().toLowerCase());
-      const billing=evaluateCustomerBillingStatus({expiration_date:user.expiry_date});
+      // Billing/customer metadata must come from the same canonical row as All Customer.
+      // MikroTik/pppoe_users is authoritative only for live session and router fields.
+      const canonicalExpiry = user.customer_expiration_date || user.expiry_date || null;
+      const billing=evaluateCustomerBillingStatus({expiration_date:canonicalExpiry});
       return {
         ...user,
+        package_name: user.customer_package_name || user.package_name || user.customer_profile || user.profile || "",
+        profile: user.customer_profile || user.profile || "",
+        expiration_date: canonicalExpiry,
+        expiry_date: canonicalExpiry,
+        customer_billing_state: user.customer_billing_state || null,
         billing_status:billing.status,
         billing_badge_class:billing.badgeClass,
         badgeClass:billing.badgeClass,
