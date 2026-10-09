@@ -23,8 +23,16 @@ function clean(value, max = 255) {
 }
 
 function extractExpiryDate(comment) {
-  const match = String(comment || "").match(/(?:^|[|;\s])EXP:\s*(\d{4}-\d{2}-\d{2})/i);
-  return match ? match[1] : "";
+  const match = String(comment || "").match(/(?:^|[|;\s])EXP:\s*(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/i);
+  if (!match) return "";
+  const value = match[1];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [, day, month, year] = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/) || [];
+  if (!day) return "";
+  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return parsed.getUTCFullYear() === Number(year) && parsed.getUTCMonth() === Number(month) - 1 && parsed.getUTCDate() === Number(day)
+    ? year + "-" + month + "-" + day
+    : "";
 }
 
 function extractPhone(comment) {

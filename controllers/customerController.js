@@ -129,12 +129,33 @@ function effectiveProfile(profile, expirationDate) {
   return dateStatus(expirationDate) === "expired" ? clean(process.env.EXPIRED_PROFILE_NAME || "EXPIRED", 100) : clean(profile, 100);
 }
 
+function formatRouterOsExpirationDate(value) {
+  const normalized = normalizeDate(value);
+  if (!normalized) return "";
+  const [year, month, day] = normalized.split("-");
+  return day + "/" + month + "/" + year;
+}
+
+function cleanAdminNote(value) {
+  const raw = clean(value, 1000);
+  if (!raw) return "";
+  // Older records may contain a full RouterOS comment in the remarks field.
+  // Keep only actual note text so customer/phone/EXP fields are not duplicated.
+  const noteParts = raw.split("|").map(part => part.trim()).filter(Boolean);
+  const cleaned = noteParts
+    .map(part => part.replace(/^Note\s*:\s*/i, "").trim())
+    .filter(part => part && !/^(?:Customer|Phone|Mobile|EXP)\s*:/i.test(part));
+  return cleaned.join(" | ").slice(0, 300);
+}
+
 function buildExpirationComment(fullName, phone, expirationDate, remarks) {
   const parts = [];
-  if (fullName) parts.push("Customer: " + fullName);
-  if (phone) parts.push("Phone: " + phone);
-  parts.push("EXP: " + expirationDate);
-  if (remarks) parts.push("Note: " + remarks);
+  if (fullName) parts.push("Customer: " + clean(fullName, 200));
+  if (phone) parts.push("Phone: " + clean(phone, 40));
+  const formattedExpiration = formatRouterOsExpirationDate(expirationDate);
+  if (formattedExpiration) parts.push("EXP: " + formattedExpiration);
+  const note = cleanAdminNote(remarks);
+  if (note) parts.push("Note: " + note);
   return parts.join(" | ").slice(0, 500);
 }
 
