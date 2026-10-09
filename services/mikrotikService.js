@@ -92,6 +92,31 @@ class MikroTikService {
   async getSystemResources() { return this._withConnection("resource query", async (connection) => { const resource = this._firstRow(await connection.write("/system/resource/print"), "resource query"); const totalMemoryBytes = this._number(resource["total-memory"]); const freeMemoryBytes = this._number(resource["free-memory"]); return { cpuLoad: this._number(resource["cpu-load"]), freeMemoryMb: Number((freeMemoryBytes / 1024 / 1024).toFixed(2)), totalMemoryMb: Number((totalMemoryBytes / 1024 / 1024).toFixed(2)), memoryUsedMb: Number(((Math.max(0, totalMemoryBytes - freeMemoryBytes)) / 1024 / 1024).toFixed(2)), memoryUsagePercent: totalMemoryBytes > 0 ? Number((((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100).toFixed(1)) : 0, uptime: this._str(resource.uptime) || "unknown", version: this._str(resource.version) || "Unknown" }; }); }
   async getInterfaces() { return this._withConnection("interface query", async (connection) => { const rows = await connection.write("/interface/print"); return (Array.isArray(rows) ? rows : []).filter((item) => { const type = this._str(item.type).toLowerCase(); return ["ether","ethernet","sfp","sfp-sfpplus","sfpplus","bridge","vlan","pppoe","lte","bonding"].some((allowed) => type.includes(allowed)); }).map((item) => ({ name: this._str(item.name), type: this._str(item.type) || "unknown", running: this._bool(item.running), disabled: this._bool(item.disabled), comment: this._str(item.comment) })).filter((item) => item.name); }); }
   async getInterfaceTraffic(interfaceName) { const name = String(interfaceName || "").trim(); if (!name || name.length > 100) throw new Error("MikroTik traffic query failed: a valid interface name is required."); return this._withConnection("traffic query for " + name, async (connection) => { const rows = await connection.write("/interface/monitor-traffic", ["=interface=" + name, "=once=true"]); const traffic = this._firstRow(rows, "traffic query"); const rxBitsPerSecond = this._number(traffic["rx-bits-per-second"]); const txBitsPerSecond = this._number(traffic["tx-bits-per-second"]); return { interface: name, rxBitsPerSecond, txBitsPerSecond, rxMbps: Number((rxBitsPerSecond / 1000000).toFixed(3)), txMbps: Number((txBitsPerSecond / 1000000).toFixed(3)), rxKbps: Number((rxBitsPerSecond / 1000).toFixed(1)), txKbps: Number((txBitsPerSecond / 1000).toFixed(1)), timestamp: new Date().toISOString() }; }); }
+  async getPppoeLiveTraffic(username) {
+    const name=String(username||"").trim();
+    if(!name||name.length>100)throw new Error("A valid PPPoE username is required.");
+    return this._withConnection("live PPPoE traffic for "+name,async(connection)=>{
+      const sessions=await connection.write("/ppp/active/print");
+      const session=(Array.isArray(sessions)?sessions:[]).find(item=>this._str(item.name).toLowerCase()===name.toLowerCase()&&this._str(item.service).toLowerCase()==="pppoe");
+      if(!session)return {online:false,username:name,interface:"",download:"0 bps",upload:"0 bps",rxBitsPerSecond:0,txBitsPerSecond:0,bytesIn:0,bytesOut:0,uptime:"",ip:"",mac:"",timestamp:new Date().toISOString()};
+      const interfaces=await connection.write("/interface/print");
+      const interfaceRows=Array.isArray(interfaces)?interfaces:[];
+      const candidates=[this._str(session.interface),"<pppoe-"+name+">",name].filter(Boolean);
+      const iface=candidates.map(candidate=>interfaceRows.find(row=>this._str(row.name).toLowerCase()===candidate.toLowerCase())).find(Boolean)
+        ||interfaceRows.find(row=>this._str(row.name).toLowerCase().includes(name.toLowerCase())&&this._bool(row.running)&&this._str(row.type).toLowerCase().includes("pppoe"));
+      let rxBitsPerSecond=0,txBitsPerSecond=0,interfaceName=this._str(iface?.name);
+      if(interfaceName){
+        try{
+          const rows=await connection.write("/interface/monitor-traffic",["=interface="+interfaceName,"=once="]);
+          const traffic=this._firstRow(rows,"live PPPoE traffic");
+          rxBitsPerSecond=this._number(traffic["rx-bits-per-second"]);
+          txBitsPerSecond=this._number(traffic["tx-bits-per-second"]);
+        }catch(error){console.warn("[MikroTik live traffic] monitor-traffic unavailable for "+interfaceName+": "+error.message);}
+      }
+      const rate=value=>value>=1000000?(value/1000000).toFixed(2)+" Mbps":value>=1000?(value/1000).toFixed(1)+" Kbps":Math.round(value)+" bps";
+      return {online:true,username:name,interface:interfaceName,download:rate(rxBitsPerSecond),upload:rate(txBitsPerSecond),rxBitsPerSecond,txBitsPerSecond,bytesIn:this._number(session["bytes-in"]),bytesOut:this._number(session["bytes-out"]),uptime:this._str(session.uptime),ip:this._str(session.address),mac:this._str(session["caller-id"]),sessionId:this._str(session[".id"]),timestamp:new Date().toISOString()};
+    });
+  }
 
   async fetchExistingProfiles() {
     return this._withConnection("PPPoE profile sync", async (connection) => {
