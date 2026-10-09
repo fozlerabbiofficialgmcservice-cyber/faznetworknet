@@ -11,6 +11,10 @@ test("default branding and billing policy are conservative",()=>{
 });
 test("outbound SMS remains disabled until explicitly configured",()=>{
  assert.equal(service.DEFAULTS.sms_gateway_mode,"disabled");
+ assert.equal(service.DEFAULTS.sms_provider_mode,"disabled");
+ assert.match(service.DEFAULTS.sms_template_expiry_warning,/{expiry_date}/);
+ assert.match(service.DEFAULTS.sms_template_payment_receipt,/{trx_id}/);
+ assert.match(service.DEFAULTS.sms_template_line_block,/{support_phone}/);
  assert.equal(service.DEFAULTS.sms_event_expiry_warning,"true");
  assert.equal(service.DEFAULTS.sms_event_payment_receipt,"true");
  assert.equal(service.DEFAULTS.sms_event_line_expiry,"true");
