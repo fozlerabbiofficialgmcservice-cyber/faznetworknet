@@ -2553,13 +2553,20 @@ async function deletePlan(id,name){
         }
 
         function customerStatus(user) {
-            const expiry = String(user?.expiry_date || '').trim();
+            const expiry = String(user?.expiration_date || user?.expiry_date || '').trim();
             let expired = false;
             if (/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
                 const expDateObj = new Date(expiry + 'T23:59:59.999+06:00');
                 expired = !Number.isNaN(expDateObj.getTime()) && Date.now() > expDateObj.getTime();
+            } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(expiry)) {
+                const parsed = FazDate.parse(expiry);
+                if (parsed) {
+                    const endOfDay = new Date(parsed.getTime() + 86400000 - 1);
+                    expired = Date.now() > endOfDay.getTime();
+                }
             }
-            if (expired || String(user?.computed_status || '').toLowerCase() === 'expired') return { key: 'expired_status', cls: 'bg-danger', online: false };
+            // Ignore stale router/computed flags when the canonical customer expiry is still valid.
+            if (expired || (!expiry && String(user?.computed_status || '').toLowerCase() === 'expired')) return { key: 'expired_status', cls: 'bg-danger', online: false };
             if (user?.online) return { key: 'online_status', cls: 'bg-success', online: true };
             return { key: 'offline_status', cls: 'bg-secondary', online: false };
         }
