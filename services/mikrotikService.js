@@ -114,7 +114,7 @@ class MikroTikService {
         }catch(error){console.warn("[MikroTik live traffic] monitor-traffic unavailable for "+interfaceName+": "+error.message);}
       }
       const rate=value=>value>=1000000?(value/1000000).toFixed(2)+" Mbps":value>=1000?(value/1000).toFixed(1)+" Kbps":Math.round(value)+" bps";
-      return {online:true,username:name,interface:interfaceName,download:rate(rxBitsPerSecond),upload:rate(txBitsPerSecond),rxBitsPerSecond,txBitsPerSecond,bytesIn:this._number(iface?.["rx-byte"]??session["bytes-in"]),bytesOut:this._number(iface?.["tx-byte"]??session["bytes-out"]),downloadBytes:this._number(iface?.["tx-byte"]??session["bytes-out"]),uploadBytes:this._number(iface?.["rx-byte"]??session["bytes-in"]),uptime:this._str(session.uptime),ip:this._str(session.address),mac:this._str(session["caller-id"]),sessionId:this._str(session[".id"]),timestamp:new Date().toISOString()};
+      return {online:true,username:name,interface:interfaceName,download:rate(txBitsPerSecond),upload:rate(rxBitsPerSecond),rxBitsPerSecond,txBitsPerSecond,bytesIn:this._number(iface?.["rx-byte"]??session["bytes-in"]),bytesOut:this._number(iface?.["tx-byte"]??session["bytes-out"]),downloadBytes:this._number(iface?.["tx-byte"]??session["bytes-out"]),uploadBytes:this._number(iface?.["rx-byte"]??session["bytes-in"]),uptime:this._str(session.uptime),ip:this._str(session.address),mac:this._str(session["caller-id"]),sessionId:this._str(session[".id"]),timestamp:new Date().toISOString()};
     });
   }
 
