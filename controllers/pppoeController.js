@@ -96,7 +96,7 @@ async function syncFromRouter() {
       // Router-only PPPoE users must also appear in All Customers, which reads
       // from the customers table. Create a minimal import record only when no
       // billing customer exists; never overwrite existing billing/payment data.
-      const importedName = (String(comment).match(/Customer:\\s*([^|]+)/i)?.[1] || user.name).trim().slice(0, 200);
+      const importedName = (String(comment).match(/Customer:\s*([^|]+)/i)?.[1] || user.name).trim().slice(0, 200);
       const importedPhone = extractPhone(comment) || ("SYNC-" + String(user.name).trim()).slice(0, 40);
       const importedExpiry = extractExpiryDate(comment) || null;
       const importedProfile = String(user.profile || "Imported").trim().slice(0, 100);
