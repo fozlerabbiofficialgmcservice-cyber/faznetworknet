@@ -197,6 +197,20 @@ CREATE INDEX IF NOT EXISTS idx_customers_area_zone ON customers(area_zone);
 
 
 -- Enterprise customer 360 audit trail.
+-- Report suite: operational expenses.
+CREATE TABLE IF NOT EXISTS expenses (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(160) NOT NULL,
+  category VARCHAR(80) NOT NULL,
+  amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+  date DATE NOT NULL,
+  notes TEXT,
+  created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_category_date ON expenses(category,date DESC);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id BIGSERIAL PRIMARY KEY,
   customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
