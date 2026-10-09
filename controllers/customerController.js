@@ -109,9 +109,10 @@ function nextBillingExpiryDate(currentExpiry,cycleValue,durationDaysValue) {
 }
 function validDateOnly(value) {
   const raw=clean(value,20);
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
-  const [year,month,day]=raw.split("-").map(Number),date=new Date(Date.UTC(year,month-1,day));
-  return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
+  // Accept the strict UI format DD/MM/YYYY and legacy API ISO dates only.
+  // normalizeDate validates calendar ranges without locale-dependent parsing.
+  if(!/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(raw)&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw))return false;
+  return Boolean(normalizeDate(raw));
 }
 function expirationEndOfDay(expirationDate) {
   const raw = normalizeDate(expirationDate);
