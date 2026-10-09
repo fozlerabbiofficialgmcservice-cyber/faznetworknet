@@ -35,7 +35,7 @@ function decorate(row,poolMap){
 
 async function list(req,res){
   try{
-    const [result,routerPools]=await Promise.all([db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template-%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal-%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system-%' ORDER BY plan_name"),mikrotikService.getIpPools()]);
+    const [result,routerPools]=await Promise.all([db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system%' ORDER BY plan_name"),mikrotikService.getIpPools()]);
     const poolMap=new Map(routerPools.map(x=>[String(x.name).toLowerCase(),x]));
     res.json({success:true,packages:result.rows.map(row=>decorate(row,poolMap))});
   }catch(e){errorResponse(res,e);}
@@ -218,6 +218,7 @@ async function sync(req,res){
     );
 
     const rows=profiles
+      .filter(profile=>!isSystemProfile(profile.name))
       .map(profile=>{
         const raw=profile.raw||{};
         const name=String(profile.name||"").trim();
