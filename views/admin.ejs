@@ -2539,6 +2539,7 @@ async function deletePlan(id,name){
             }
             if (!raw) return '-';
             if (/^(?:EXPIRED_|UNLIMITED)/i.test(raw)) return 'EXP: ' + raw;
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return 'EXP: ' + FazDate.formatDate(raw) + ', 12:00 AM';
             try {
                 const source = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw + 'T00:00:00+06:00' : raw;
                 const date = new Date(source);
