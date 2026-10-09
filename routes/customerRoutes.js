@@ -8,6 +8,7 @@ router.post("/",controller.createCustomer);
 router.post("/provision",controller.createCustomer);
 router.post("/customers",controller.createCustomer);
 router.get("/profile",controller.profile);
+router.get("/:id/audit-logs",controller.getAuditLogs);
 router.get("/:id/profile",controller.getCustomerProfileById);
 router.put("/:id",controller.updateCustomer);
 router.delete("/:id",controller.removeCustomer);
