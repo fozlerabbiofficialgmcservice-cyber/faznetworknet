@@ -1,7 +1,7 @@
 const { RouterOSAPI } = require("node-routeros");
 
-const CONNECTION_TIMEOUT_MS = 4000;
-const OPERATION_TIMEOUT_MS = 4000;
+const CONNECTION_TIMEOUT_MS = 3000;
+const OPERATION_TIMEOUT_MS = 3000;
 const DEFAULT_PORT = 8728;
 
 class MikroTikService {
