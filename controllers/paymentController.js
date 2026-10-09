@@ -84,6 +84,7 @@ async function list(req,res){
  }catch(e){return errorResponse(res,e,503);}
 }
 async function manualMatch(req,res){
+ let claimedTransactionId=null;
  try{
   const trxId=String(req.body.trxId||req.body.trxid||req.body.txnId||"").trim().toUpperCase();
   const username=String(req.body.username||"").trim();
@@ -101,10 +102,22 @@ async function manualMatch(req,res){
   if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:"Payment rejected. Exact bill amount of ৳"+expected.toFixed(2)+" is required to activate or renew service.",expectedAmount:expected,paidAmount:Number(tx.amount)});
   const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND used=false AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
+  claimedTransactionId=tx.id;
   const expiration=await renewCustomer(customer);
-  await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true",[user.rows[0].username,tx.id]);
+  const finalized=await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
+  if(!finalized.rows.length)throw new Error("Customer renewal completed but payment finalization failed; transaction recovery was attempted.");
+  claimedTransactionId=null;
   return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
- }catch(e){return errorResponse(res,e,503);}
+ }catch(e){
+  if(claimedTransactionId!==null){
+   try{
+    const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);
+    if(!rollback.rows.length)console.error("[Manual Match] Claim rollback found no processing row for transaction",claimedTransactionId);
+   }catch(rollbackError){console.error("[Manual Match] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
+  }
+  console.error("[Manual Match] Renewal failed:",e?.message||e);
+  return errorResponse(res,e,500);
+ }
 }
 async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status IN ('processed','PAID')) AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:r.rows});}catch(e){return errorResponse(res,e,503);}}
 
@@ -170,16 +183,19 @@ async function verifyTrx(req,res){
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
   claimedTransactionId=tx.id;
   await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+cleanTrx+" | Paid: ৳"+amount});
-  await db.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing'",[phone,tx.id]);
+  const finalized=await db.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);
+  if(!finalized.rows.length)throw new Error("Hotspot provisioning completed but payment finalization failed.");
   claimedTransactionId=null;
   return res.json({success:true,message:'সফল হয়েছে!',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){
   if(claimedTransactionId!==null){
-   // Keep the claim locked on an ambiguous RouterOS/database failure. Automatically
-   // releasing it could allow a retry to reset an already-created user's quota.
-   console.error("[VERIFY-TRX] Transaction "+claimedTransactionId+" remains processing for reconciliation:",e?.message||e);
+   try{
+    const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);
+    if(!rollback.rows.length)console.error("[VERIFY-TRX] Claim rollback found no processing row for transaction",claimedTransactionId);
+   }catch(rollbackError){console.error("[VERIFY-TRX] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
   }
-  return errorResponse(res,e,503);
+  console.error("[VERIFY-TRX] Provisioning failed:",e?.message||e);
+  return errorResponse(res,e,500);
  }
 }
 
