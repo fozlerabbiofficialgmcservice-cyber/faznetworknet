@@ -242,7 +242,7 @@ class MikroTikService {
         catch(error) { failed++; results.push({username,status:"failed",reason:error && error.message ? error.message : "RouterOS update failed."}); }
       }
       return {total:customers.length,updated,skipped,failed,results};
-    });
+    }, undefined, 90000);
   }
   async fetchExistingSecrets() {
     return this._withConnection("PPPoE secret sync", async (connection) => {
