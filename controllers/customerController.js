@@ -302,6 +302,18 @@ async function createCustomer(req, res) {
   }
 }
 
+async function syncExpiryDatesToMikroTik(req,res){
+  try{
+    const result=await db.query("SELECT id,username,expiration_date FROM customers WHERE username IS NOT NULL AND BTRIM(username)<>'' ORDER BY COALESCE(created_at,'1970-01-01'::timestamp) ASC, username ASC, id ASC");
+    const customers=result.rows.map(row=>({username:clean(row.username,100),expiryDate:normalizeDate(row.expiration_date)}));
+    const eligible=customers.filter(row=>row.username&&row.expiryDate);
+    const sync=await mikrotikService.syncPppoeExpiryComments(eligible);
+    const successful=(sync.results||[]).filter(item=>item.status==='updated').map(item=>item.username.toLowerCase());
+    if(successful.length) await db.query("UPDATE pppoe_users u SET comment='EXP: ' || c.expiration_date::text, expiry_date=c.expiration_date, synced_at=NOW(), updated_at=NOW() FROM customers c WHERE LOWER(u.username)=LOWER(c.username) AND LOWER(u.username)=ANY($1::text[])",[successful]);
+    const skipped=(customers.length-eligible.length)+(sync.skipped||0);
+    return res.json({success:(sync.failed||0)===0,total:customers.length,eligible:eligible.length,updated:sync.updated||0,skipped,failed:sync.failed||0,results:sync.results||[],message:"EXP dates pushed to MikroTik. PPPoE profiles, passwords, and disabled states were not changed."});
+  }catch(error){console.error("[CUSTOMER EXP SYNC]",error);return res.status(503).json({success:false,message:error.message||"Unable to sync customer expiry dates to MikroTik."});}
+}
 async function listCustomers(req,res){
   try{
     const requestedStatus=clean(req.query?.status||"all",20).toLowerCase();
@@ -1092,4 +1104,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik };
