@@ -1,15 +1,23 @@
 function parseDateOnlyInDhaka(value) {
   if (value == null || value === "") return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  if (value instanceof Date) { if (Number.isNaN(value.getTime())) return null; const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value); const part = type => parts.find(item => item.type === type)?.value; return new Date(Date.UTC(Number(part("year")), Number(part("month")) - 1, Number(part("day")))); }
   if (typeof value === "string") {
     const raw = value.trim();
     // PostgreSQL DATE and ISO timestamp values are year-first.
-    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T|\s)/);
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (iso) {
       const year = Number(iso[1]), month = Number(iso[2]), day = Number(iso[3]);
       const parsed = new Date(Date.UTC(year, month - 1, day));
       if (parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day) return parsed;
       return null;
+    }
+    // ISO timestamp strings represent instants and must use Bangladesh's calendar date.
+    if (/^\d{4}-\d{2}-\d{2}[T\s]/.test(raw)) {
+      const instant = new Date(raw);
+      if (Number.isNaN(instant.getTime())) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant);
+      const part = type => parts.find(item => item.type === type)?.value;
+      return new Date(Date.UTC(Number(part("year")), Number(part("month")) - 1, Number(part("day"))));
     }
     // Human-entered dates are always day-first. Never pass DD/MM/YYYY to Date().
     const dayFirst = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s|$)/);
