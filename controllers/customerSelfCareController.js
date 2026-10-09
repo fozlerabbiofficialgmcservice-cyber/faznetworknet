@@ -2,7 +2,10 @@ const crypto=require("crypto");
 const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 const COOKIE="faz_customer_session",SESSION_SECONDS=43200;
-const secret=()=>String(process.env.CUSTOMER_SESSION_SECRET||process.env.SESSION_SECRET||process.env.ADMIN_SESSION_SECRET||"").trim();
+const rootSecret=String(process.env.CUSTOMER_SESSION_SECRET||"").trim();
+const secret=()=>rootSecret?crypto.createHmac("sha256",rootSecret).update("faznetwork:customer-self-care:session-v1").digest("hex"):"";
+const loginAttempts=new Map();
+function allowLogin(ip){const now=Date.now(),key=String(ip||"unknown"),b=loginAttempts.get(key)||{start:now,count:0};if(now-b.start>60000){b.start=now;b.count=0;}b.count++;loginAttempts.set(key,b);return b.count<=8;}
 function sign(v){return crypto.createHmac("sha256",secret()).update(v).digest("base64url");}
 function issueToken(p){if(!secret())throw new Error("Customer session signing secret is not configured.");const h=Buffer.from(JSON.stringify({alg:"HS256",typ:"JWT"})).toString("base64url"),b=Buffer.from(JSON.stringify({...p,iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+SESSION_SECONDS})).toString("base64url"),u=h+"."+b;return u+"."+sign(u);}
 function readToken(req){const raw=String(req.headers.cookie||"").split(";").map(x=>x.trim()).find(x=>x.startsWith(COOKIE+"="))?.slice(COOKIE.length+1);if(!raw||!secret())return null;try{const t=decodeURIComponent(raw),p=t.split("."),expected=sign(p[0]+"."+p[1]);if(p.length!==3||p[2].length!==expected.length||!crypto.timingSafeEqual(Buffer.from(p[2]),Buffer.from(expected)))return null;const d=JSON.parse(Buffer.from(p[1],"base64url").toString("utf8"));return d.sub&&["pppoe","hotspot"].includes(d.type)&&Number(d.exp)>Math.floor(Date.now()/1000)?d:null;}catch(_){return null;}}
@@ -15,6 +18,8 @@ async function passwordMatches(input,stored){const p=String(input??""),s=String(
 function daysLeft(v){if(!v)return null;const d=String(v).slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return null;const t=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());return Math.ceil((Date.parse(d+"T00:00:00Z")-Date.parse(t+"T00:00:00Z"))/86400000);}
 function gb(v){return Number((Math.max(0,Number(v)||0)/1073741824).toFixed(2));}
 async function login(req,res){
+ if(!allowLogin(req.ip))return res.status(429).json({success:false,message:"Too many login attempts. Wait one minute and try again."});
+ if(!rootSecret)return res.status(503).json({success:false,message:"Customer login is not configured yet. Please contact FAZ NETWORK support."});
  try{
   const type=clean(req.body?.type||req.body?.accountType,20).toLowerCase(),identifier=clean(req.body?.identifier||req.body?.username||req.body?.phone,120),password=String(req.body?.password??"");
   if(!["pppoe","hotspot"].includes(type))return res.status(400).json({success:false,message:"Choose PPPoE or Hotspot subscriber login."});
@@ -23,7 +28,7 @@ async function login(req,res){
   if(type==="hotspot"){
    const p=phone(identifier);if(!validPhone(p)||password!==p)return res.status(401).json({success:false,message:"Hotspot login requires the 11-digit mobile number as both username and password."});
    let u=null;try{u=await mikrotikService.getHotspotUser(p)}catch(e){console.warn("[Self-care] Hotspot lookup:",e.message)}
-   if(u&&!u.disabled&&(u.password===p||!u.password)){subject=u.username;name=u.username;mobile=p;}
+   if(u&&!u.disabled&&u.password===p){subject=u.username;name=u.username;mobile=p;}
    else{const q=await db.query("SELECT username,password,status FROM hotspot_vouchers WHERE username=$1 LIMIT 1",[p]).catch(()=>({rows:[]}));if(!q.rows.length||q.rows[0].status==="expired"||!(await passwordMatches(p,q.rows[0].password)))return res.status(401).json({success:false,message:"Hotspot account not found or mobile-number login is not enabled."});subject=q.rows[0].username;name=subject;mobile=p;}
   }else{
    const p=phone(identifier),q=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) OR phone=$2 LIMIT 1",[identifier,p]),c=q.rows[0]||null,username=c?.username||identifier;
