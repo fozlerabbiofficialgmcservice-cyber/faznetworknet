@@ -170,3 +170,34 @@ test("verifyTrx releases the claim if RouterOS provisioning fails",async()=>{
     mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;
   }
 });
+
+
+test("verifyTrx atomic claim allows only one concurrent RouterOS recharge",async()=>{
+  const originalQuery=db.query,originalWithTransaction=db.withTransaction,originalProfiles=mikrotik.getHotspotProfiles,originalRecharge=mikrotik.rechargeHotspotUser;
+  let claimAttempts=0,rechargeCount=0;
+  try{
+    db.query=async(sql,params=[])=>{
+      if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:113,trx_id:"CONCURRENT-113",amount:15,used:false,status:"unmatched",matched_username:null}]};
+      if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
+      if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
+      if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.includes("SET used=true,status='processing'")){claimAttempts++;return claimAttempts===1?{rows:[{id:113}]}:{rows:[]};}
+      if(sql.includes("SELECT status,used FROM transactions"))return {rows:[{status:"processing",used:true}]};
+      throw new Error("Unexpected SQL in test: "+sql);
+    };
+    mikrotik.getHotspotProfiles=async()=>[{name:"Weekend",sessionTimeout:"1d"}];
+    mikrotik.rechargeHotspotUser=async()=>{rechargeCount++;return {username:"01712345678"};};
+    db.withTransaction=async callback=>callback({query:async(sql,params=[])=>{if(sql.startsWith("UPDATE transactions"))return {rows:[{id:params[1]}]};throw new Error("Unexpected transactional SQL: "+sql);}});
+    const a=responseRecorder(),b=responseRecorder();
+    await Promise.all([
+      paymentController.verifyTrx({ip:"test-concurrent-a",body:{phone:"01712345678",trxId:"CONCURRENT-113"}},a),
+      paymentController.verifyTrx({ip:"test-concurrent-b",body:{phone:"01712345678",trxId:"CONCURRENT-113"}},b)
+    ]);
+    assert.equal(claimAttempts,2);
+    assert.equal(rechargeCount,1,"only the winning atomic claim may invoke RouterOS");
+    assert.deepEqual([a.statusCode,b.statusCode].sort(),[200,409]);
+  }finally{
+    db.query=originalQuery;db.withTransaction=originalWithTransaction;
+    mikrotik.getHotspotProfiles=originalProfiles;mikrotik.rechargeHotspotUser=originalRecharge;
+  }
+});
