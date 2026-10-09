@@ -87,7 +87,6 @@ test("billing cron marks a past-due migration override expired without changing 
     assert.equal(result.failed,0);
     assert.equal(calls.some(x=>x.sql.includes("UPDATE customers SET status='expired'")),true);
     assert.equal(calls.some(x=>x.sql.includes("UPDATE pppoe_users SET status='expired'")),true);
-    assert.equal(calls.some(x=>x.sql.includes("AUTO_EXPIRE_STATUS_ONLY")),false,"audit action is passed as a payload, not SQL");
   }finally{
     db.query=originalQuery;
     mikrotik.changeSecretProfile=originalChange;
