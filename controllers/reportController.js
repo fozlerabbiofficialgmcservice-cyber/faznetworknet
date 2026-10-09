@@ -23,7 +23,7 @@ async function due(req,res){try{
  if(status==="overdue")where.push("(LOWER(COALESCE(c.billing_status,'')) IN ('overdue','unpaid') OR c.expiration_date<CURRENT_DATE)");
  const [result,summary,packages]=await Promise.all([
  db.query(`SELECT c.id,c.full_name,c.username,c.phone,c.package_name,c.monthly_bill,c.expiration_date,GREATEST(0,CURRENT_DATE-COALESCE(c.expiration_date,CURRENT_DATE))::int days_overdue,c.billing_status FROM customers c WHERE ${where.join(" AND ")} ORDER BY c.expiration_date ASC NULLS FIRST,c.full_name ASC LIMIT 3000`,params),
- db.query("SELECT COALESCE(SUM(monthly_bill),0)::numeric(14,2) outstanding,COUNT(*)::int subscribers FROM customers c WHERE c.status NOT IN ('left','inactive') AND (c.expiration_date<CURRENT_DATE OR c.expiration_date IS NULL OR LOWER(COALESCE(c.billing_status,'')) IN ('overdue','expired','unpaid'))"),
+ db.query(`SELECT COALESCE(SUM(c.monthly_bill),0)::numeric(14,2) outstanding,COUNT(*)::int subscribers FROM customers c WHERE ${where.join(" AND ")}`,params),
  db.query("SELECT DISTINCT package_name FROM customers WHERE package_name IS NOT NULL ORDER BY package_name")]);
  res.json({success:true,summary:summary.rows[0],packages:packages.rows.map(r=>r.package_name),rows:result.rows});
  }catch(e){console.error("[Reports:due]",e);res.status(500).json({success:false,message:"Unable to load due summary."})}}
