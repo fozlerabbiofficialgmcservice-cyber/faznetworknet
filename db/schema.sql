@@ -191,7 +191,8 @@ ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK(status IN ('ac
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_channel_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_channel_check CHECK(channel IN ('bkash','nagad','rocket','upay','cash'));
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
-ALTER TABLE transactions ADD CONSTRAINT transactions_status_check CHECK(status IN ('processed','unmatched','duplicate','PAID'));
+-- Hotspot verification claims a transaction before calling RouterOS; keep this state durable on ambiguous failures.
+ALTER TABLE transactions ADD CONSTRAINT transactions_status_check CHECK(status IN ('processed','unmatched','duplicate','PAID','processing'));
 CREATE INDEX IF NOT EXISTS idx_customers_area_zone ON customers(area_zone);
 
 
