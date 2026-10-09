@@ -2,7 +2,7 @@
 const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{};
 const brandName=String(brand.company_name||"FAZ NETWORK");
 const safeOfficeAddress=String(brand.office_address|| (typeof officeAddress!=="undefined"?officeAddress:"FAZ NETWORK, Bangladesh"));
-const safeWhatsapp=String(brand.whatsapp_number||"8801339932887").replace(/\D/g,"");
+const safeWhatsapp=String(brand.whatsapp_number||"").replace(/\D/g,"");
 const copyrightText=String(brand.footer_copyright||"© {year} {company_name}. All Rights Reserved.").replace(/\{year\}/g,String(new Date().getFullYear())).replace(/\{company_name\}/g,brandName);
 const safeHelpline=String(typeof helpline!=="undefined"?helpline:"01339932887");
 const isExcludedPublicPlan=value=>/(expired|ex-|disabled|block|default|vpn)/i.test(String(value??""));
@@ -175,7 +175,7 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
 </div>
 
 <div id="supportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 p-4">
-  <div class="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl"><div class="flex justify-between"><h2 class="text-2xl font-black">FAZ NETWORK Support</h2><button id="closeSupport" class="text-2xl text-slate-400">×</button></div><p class="mt-4 text-slate-500">24/7 customer assistance</p><div class="mt-5 space-y-3"><a class="block rounded-xl bg-cyan-50 p-4 font-bold text-cyan-700" href="tel:<%= esc(safeHelpline) %>">☎ Call <%= esc(safeHelpline) %></a><a class="block rounded-xl bg-emerald-50 p-4 font-bold text-emerald-700" href="https://wa.me/<%= esc(safeWhatsapp) %>" target="_blank" rel="noopener">💬 WhatsApp Support</a><div class="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">⌂ <%= esc(safeOfficeAddress) %></div></div></div>
+  <div class="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl"><div class="flex justify-between"><h2 class="text-2xl font-black">FAZ NETWORK Support</h2><button id="closeSupport" class="text-2xl text-slate-400">×</button></div><p class="mt-4 text-slate-500">24/7 customer assistance</p><div class="mt-5 space-y-3"><a class="block rounded-xl bg-cyan-50 p-4 font-bold text-cyan-700" href="tel:<%= esc(safeHelpline) %>">☎ Call <%= esc(safeHelpline) %></a><% if (safeWhatsapp) { %><a class="block rounded-xl bg-emerald-50 p-4 font-bold text-emerald-700" href="https://wa.me/<%= esc(safeWhatsapp) %>" target="_blank" rel="noopener">💬 WhatsApp Support</a><% } %><div class="rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">⌂ <%= esc(safeOfficeAddress) %></div></div></div>
 </div>
 
 <script>
