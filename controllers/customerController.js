@@ -57,10 +57,18 @@ function errorResponse(res, error) {
 }
 
 function normalizeDate(value) {
-  const raw = clean(value, 20);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
-  const date = new Date(raw + "T00:00:00Z");
-  return Number.isNaN(date.getTime()) ? "" : raw;
+  const raw = clean(value, 30);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? raw : "";
+  }
+  const dayFirst = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!dayFirst) return "";
+  const day = Number(dayFirst[1]), month = Number(dayFirst[2]), year = Number(dayFirst[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+  return [year, String(month).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
 }
 
 function bangladeshToday() {
