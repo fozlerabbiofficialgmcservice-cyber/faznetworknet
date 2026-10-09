@@ -8,7 +8,8 @@ function normalizePhone(value){const bangla="০১২৩৪৫৬৭৮৯";let
 function moneyCents(v){const n=Number(v);return Number.isFinite(n)?Math.round(n*100):NaN;}
 function addCalendarMonths(v,months){const d=new Date(String(v||"")+"T00:00:00Z");if(Number.isNaN(d.getTime()))return null;const day=d.getUTCDate(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+Number(months),1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(day,last));return t.toISOString().slice(0,10);}
 async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p.plan_name,p.pool_name,p.price,p.duration_months,p.profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]);return r.rows[0]||null;}
-async function renewCustomer(c){const expiration=addCalendarMonths(new Date().toISOString().slice(0,10),Math.max(1,Number(c.duration_months||1))),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});await mikrotikService.kickActiveUser(c.username);await db.query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,profile,c.price,expiration,c.id]);await db.query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[profile,pool,expiration,comment,c.username]);return expiration;}
+async function renewCustomer(c,{persist=true,query=db.query}={}){const expiration=addCalendarMonths(new Date().toISOString().slice(0,10),Math.max(1,Number(c.duration_months||1))),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});await mikrotikService.kickActiveUser(c.username);const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
+async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
 async function webhook(req,res){
  try{
   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret')");
@@ -84,7 +85,7 @@ async function list(req,res){
  }catch(e){return errorResponse(res,e,503);}
 }
 async function manualMatch(req,res){
- let claimedTransactionId=null;
+ let claimedTransactionId=null,routerSucceeded=false;
  try{
   const trxId=String(req.body.trxId||req.body.trxid||req.body.txnId||"").trim().toUpperCase();
   const username=String(req.body.username||"").trim();
@@ -103,17 +104,20 @@ async function manualMatch(req,res){
   const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND used=false AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
   claimedTransactionId=tx.id;
-  const expiration=await renewCustomer(customer);
-  const finalized=await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
-  if(!finalized.rows.length)throw new Error("Customer renewal completed but payment finalization failed; transaction recovery was attempted.");
+  const renewal=await renewCustomer(customer,{persist:false});routerSucceeded=true;
+  await db.withTransaction(async client=>{
+   await persistCustomerRenewal(client.query.bind(client),customer,renewal);
+   const finalized=await client.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.rows[0].username,tx.id]);
+   if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
+  });
   claimedTransactionId=null;
-  return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
+  return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration:renewal.expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){
-  if(claimedTransactionId!==null){
-   try{
-    const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);
-    if(!rollback.rows.length)console.error("[Manual Match] Claim rollback found no processing row for transaction",claimedTransactionId);
-   }catch(rollbackError){console.error("[Manual Match] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
+  if(claimedTransactionId!==null&&!routerSucceeded){
+   try{const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);if(!rollback.rows.length)console.error("[Manual Match] Claim rollback found no processing row for transaction",claimedTransactionId);}
+   catch(rollbackError){console.error("[Manual Match] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
+  }else if(claimedTransactionId!==null&&routerSucceeded){
+   console.error("[CRITICAL_PARTIAL_PROVISION] Manual PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:req.body?.username,error:e?.message||String(e)});
   }
   console.error("[Manual Match] Renewal failed:",e?.message||e);
   return errorResponse(res,e,500);
@@ -128,7 +132,7 @@ async function verifyTrx(req,res){
  const body=req.body&&typeof req.body==="object"?req.body:{};
  const query=req.query&&typeof req.query==="object"?req.query:{};
  const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});
- let claimedTransactionId=null;
+ let claimedTransactionId=null,routerSucceeded=false;
  try{
   const phone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
   if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
@@ -183,16 +187,21 @@ async function verifyTrx(req,res){
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
   claimedTransactionId=tx.id;
   await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+cleanTrx+" | Paid: ৳"+amount});
-  const finalized=await db.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);
-  if(!finalized.rows.length)throw new Error("Hotspot provisioning completed but payment finalization failed.");
+  routerSucceeded=true;
+  await db.withTransaction(async client=>{
+   const finalized=await client.query("UPDATE transactions SET status='processed',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[phone,tx.id]);
+   if(!finalized.rows.length)throw new Error("Hotspot provisioning completed but payment finalization did not update the claimed transaction.");
+  });
   claimedTransactionId=null;
   return res.json({success:true,message:'সফল হয়েছে!',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){
-  if(claimedTransactionId!==null){
+  if(claimedTransactionId!==null&&!routerSucceeded){
    try{
     const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimedTransactionId]);
     if(!rollback.rows.length)console.error("[VERIFY-TRX] Claim rollback found no processing row for transaction",claimedTransactionId);
    }catch(rollbackError){console.error("[VERIFY-TRX] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
+  }else if(claimedTransactionId!==null&&routerSucceeded){
+   console.error("[CRITICAL_PARTIAL_PROVISION] Hotspot provisioning succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:phone,error:e?.message||String(e)});
   }
   console.error("[VERIFY-TRX] Provisioning failed:",e?.message||e);
   return errorResponse(res,e,500);
