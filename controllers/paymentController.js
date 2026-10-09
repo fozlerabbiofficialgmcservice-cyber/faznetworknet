@@ -227,7 +227,7 @@ async function verifyTrx(req,res){
     if(!rollback.rows.length)console.error("[VERIFY-TRX] Claim rollback found no processing row for transaction",claimedTransactionId);
    }catch(rollbackError){console.error("[VERIFY-TRX] Failed to rollback transaction claim",claimedTransactionId,rollbackError?.message||rollbackError);}
   }else if(claimedTransactionId!==null&&routerSucceeded){
-   console.error("[CRITICAL_PARTIAL_PROVISION] Hotspot provisioning succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:phone,error:e?.message||String(e)});
+   console.error("[CRITICAL_PARTIAL_PROVISION] Hotspot provisioning succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,username:body.username||body.phone||body.customer_phone||body.user||null,error:e?.message||String(e)});
   }
   console.error("[VERIFY-TRX] Provisioning failed:",e?.message||e);
   return errorResponse(res,e,500);
