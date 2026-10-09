@@ -65,7 +65,7 @@ async function sendNotification({to,phone,message,event,variables={},...extra}={
  const settings=await settingsService.getAllSettings();
  const config=EVENT_CONFIG[event];
  if(config&&!settingsService.bool(settings[config.enabled]))return {success:true,skipped:true,reason:"event_disabled"};
- const resolvedVariables={...extra,...variables};
+ const resolvedVariables={company_name:settings.company_name||"FAZ NETWORK",support_phone:settings.support_phone||"",...extra,...variables};
  const rendered=eventTemplate(settings,event,resolvedVariables,message);
  return sendSms({to,phone,message:rendered,event,variables:resolvedVariables});
 }
