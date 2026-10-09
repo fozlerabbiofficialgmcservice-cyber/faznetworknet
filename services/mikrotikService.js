@@ -1,4 +1,29 @@
-const { RouterOSAPI } = require("node-routeros");
+const RouterOS = require("node-routeros");
+const { RouterOSAPI } = RouterOS;
+
+// RouterOS v7.19+ may return "!empty" for a successful query with zero rows.
+// node-routeros treats every unknown sentence as a thrown RosException from an
+// EventEmitter callback; that exception can crash Node and take the whole panel
+// down (Customer 360 then shows a generic "Request failed"). Handle ONLY this
+// known empty-result sentence as a normal empty result; preserve other errors.
+const RouterOSChannel = RouterOS.Channel;
+if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyReply) {
+  const originalOnUnknown = RouterOSChannel.prototype.onUnknown;
+  RouterOSChannel.prototype.onUnknown = function(reply) {
+    if (reply === "!empty") {
+      const rows = Array.isArray(this.data) ? this.data : [];
+      this.emit("done", rows);
+      return;
+    }
+    return originalOnUnknown.call(this, reply);
+  };
+  Object.defineProperty(RouterOSChannel.prototype, "__fazHandlesEmptyReply", {
+    value: true,
+    configurable: false,
+    enumerable: false,
+    writable: false
+  });
+}
 
 const CONNECTION_TIMEOUT_MS = 3000;
 const OPERATION_TIMEOUT_MS = 3000;
