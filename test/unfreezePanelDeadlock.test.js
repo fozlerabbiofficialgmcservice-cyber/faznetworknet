@@ -41,7 +41,7 @@ test("admin inline script has no accidentally escaped line break before router t
   const admin = read("views/admin.ejs");
   assert.doesNotMatch(
     admin,
-    /Boolean\(d\.success\)\);\\\\n\s*document\.getElementById\('generalRouterTestBtn'\)/
+    /Boolean\(d\.success\)\);\\n\s*document\.getElementById\('generalRouterTestBtn'\)/
   );
   assert.match(
     admin,
