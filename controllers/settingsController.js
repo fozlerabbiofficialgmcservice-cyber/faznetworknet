@@ -35,7 +35,7 @@ async function saveHotspotWebhookSettings(req,res){try{const body=req.body||{},w
 const mikrotikService=require("../services/mikrotikService");
 const ROUTER_KEYS=["mikrotik_host","mikrotik_port","mikrotik_user","mikrotik_password"];
 const MFS_KEYS={bkash:"mfs_bkash_number",nagad:"mfs_nagad_number",rocket:"mfs_rocket_number",upay:"mfs_upay_number"};
-async function upsertSetting(key,value){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);}
+async function upsertSetting(key,value){await db.query("INSERT INTO app_settings(key,value,updated_at) VALUES($1,$2,NOW()) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()",[key,String(value??"")]);try{require("../services/appSettings").invalidate();}catch(_){}}
 async function getSettingsMap(keys){const result=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[keys]);return Object.fromEntries((result.rows||[]).map(row=>[row.key,row.value]));}
 async function generalSettings(req,res){
  try{
