@@ -1,4 +1,5 @@
 <!doctype html>
+<% const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{}; const brandName=String(brand.company_name||"FAZ NETWORK"); %>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><%= brandName %> · Customer 360</title><% if(brand.favicon_url){ %><link rel="icon" href="<%= brand.favicon_url %>"><% } %>
