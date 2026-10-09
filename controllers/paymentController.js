@@ -117,10 +117,10 @@ async function verifyTrx(req,res){
   if(!cleanTrx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
   console.log('[VERIFY-TRX QUERY PARAM]:', cleanTrx);
   const q=await db.query(`SELECT * FROM transactions
-     WHERE UPPER(TRIM(trx_id)) = $1
+     WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1))
        AND (used = false OR used IS NULL)
-       AND LOWER(TRIM(status)) IN ('unmatched', 'pending', 'received')
-     LIMIT 1;`,[cleanTrx]);
+       AND LOWER(TRIM(status)) IN ('unmatched', 'pending', 'received', 'paid')
+     LIMIT 1;`,[rawTrx]);
   console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
   if(!q.rows.length){
    const existing=await db.query("SELECT status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
@@ -152,7 +152,7 @@ async function verifyTrx(req,res){
   const claim=await db.query(`UPDATE transactions
      SET used=true,status='processing',matched_username=$1
      WHERE id=$2 AND (used=false OR used IS NULL)
-       AND LOWER(TRIM(status)) IN ('unmatched','pending','received')
+       AND LOWER(TRIM(status)) IN ('unmatched','pending','received','paid')
      RETURNING id;`,[phone,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
   claimedTransactionId=tx.id;

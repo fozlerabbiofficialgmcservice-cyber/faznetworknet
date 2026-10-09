@@ -1,6 +1,6 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {parseSms,extractWebhookPayload,extractAmount,extractTransactionId}=require("../../services/paymentWebhookParser");
+const {parseSms,extractWebhookPayload,extractAmount,extractTransactionId}=require("../services/paymentWebhookParser");
 
 test("parses bKash JSON gateway payload",()=>{
   const result=parseSms(

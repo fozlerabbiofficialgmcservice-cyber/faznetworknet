@@ -23,6 +23,7 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     db.query=async(sql,params=[])=>{
       if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:params[0]==="PRICE10"?72:71,trx_id:params[0],amount:params[0]==="PRICE10"?10:15,used:false,status:"PAID"}]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata)}]};
+      if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
@@ -79,6 +80,7 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
     db.query=async(sql,params=[])=>{
       if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched"}]};}
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
+      if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
       throw new Error("Unexpected SQL in test: "+sql);
     };
