@@ -2658,7 +2658,14 @@ async function deletePlan(id,name){
         async function deleteCustomer(customerId, username) {
             const id=String(customerId||'').trim(), name=String(username||'').trim();
             if(!id && !name)return;
+            if(!name){alert('Cannot safely delete this customer: PPPoE username is missing. No records were changed.');return;}
             if(!confirm('Are you sure you want to permanently delete "'+name+'" from MikroTik and Database?'))return;
+            const typedUsername=prompt('Type the exact PPPoE username "'+name+'" to confirm permanent deletion:');
+            if(typedUsername===null)return;
+            if(String(typedUsername).trim().toLowerCase()!==name.toLowerCase()){
+                alert('Username did not match. No customer records were deleted.');
+                return;
+            }
             const row=Array.from(document.querySelectorAll('#customerFilterBody tr[data-customer-row]')).find(function(el){
                 return String(el.dataset.customerId||el.dataset.id||'')===id;
             });
