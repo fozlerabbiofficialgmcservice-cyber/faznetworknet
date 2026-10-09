@@ -43,6 +43,7 @@ async function login(req,res){
 }
 function logout(req,res){clearCookie(res);return res.json({success:true});}
 async function profile(req,res){
+ res.set("Cache-Control","no-store, private");
  const s=readToken(req);if(!s)return res.status(401).json({success:false,message:"Please sign in to view your account."});
  try{
   if(s.type==="hotspot"){
@@ -62,6 +63,7 @@ async function profile(req,res){
  }catch(e){console.error("[Customer self-care profile]",e);return res.status(503).json({success:false,message:"Unable to load live account data right now."});}
 }
 async function renew(req,res){
+ res.set("Cache-Control","no-store, private");
  const s=readToken(req);if(!s)return res.status(401).json({success:false,message:"Please sign in first."});
  if(s.type!=="pppoe")return res.status(400).json({success:false,message:"This renewal form is for PPPoE subscribers."});
  const trx=clean(req.body?.trxId||req.body?.trx_id,100).toUpperCase();if(!trx)return res.status(400).json({success:false,message:"TrxID is required."});
