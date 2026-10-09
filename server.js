@@ -1,7 +1,7 @@
 process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
 const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
-const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
+const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 app.use(session({
@@ -85,8 +85,9 @@ app.post("*",paymentController.dynamicWebhook);app.use("/api/router",requireAdmi
 app.get("/pppoe",requireAdmin,(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireAdmin,(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireAdmin,(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));
-initializeDatabase().then(()=>startBillingCron()).catch(e=>{
+initializeDatabase().then(()=>{startBillingCron();startUsageCollector();}).catch(e=>{
   console.error("[Database] Startup initialization failed:",e.message);
   startBillingCron();
+  startUsageCollector();
 });
 module.exports=app;
