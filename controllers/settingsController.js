@@ -102,4 +102,68 @@ async function saveMfsAccounts(req,res){
  }catch(error){return errorResponse(res,error,400);}
 }
 
-module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts};
+
+const appSettingsService=require("../services/appSettings");
+const SETTINGS_RULES={
+ company_name:{max:160},public_base_url:{url:true,max:500},logo_url:{url:true,max:1000},favicon_url:{url:true,max:1000},
+ support_phone:{phone:true,max:40},whatsapp_number:{phone:true,max:24},office_address:{max:1000},btrc_license_number:{max:200},footer_copyright:{max:300},
+ billing_cycle_type:{oneOf:["monthly_1st","rolling_30"]},grace_period_days:{numberMin:0,numberMax:7},expiry_action:{oneOf:["quarantine","disable_secret"]},
+ personal_payment_webhook_url:{pathOrUrl:true,max:500},personal_payment_webhook_enabled:{bool:true},personal_payment_webhook_secret:{secret:true,max:300},
+ mfs_bkash_number:{phone:true,max:24},mfs_nagad_number:{phone:true,max:24},mfs_rocket_number:{phone:true,max:24},mfs_upay_number:{phone:true,max:24},
+ sms_gateway_mode:{oneOf:["bulk_sms","personal_device","disabled"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},
+ sms_device_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},
+ sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true}
+};
+function validateSettingValue(key,value,rule){
+ if(rule.bool)return parseBool(value)?"true":"false";
+ if(rule.oneOf&&!rule.oneOf.includes(String(value)))throw new Error("Invalid value for "+key+".");
+ if(rule.numberMin!==undefined){const n=Number(value);if(!Number.isInteger(n)||n<rule.numberMin||n>rule.numberMax)throw new Error(key+" must be between "+rule.numberMin+" and "+rule.numberMax+".");return String(n);}
+ let out=String(value??"").trim();
+ if(out.length>(rule.max||1000))throw new Error(key+" is too long.");
+ if(rule.phone&&out&&!/^[+()\\d\\s-]{6,40}$/.test(out))throw new Error("Enter a valid phone number for "+key+".");
+ if(rule.url&&out){let u;try{u=new URL(out);}catch(_){throw new Error(key+" must be a valid HTTP(S) URL.");}if(!["http:","https:"].includes(u.protocol))throw new Error(key+" must use HTTP or HTTPS.");out=u.toString();}
+ if(rule.pathOrUrl&&out)out=validateUrl(out);
+ return out;
+}
+async function getAllSettings(req,res){
+ try{
+  const map=await appSettingsService.getAllSettings();
+  const out={...map};
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","mikrotik_password"])delete out[key];
+  out.personal_payment_webhook_secret_configured=Boolean(map.personal_payment_webhook_secret);
+  out.sms_api_key_configured=Boolean(map.sms_api_key);
+  out.sms_device_token_configured=Boolean(map.sms_device_token);
+  return res.set("Cache-Control","no-store").json({success:true,settings:out});
+ }catch(error){return errorResponse(res,error,503);}
+}
+async function updateSettings(req,res){
+ try{
+  const input=req.body?.settings&&typeof req.body.settings==="object"?req.body.settings:(req.body||{});
+  const updates=[];
+  for(const [key,rule] of Object.entries(SETTINGS_RULES)){
+   if(!Object.prototype.hasOwnProperty.call(input,key))continue;
+   const raw=input[key];
+   if(rule.secret&&String(raw??"").trim()==="")continue;
+   updates.push([key,validateSettingValue(key,raw,rule)]);
+  }
+  if(!updates.length)throw new Error("No supported settings were supplied.");
+  for(const [key,value] of updates)await upsertSetting(key,value);
+  appSettingsService.invalidate();
+  const all=await appSettingsService.getAllSettings();
+  const safe={...all};
+  for(const key of ["personal_payment_webhook_secret","sms_api_key","sms_device_token","mikrotik_password"])delete safe[key];
+  safe.personal_payment_webhook_secret_configured=Boolean(all.personal_payment_webhook_secret);
+  safe.sms_api_key_configured=Boolean(all.sms_api_key);
+  safe.sms_device_token_configured=Boolean(all.sms_device_token);
+  return res.set("Cache-Control","no-store").json({success:true,message:"System settings saved. Cached branding/settings refreshed.",settings:safe,updatedKeys:updates.map(([key])=>key)});
+ }catch(error){return errorResponse(res,error,400);}
+}
+async function publicSettings(req,res){
+ try{
+  const brand=await appSettingsService.getBrandSettings();
+  const all=await appSettingsService.getAllSettings();
+  return res.set("Cache-Control","public, max-age=30").json({success:true,settings:{...brand,payment_accounts:{bkash:all.mfs_bkash_number||"",nagad:all.mfs_nagad_number||"",rocket:all.mfs_rocket_number||"",upay:all.mfs_upay_number||""}}});
+ }catch(error){return res.status(503).json({success:false,message:"Public settings temporarily unavailable."});}
+}
+
+module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts,getAllSettings,updateSettings,publicSettings};
