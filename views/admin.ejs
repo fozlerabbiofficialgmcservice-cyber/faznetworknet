@@ -796,7 +796,7 @@
                                     </div>
                                     <div class="col-lg-3">
                                         <label for="connectionDate" class="form-label">Connection Date <span class="text-danger">*</span></label>
-                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar3"></i></span><input type="text" class="form-control" id="connectionDate" placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar3"></i></span><input type="text" class="form-control" id="connectionDate" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
                                     </div>
                                 </div>
                             </div>
@@ -832,11 +832,11 @@
                                             <div class="row g-3">
                                                 <div class="col-md-6">
                                                     <label for="activationDate" class="form-label">Activation Date <span class="text-danger">*</span></label>
-                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-event"></i></span><input type="text" class="form-control" id="activationDate" placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
+                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-event"></i></span><input type="text" class="form-control" id="activationDate" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label for="expirationDate" class="form-label">Expiration Date <span class="text-danger">*</span></label>
-                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-x"></i></span><input type="text" class="form-control" id="expirationDate" placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
+                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-x"></i></span><input type="text" class="form-control" id="expirationDate" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
                                                 </div>
                                                 <div class="col-12">
                                                     <div class="small text-muted mb-2">Quick Duration</div>
@@ -1243,7 +1243,7 @@
                   <div class="col-md-8"><label class="form-label fw-semibold">Current Package / Profile</label><select id="cpPlan" class="form-select"></select></div>
                   <div class="col-md-4"><label class="form-label fw-semibold">Monthly Bill</label><input id="cpBillAmount" class="form-control fw-bold" readonly></div>
                   <div class="col-12"><div class="rounded-3 border border-success-subtle bg-success-subtle bg-opacity-25 p-3"><div class="small text-muted">Current Active Expiry / Next Bill Date</div><div id="cpCurrentExpiry" class="fs-5 fw-bold text-success">—</div><div id="cpCurrentCycle" class="small text-muted mt-1">Billing cycle: Monthly</div></div></div>
-                  <div class="col-md-6"><label class="form-label fw-semibold" for="cpExpiration">Billing Expiry Date / Next Due Date</label><input id="cpExpiration" type="text" class="form-control" placeholder="DD/MM/YYYY" pattern="\\d{2}/\\d{2}/\\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="cpExpiryHelp"><div id="cpExpiryHelp" class="form-text">Any past, present, or future date is allowed for migration.</div></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold" for="cpExpiration">Billing Expiry Date / Next Due Date</label><input id="cpExpiration" type="text" class="form-control" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="cpExpiryHelp"><div id="cpExpiryHelp" class="form-text">Any past, present, or future date is allowed for migration.</div></div>
                   <div class="col-md-6"><label class="form-label fw-semibold">Validity Countdown</label><div id="cpRemaining" class="form-control bg-light">—</div></div>
                   <div class="col-md-6"><label class="form-label fw-semibold" for="cpBillingCycle">Billing Duration / Cycle</label><select id="cpBillingCycle" class="form-select"><option value="monthly">Monthly</option><option value="15_days">15 Days</option><option value="30_days">30 Days</option><option value="custom_days">Custom Days</option></select></div>
                   <div class="col-md-6" id="cpCustomDaysWrap"><label class="form-label fw-semibold" for="cpBillingDays">Custom Duration (Days)</label><input id="cpBillingDays" type="number" min="1" max="3650" step="1" class="form-control" placeholder="e.g. 45"><div class="form-text">Used for the next renewal when Custom Days is selected.</div></div>
