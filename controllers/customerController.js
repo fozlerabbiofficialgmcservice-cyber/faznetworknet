@@ -139,7 +139,7 @@ function buildExpirationComment(fullName, phone, expirationDate, remarks) {
 }
 
 function extractExpirationDate(comment) {
-  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2}|\\d{2}\\/\\d{2}\\/\\d{4})/i);
+  const match = String(comment || "").match(/EXP:\s*(\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/i);
   return match ? normalizeDate(match[1]) : "";
 }
 
