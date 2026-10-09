@@ -3227,7 +3227,8 @@ async function deletePlan(id,name){
             if (!confirm('Push EXP: YYYY-MM-DD comments for all customers with valid expiry dates to MikroTik? Profiles, passwords, and disabled states will not be changed.')) return;
             const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Pushing EXP dates…';
             try {
-                const data = await jsonFetch('/api/customers/sync-expiry-dates', {method:'POST'});
+                const data = await jsonFetch('/api/customers/sync-expiry-dates', {method:'POST', timeout:90000});
+                if (!data || data.success === false) throw new Error(data?.message || 'EXP sync request failed.');
                 alert('EXP sync finished. Updated: ' + Number(data.updated || 0) + ', skipped: ' + Number(data.skipped || 0) + ', failed: ' + Number(data.failed || 0));
                 await fetchCustomers(); await refreshDashboard();
             } catch (error) { alert(error.message || 'Failed to push EXP dates to MikroTik.'); }
