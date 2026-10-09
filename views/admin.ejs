@@ -796,7 +796,7 @@
                                     </div>
                                     <div class="col-lg-3">
                                         <label for="connectionDate" class="form-label">Connection Date <span class="text-danger">*</span></label>
-                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar3"></i></span><input type="date" class="form-control" id="connectionDate" required></div>
+                                        <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar3"></i></span><input type="text" class="form-control" id="connectionDate" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
                                     </div>
                                 </div>
                             </div>
@@ -832,11 +832,11 @@
                                             <div class="row g-3">
                                                 <div class="col-md-6">
                                                     <label for="activationDate" class="form-label">Activation Date <span class="text-danger">*</span></label>
-                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-event"></i></span><input type="date" class="form-control" id="activationDate" required></div>
+                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-event"></i></span><input type="text" class="form-control" id="activationDate" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label for="expirationDate" class="form-label">Expiration Date <span class="text-danger">*</span></label>
-                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-x"></i></span><input type="date" class="form-control" id="expirationDate" required></div>
+                                                    <div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-calendar-x"></i></span><input type="text" class="form-control" id="expirationDate" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="customerDateFormatHelp" required></div>
                                                 </div>
                                                 <div class="col-12">
                                                     <div class="small text-muted mb-2">Quick Duration</div>
@@ -846,6 +846,7 @@
                                                         <button type="button" class="billing-preset" data-months="6">6 Months</button>
                                                         <button type="button" class="billing-preset" data-months="12">1 Year</button>
                                                     </div>
+                                                    <div id="customerDateFormatHelp" class="form-text">Enter dates as DD/MM/YYYY (day/month/year). Example: 05/11/2026 = 5 November 2026.</div>
                                                     <div class="form-text">Manual expiration date always takes precedence over presets.</div>
                                                 </div>
                                             </div>
@@ -1242,7 +1243,7 @@
                   <div class="col-md-8"><label class="form-label fw-semibold">Current Package / Profile</label><select id="cpPlan" class="form-select"></select></div>
                   <div class="col-md-4"><label class="form-label fw-semibold">Monthly Bill</label><input id="cpBillAmount" class="form-control fw-bold" readonly></div>
                   <div class="col-12"><div class="rounded-3 border border-success-subtle bg-success-subtle bg-opacity-25 p-3"><div class="small text-muted">Current Active Expiry / Next Bill Date</div><div id="cpCurrentExpiry" class="fs-5 fw-bold text-success">—</div><div id="cpCurrentCycle" class="small text-muted mt-1">Billing cycle: Monthly</div></div></div>
-                  <div class="col-md-6"><label class="form-label fw-semibold" for="cpExpiration">Billing Expiry Date / Next Due Date</label><input id="cpExpiration" type="date" class="form-control" aria-describedby="cpExpiryHelp"><div id="cpExpiryHelp" class="form-text">Any past, present, or future date is allowed for migration.</div></div>
+                  <div class="col-md-6"><label class="form-label fw-semibold" for="cpExpiration">Billing Expiry Date / Next Due Date</label><input id="cpExpiration" type="text" class="form-control" placeholder="DD/MM/YYYY" pattern="\d{2}/\d{2}/\d{4}" inputmode="numeric" autocomplete="off" maxlength="10" aria-describedby="cpExpiryHelp"><div id="cpExpiryHelp" class="form-text">Any past, present, or future date is allowed for migration.</div></div>
                   <div class="col-md-6"><label class="form-label fw-semibold">Validity Countdown</label><div id="cpRemaining" class="form-control bg-light">—</div></div>
                   <div class="col-md-6"><label class="form-label fw-semibold" for="cpBillingCycle">Billing Duration / Cycle</label><select id="cpBillingCycle" class="form-select"><option value="monthly">Monthly</option><option value="15_days">15 Days</option><option value="30_days">30 Days</option><option value="custom_days">Custom Days</option></select></div>
                   <div class="col-md-6" id="cpCustomDaysWrap"><label class="form-label fw-semibold" for="cpBillingDays">Custom Duration (Days)</label><input id="cpBillingDays" type="number" min="1" max="3650" step="1" class="form-control" placeholder="e.g. 45"><div class="form-text">Used for the next renewal when Custom Days is selected.</div></div>
@@ -2954,7 +2955,7 @@ async function deletePlan(id,name){
                 setVal('cpAddress',customer.installation_address||'');setVal('cpOltPon',customer.olt_pon_port||'');setVal('cpDistribution',customer.distribution_box||'');
                 setVal('cpOnuMac',customer.onu_mac||'');setVal('cpOnuSerial',customer.onu_serial||'');setVal('cpFiberCore',customer.fiber_drop_core||'');
                 setVal('cpUsername',customer.username||name);setVal('cpPassword',customer.password||'');setVal('cpRemarks',customer.remarks||'');
-                setVal('cpExpiration',safeDate);
+                setVal('cpExpiration',formatDateForInput(safeDate));
                 const storedCycle=String(customer.billing_cycle||customer.billingCycle||'monthly').toLowerCase();const storedDays=customer.billing_duration_days??customer.billingDurationDays??'';const billingCycle=storedCycle!=='monthly'?(Number(storedDays)===15?'15_days':Number(storedDays)===30?'30_days':'custom_days'):'monthly';
                 const cycleInput=modalEl.querySelector('#cpBillingCycle'),daysInput=modalEl.querySelector('#cpBillingDays'),autoExpire=modalEl.querySelector('#cpAutoExpire');
                 if(cycleInput)cycleInput.value=billingCycle;
@@ -2995,9 +2996,11 @@ async function deletePlan(id,name){
             // Submit the selected PPPoE username as the edit key; database/RouterOS IDs may collide.
             set('customerEditId',customer.username||name);set('username',customer.username||name);
             set('fullName',customer.fullName||customer.full_name||customer.name||'');set('phoneNumber',customer.phone||customer.rawPhone||'');
-            const activation=String(customer.connectionDate||customer.connection_date||'').slice(0,10)||localDateValue();
-            set('connectionDate',activation);set('activationDate',activation);
-            set('expirationDate',String(customer.expirationDate||customer.expiration_date||'').slice(0,10)||addCalendarMonths(activation,1));
+            const activationIso=dateInputToIso(customer.activationDate||customer.activation_date||customer.connectionDate||customer.connection_date)||localDateValue();
+            const connectionIso=dateInputToIso(customer.connectionDate||customer.connection_date)||activationIso;
+            const expirationIso=dateInputToIso(customer.expirationDate||customer.expiration_date)||addCalendarMonths(activationIso,1);
+            set('connectionDate',formatDateForInput(connectionIso));set('activationDate',formatDateForInput(activationIso));
+            set('expirationDate',formatDateForInput(expirationIso));
             set('password',customer.password||'');set('nidNumber',customer.nid||'');
             set('installationAddress',customer.installationAddress||customer.installation_address||'');
             set('fiberBox',customer.fiberBox||customer.fiber_box||customer.splitterBox||'');set('onuMac',customer.onuMac||customer.onu_mac||'');
@@ -3218,6 +3221,24 @@ async function deletePlan(id,name){
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
 
+        // All customer date text inputs display DD/MM/YYYY. Keep ISO dates
+        // internally for calendar arithmetic; never pass slash dates to Date().
+        function dateInputToIso(value) {
+            const raw=String(value||'').trim();
+            let year,month,day,match;
+            if((match=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/))){year=Number(match[1]);month=Number(match[2]);day=Number(match[3]);}
+            else if((match=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/))){day=Number(match[1]);month=Number(match[2]);year=Number(match[3]);}
+            else return '';
+            const date=new Date(Date.UTC(year,month-1,day));
+            if(date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return '';
+            return [String(year).padStart(4,'0'),String(month).padStart(2,'0'),String(day).padStart(2,'0')].join('-');
+        }
+        function formatDateForInput(value) {
+            const iso=dateInputToIso(value);
+            if(!iso)return '';
+            const [year,month,day]=iso.split('-');
+            return day+'/'+month+'/'+year;
+        }
         function localDateValue() {
             const now = new Date();
             const offset = now.getTimezoneOffset();
@@ -3231,15 +3252,18 @@ async function deletePlan(id,name){
         }
         function updateCustomerValidityStatus() {
             const input=document.getElementById('expirationDate'), badge=document.getElementById('customerStatusPreview'); if(!input||!badge) return;
-            if(!input.value){badge.className='badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2';badge.textContent='Status: Select expiration date';return;}
-            const expired=input.value<localDateValue(); badge.className=expired?'badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2':'badge bg-success-subtle text-success border border-success-subtle px-3 py-2'; badge.textContent=expired?'Status: Expired / Suspended':'Status: Active';
+            const expirationIso=dateInputToIso(input.value);
+            if(!expirationIso){badge.className='badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2';badge.textContent=input.value?'Status: Enter DD/MM/YYYY':'Status: Select expiration date';return;}
+            const expired=expirationIso<localDateValue(); badge.className=expired?'badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2':'badge bg-success-subtle text-success border border-success-subtle px-3 py-2'; badge.textContent=expired?'Status: Expired / Suspended':'Status: Active';
         }
         function applyBillingPreset(months) {
             const activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'); if(!activation||!expiration)return;
-            if(!activation.value)activation.value=localDateValue(); expiration.value=addCalendarMonths(activation.value,months);
+            const activationIso=dateInputToIso(activation.value)||localDateValue();
+            activation.value=formatDateForInput(activationIso);
+            expiration.value=formatDateForInput(addCalendarMonths(activationIso,months));
             document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.months)===Number(months))); updateCustomerValidityStatus();
         }
-        function syncActivationDate(){const activation=document.getElementById('activationDate'),expiration=document.getElementById('expirationDate');if(!activation||!expiration)return;expiration.value=addCalendarMonths(activation.value||localDateValue(),1);document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();}
+        function syncActivationDate(){const activation=document.getElementById('activationDate'),expiration=document.getElementById('expirationDate');if(!activation||!expiration)return;const activationIso=dateInputToIso(activation.value)||localDateValue();if(!dateInputToIso(activation.value))activation.value=formatDateForInput(activationIso);expiration.value=formatDateForInput(addCalendarMonths(activationIso,1));document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();}
 
 
         async function loadCustomerPackages(selectedProfile = '') {

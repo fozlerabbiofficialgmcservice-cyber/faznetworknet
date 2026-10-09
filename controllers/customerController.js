@@ -109,9 +109,10 @@ function nextBillingExpiryDate(currentExpiry,cycleValue,durationDaysValue) {
 }
 function validDateOnly(value) {
   const raw=clean(value,20);
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
-  const [year,month,day]=raw.split("-").map(Number),date=new Date(Date.UTC(year,month-1,day));
-  return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
+  // Accept the strict UI format DD/MM/YYYY and legacy API ISO dates only.
+  // normalizeDate validates calendar ranges without locale-dependent parsing.
+  if(!/^\d{2}\/\d{2}\/\d{4}$/.test(raw)&&!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
+  return Boolean(normalizeDate(raw));
 }
 function expirationEndOfDay(expirationDate) {
   const raw = normalizeDate(expirationDate);
@@ -176,13 +177,13 @@ async function createCustomer(req, res) {
   const customer = {
     fullName: clean(body.fullName || body.name, 200),
     phone: formatBdPhoneNumber(body.phone),
-    connectionDate: normalizeDate(body.connectionDate),
+    connectionDate: normalizeDate(body.activationDate || body.activation_date || body.connectionDate || body.connection_date),
     username: clean(body.username, 100),
     password: clean(body.password, 255),
     packageName: clean(body.package || body.packageName || body.profile, 100),
     profile: clean(body.packageProfile || body.profile || body.package || body.packageName, 100),
-    activationDate: normalizeDate(body.activationDate || body.connectionDate),
-    expirationDate: normalizeDate(body.expirationDate),
+    activationDate: normalizeDate(body.activationDate || body.activation_date || body.connectionDate || body.connection_date),
+    expirationDate: normalizeDate(body.expirationDate || body.expiration_date),
     nid: clean(body.nid, 100),
     installationAddress: clean(body.installationAddress || body.address, 500),
     fiberBox: clean(body.fiberBox, 150),
@@ -843,8 +844,8 @@ async function updateCustomer(req,res){
       try{secret=await mikrotikService.getPppoeSecret(username);}catch(error){return res.status(404).json({success:false,message:"This customer is not in Billing Panel and MikroTik could not be read: "+(error.message||"router lookup failed")});}
       if(!secret)return res.status(404).json({success:false,message:"Customer not found in Billing Panel or MikroTik."});
       const fullName=clean(body.fullName||body.name||"",200),phone=clean(body.phone,40);
-      const connectionDate=normalizeDate(body.connectionDate||body.activationDate)||bangladeshToday();
-      const expirationDate=normalizeDate(body.expirationDate)||bangladeshToday();
+      const connectionDate=normalizeDate(body.activationDate||body.activation_date||body.connectionDate||body.connection_date)||bangladeshToday();
+      const expirationDate=normalizeDate(body.expirationDate||body.expiration_date)||bangladeshToday();
       const requestedProfile=clean(body.packageProfile||body.profile||secret.profile,120);
       const packageName=clean(body.package||body.packageName||requestedProfile,120);
       if(!fullName||!phone||!requestedProfile||!clean(body.password||secret.password,255)){
@@ -863,6 +864,11 @@ async function updateCustomer(req,res){
       if(!current.rows.length)return res.status(409).json({success:false,message:"Could not create the Billing Panel record for this MikroTik customer. Check for a duplicate username or database constraint."});
     }
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
+    const connectionDate=normalizeDate(body.activationDate||body.activation_date||body.connectionDate||body.connection_date)||normalizeDate(row.connection_date);
+    const activationDateKey=["activationDate","activation_date","connectionDate","connection_date"].find(key=>Object.prototype.hasOwnProperty.call(body,key));
+    if(activationDateKey&&String(body[activationDateKey]||"").trim()&&!validDateOnly(body[activationDateKey])){
+      return res.status(400).json({success:false,message:"Activation date must be a valid DD/MM/YYYY date (or legacy YYYY-MM-DD)."});
+    }
     const alternativePhone=clean(body.alternativePhone||body.alternative_phone||row.alternative_phone,40);
     const hasOwn=(key)=>Object.prototype.hasOwnProperty.call(body,key);
     const billingDateKey=["billing_expiry_date","next_billing_date","expirationDate","expiration_date"].find(hasOwn);
@@ -903,7 +909,7 @@ async function updateCustomer(req,res){
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const nextStatus=expired?"expired":effectiveDisabled?"inactive":"active";
-    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW() WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id]);
+    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW(),connection_date=COALESCE($25::date,connection_date) WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id,connectionDate||null]);
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,synced_at,updated_at)
       VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,CASE WHEN $10::text='paid' THEN $8::date ELSE NULL::date END,NOW(),NOW())
