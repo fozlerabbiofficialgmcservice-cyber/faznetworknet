@@ -7,10 +7,10 @@ const EXPIRED_PROFILE=String(process.env.EXPIRED_PROFILE_NAME||"EXPIRED").trim()
 async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
-    // expiration_date is a Bangladesh calendar date. A subscriber is overdue
-    // once that calendar date has fully passed, regardless of router/session state.
+    // expiration_date is a Bangladesh calendar date. Explicit migration overrides
+    // are excluded so a manually imported past-due account is not disconnected.
     const q=await db.query(
-      "SELECT id,username,full_name,phone,expiration_date,status FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) <> 'expired' ORDER BY expiration_date ASC,id ASC"
+      "SELECT id,username,full_name,phone,expiration_date,status FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) <> 'expired' AND COALESCE(billing_expiry_override,FALSE)=FALSE ORDER BY expiration_date ASC,id ASC"
     );
     if(!q.rows.length){
       console.log("[BILLING EXPIRATION] No overdue customers found.");
