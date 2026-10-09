@@ -7,13 +7,19 @@ async function mikrotikTest(req, res) {
   let router = null;
   let routerError = null;
   try {
-    await db.query("SELECT 1");
+    await Promise.race([
+      db.query("SELECT 1"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Database health check timed out")), 1500))
+    ]);
     dbStatus = "healthy";
   } catch (error) {
     routerError = "Database check failed: " + String(error?.message || "unavailable");
   }
   try {
-    router = await mikrotikService.testConnection();
+    router = await Promise.race([
+      mikrotikService.testConnection(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("MikroTik diagnostic timed out after 3 seconds")), 3000))
+    ]);
   } catch (error) {
     routerError = String(error?.message || "MikroTik connection failed");
   }
