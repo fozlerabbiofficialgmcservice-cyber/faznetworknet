@@ -865,6 +865,10 @@ async function updateCustomer(req,res){
     }
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
     const connectionDate=normalizeDate(body.activationDate||body.activation_date||body.connectionDate||body.connection_date)||normalizeDate(row.connection_date);
+    const activationDateKey=["activationDate","activation_date","connectionDate","connection_date"].find(key=>Object.prototype.hasOwnProperty.call(body,key));
+    if(activationDateKey&&String(body[activationDateKey]||"").trim()&&!validDateOnly(body[activationDateKey])){
+      return res.status(400).json({success:false,message:"Activation date must be a valid DD/MM/YYYY date (or legacy YYYY-MM-DD)."});
+    }
     const alternativePhone=clean(body.alternativePhone||body.alternative_phone||row.alternative_phone,40);
     const hasOwn=(key)=>Object.prototype.hasOwnProperty.call(body,key);
     const billingDateKey=["billing_expiry_date","next_billing_date","expirationDate","expiration_date"].find(hasOwn);
