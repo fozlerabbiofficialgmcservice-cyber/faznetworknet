@@ -2,6 +2,19 @@ const express=require("express");
 const controller=require("../controllers/customerController");
 const router=express.Router();
 
+// Fail closed on destructive customer actions: a numeric route ID may refer to
+// a different record in the customers and pppoe_users tables. Require the
+// explicit PPPoE username sent by the admin UI before the controller is called.
+function requireExactDeleteUsername(req,res,next){
+  const username=String(req.body?.username||"").trim();
+  if(!username)return res.status(400).json({
+    success:false,
+    code:"CUSTOMER_DELETE_USERNAME_REQUIRED",
+    message:"Exact PPPoE username is required. No customer records were changed."
+  });
+  next();
+}
+
 router.get("/packages",controller.packages);
 router.post("/sync-expiry-dates",controller.syncExpiryDatesToMikroTik);
 router.post("/sync-panel-to-mikrotik",controller.syncPanelCustomersToMikroTik);
@@ -16,7 +29,7 @@ router.get("/:id/live-session",controller.getCustomerLiveSession);
 router.get("/:id/usage-records",controller.getCustomerUsageRecords);
 router.get("/:id/profile",controller.getCustomerProfileById);
 router.put("/:id",controller.updateCustomer);
-router.delete("/:id",controller.removeCustomer);
+router.delete("/:id",requireExactDeleteUsername,controller.removeCustomer);
 router.post("/:id/kick",controller.kickCustomerById);
 router.post("/:id/toggle-status",controller.toggleCustomerStatus);
 router.post("/:id/renew",controller.renewCustomerById);
@@ -26,7 +39,7 @@ router.put("/customers/:id",controller.updateCustomer);
 router.post("/update",(req,res)=>{req.params.id=String(req.body?.id||req.body?.username||"").trim();return controller.updateCustomer(req,res);});
 router.post("/renew",controller.renew);
 router.post("/mark-paid",controller.markPaid);
-router.post("/delete",controller.removeCustomer);
+router.post("/delete",requireExactDeleteUsername,controller.removeCustomer);
 router.post("/kick",async(req,res)=>{
   const username=String(req.body?.username||"").trim();
   if(!username)return res.status(400).json({success:false,message:"Username is required."});
