@@ -43,7 +43,7 @@ class MikroTikService {
 
     return connection;
   }
-  async _withConnection(operationName, operation, configOverride) {
+  async _withConnection(operationName, operation, configOverride, operationTimeoutMs = OPERATION_TIMEOUT_MS) {
     let connection = null;
     let connectTimer;
     try {
@@ -59,7 +59,7 @@ class MikroTikService {
         })
       ]);
       if (connectTimer) clearTimeout(connectTimer);
-      return await this._executeWithTimeout(operation(connection), OPERATION_TIMEOUT_MS, operationName);
+      return await this._executeWithTimeout(operation(connection), operationTimeoutMs, operationName);
     } catch (error) {
       const details=this._extractRouterError(error);
       const wrapped=new Error(details.message);
@@ -224,7 +224,7 @@ class MikroTikService {
         }
       }
       return {total:customers.length,updated,skipped,failed,results};
-    });
+    }, undefined, 30000);
   }
   async syncPppoeExpiryComments(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
