@@ -11,6 +11,7 @@ async function getCustomerPackage(username){const r=await db.query("SELECT c.*,p
 async function renewCustomer(c,{persist=true,query=db.query}={}){const expiration=addCalendarMonths(new Date().toISOString().slice(0,10),Math.max(1,Number(c.duration_months||1))),profile=c.profile_name||c.profile,pool=c.pool_name||"",comment="Customer: "+c.full_name+" | Phone: "+c.phone+" | EXP: "+expiration;await mikrotikService.updateSecret(c.username,{password:c.password,profile,comment,disabled:false});await mikrotikService.kickActiveUser(c.username);const renewal={expiration,profile,pool,comment};if(persist)await persistCustomerRenewal(query,c,renewal);return renewal;}
 async function persistCustomerRenewal(query,c,renewal){await query("UPDATE customers SET package_name=$1,profile=$2,monthly_bill=$3,expiration_date=$4,status='active',updated_at=NOW() WHERE id=$5",[c.plan_name,renewal.profile,c.price,renewal.expiration,c.id]);await query("UPDATE pppoe_users SET profile=$1,remote_address=$2,disabled=false,status='active',expiry_date=$3,comment=$4,updated_at=NOW() WHERE username=$5",[renewal.profile,renewal.pool,renewal.expiration,renewal.comment,c.username]);}
 async function webhook(req,res){
+ let claimedTransactionId=null,routerSucceeded=false;
  try{
   const configured=await db.query("SELECT key,value FROM app_settings WHERE key IN ('personal_payment_webhook_enabled','personal_payment_webhook_secret')");
   const settings=Object.fromEntries((configured.rows||[]).map(row=>[row.key,row.value]));
@@ -42,13 +43,38 @@ async function webhook(req,res){
      await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'unmatched',$5,$6,false)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
      return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expectedAmount.toFixed(2)} is required to activate or renew service.`,expectedAmount,paidAmount:payment.amount});
     }
-    await renewCustomer(customer);status="PAID";
+    // Persist the claim before calling RouterOS. The unique TrxID constraint arbitrates concurrent webhook retries.
+    let claim;
+    try{
+     claim=await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,'processing',$5,$6,true) RETURNING id",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,user.username,payment.rawSms]);
+    }catch(claimError){
+     if(claimError?.code==="23505")return res.status(409).json({success:false,status:"duplicate",error:"This TrxID has already been received or claimed."});
+     throw claimError;
+    }
+    if(!claim.rows.length)throw new Error("Could not persist the payment claim.");
+    claimedTransactionId=claim.rows[0].id;
+    const renewal=await renewCustomer(customer,{persist:false});routerSucceeded=true;
+    await db.withTransaction(async client=>{
+     await persistCustomerRenewal(client.query.bind(client),customer,renewal);
+     const finalized=await client.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[user.username,claimedTransactionId]);
+     if(!finalized.rows.length)throw new Error("Renewal completed but payment finalization did not update the claimed transaction.");
+    });
+    claimedTransactionId=null;
+    return res.json({success:true,status:"PAID",trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user.username,amount:payment.amount,channel:payment.channel});
    }
   }
   const renewalCompleted=status==="PAID";
   await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,renewalCompleted&&user?user.username:null,payment.rawSms,renewalCompleted]);
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
- }catch(error){return errorResponse(res,error,400);}
+ }catch(error){
+  if(claimedTransactionId!==null&&!routerSucceeded){
+   try{await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true",[claimedTransactionId]);}
+   catch(rollbackError){console.error("[Payment Webhook] Failed to release claim after RouterOS failure",claimedTransactionId,rollbackError?.message||rollbackError);}
+  }else if(claimedTransactionId!==null&&routerSucceeded){
+   console.error("[CRITICAL_PARTIAL_PROVISION] Webhook PPPoE renewal succeeded on MikroTik but DB finalization failed; transaction remains processing for reconciliation.",{transactionId:claimedTransactionId,trxId:req.body?.trxId||req.body?.trx_id||null,error:error?.message||String(error)});
+  }
+  return errorResponse(res,error,claimedTransactionId!==null&&routerSucceeded?500:400);
+ }
 }
 async function dynamicWebhook(req,res,next){
  try{
