@@ -31,7 +31,6 @@ async function webhook(req,res){
   if(!user&&payment.senderPhone){
    const found=await db.query("SELECT username,phone FROM pppoe_users WHERE phone IS NOT NULL");
    user=found.rows.find(row=>normalizePhone(row.phone)===payment.senderPhone)||null;
-   user=found.rows[0]||null;
   }
   let status="unmatched";
   if(user){
