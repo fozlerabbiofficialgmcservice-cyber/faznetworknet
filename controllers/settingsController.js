@@ -85,6 +85,14 @@ async function syncMikrotik(req,res){
  try{return res.json({success:true,message:"MikroTik profile synchronization completed.",sync:await syncMikrotikProfilesInternal()});}
  catch(error){return errorResponse(res,error,502);}
 }
+async function saveGeneralSettings(req,res){
+ try{
+  const body=req.body||{},mfs=body.mfs&&typeof body.mfs==="object"?body.mfs:body,normalized={};
+  for(const [name] of Object.entries(MFS_KEYS)){const value=String(mfs[name]??"").trim();if(value&&!/^[+()\\d\\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
+  for(const [name,key] of Object.entries(MFS_KEYS))await upsertSetting(key,normalized[name]);
+  return res.set("Cache-Control","no-store").json({success:true,message:"MFS receiving numbers saved. Customer payment instructions update immediately.",accounts:normalized});
+ }catch(error){return errorResponse(res,error,400);}
+}
 async function saveMfsAccounts(req,res){
  try{
   const body=req.body||{},normalized={};
@@ -94,4 +102,4 @@ async function saveMfsAccounts(req,res){
  }catch(error){return errorResponse(res,error,400);}
 }
 
-module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts};
+module.exports={hotspotWebhookSettings,saveHotspotWebhookSettings,website:hotspotWebhookSettings,saveWebsite:saveHotspotWebhookSettings,hotspotProfiles,getHotspotProfileSettings,saveHotspotProfileSettings,generalSettings,saveGeneralSettings,testMikrotik,saveMikrotik,syncMikrotik,saveMfsAccounts};

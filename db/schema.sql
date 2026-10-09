@@ -67,6 +67,16 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Ensure dynamic MFS and webhook configuration keys exist without overwriting production values.
+INSERT INTO app_settings(key,value) VALUES
+ ('mfs_bkash_number',''),
+ ('mfs_nagad_number',''),
+ ('mfs_rocket_number',''),
+ ('mfs_upay_number',''),
+ ('personal_payment_webhook_secret',''),
+ ('personal_payment_webhook_enabled','false')
+ON CONFLICT(key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS transactions (
   id BIGSERIAL PRIMARY KEY,
   channel VARCHAR(20) NOT NULL CHECK (channel IN ('bkash','nagad','rocket','upay')),

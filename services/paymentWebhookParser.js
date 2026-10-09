@@ -23,11 +23,15 @@ function extractWebhookPayload(body,query={},headers={}){
     getNestedValue(objectBody,["sender","from","number","sms_number"]),
     headers["x-sms-sender"],headers["x-sender"],headers["x-sms-from"],headers["x-payer-phone"],query?.sender,query?.from
   ]);
+  const recipient=firstDefined([
+    getNestedValue(objectBody,["recipient","recipient_phone","receiving_number","receiver","destination","to","merchant_number","account_number"]),
+    headers["x-sms-recipient"],headers["x-recipient-phone"],headers["x-receiving-number"],query?.recipient,query?.recipient_phone,query?.to
+  ]);
   const token=firstDefined([
     headers["x-webhook-token"],headers["x-macrodroid-token"],
     getNestedValue(objectBody,["token","secret"]),query?.token
   ]);
-  return {text:String(typeof text==="object"?JSON.stringify(text):text||""),sender:String(sender||"").trim(),token:String(token||"").trim()};
+  return {text:String(typeof text==="object"?JSON.stringify(text):text||""),sender:String(sender||"").trim(),recipient:String(recipient||"").trim(),token:String(token||"").trim()};
 }
 function normalizePhone(value){
   const bangla="০১২৩৪৫৬৭৮৯";
@@ -77,7 +81,7 @@ function extractReference(text){
   const m=String(text||"").match(/\b(?:ref|reference)\s*[:#=-]?\s*([A-Za-z0-9_-]{1,50})/i);
   return m?m[1].trim():"";
 }
-function parseSms(body,query={},headers={}){
+function parseSms(body,query={},headers={},options={}){
   const payload=extractWebhookPayload(body,query,headers);
   const text=payload.text;
   const trxId=extractTransactionId(text);
@@ -85,6 +89,12 @@ function parseSms(body,query={},headers={}){
   const channel=channelFrom(text,payload.sender);
   if(!trxId||!Number.isFinite(amount)||amount<=0)throw new Error("Could not parse transaction ID or amount from SMS.");
   if(!channel)throw new Error("Unsupported payment channel. Include the MFS name in the SMS or sender.");
-  return {channel,trxId,amount,senderPhone:extractSenderPhone(text,payload.sender),customerRef:extractReference(text),rawSms:text,sourceSender:payload.sender};
+  const recipient=normalizePhone(payload.recipient);
+  if(recipient){
+    const configured=normalizePhone(options.recipientNumbers?.[channel]||"");
+    if(!configured)throw new Error("Receiving number is not configured for "+channel+". Save the MFS number in General Settings.");
+    if(recipient!==configured)throw new Error("SMS recipient does not match the configured "+channel+" receiving number.");
+  }
+  return {channel,trxId,amount,senderPhone:extractSenderPhone(text,payload.sender),recipientPhone:recipient,customerRef:extractReference(text),rawSms:text,sourceSender:payload.sender};
 }
 module.exports={extractWebhookPayload,extractTransactionId,extractAmount,parseSms,normalizePhone,channelFrom};

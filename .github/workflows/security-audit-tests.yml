@@ -1,0 +1,37 @@
+name: Security Audit and Regression Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, feat/all-in-one-settings-health-security]
+
+jobs:
+  audit-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies and generate lockfile
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Report npm audit findings
+        run: |
+          npm audit --json > npm-audit-report.json || true
+          node -e "const r=require('./npm-audit-report.json'); console.log(JSON.stringify({metadata:r.metadata?.vulnerabilities, advisories:Object.entries(r.vulnerabilities||{}).map(([name,v])=>({name,severity:v.severity,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,range:x.range})}))},null,2))"
+      - name: Require zero high or critical vulnerabilities
+        run: npm audit --audit-level=high
+      - name: Syntax checks
+        run: |
+          node --check server.js
+          node --check controllers/paymentController.js
+          node --check controllers/settingsController.js
+          node --check controllers/adminDiagnosticsController.js
+          node --check services/paymentWebhookParser.js
+          node --check services/mikrotikService.js
+      - name: Regression tests
+        run: npm test
