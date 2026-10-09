@@ -2455,11 +2455,14 @@ async function deletePlan(id,name){
             return window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
         }
         async function openCustomerEditForm(customerId,usernameFallback){
-            const id=String(customerId||usernameFallback||'').trim();
-            if(!id){alert('Customer ID or PPPoE username is missing.');return;}
+            // RouterOS IDs are not customer-table IDs and can collide with a
+            // panel-created customer's numeric database ID. Resolve edits by
+            // the selected PPPoE username, never by the row's router ID.
+            const username=String(usernameFallback||customerId||'').trim();
+            if(!username){alert('Customer ID or PPPoE username is missing.');return;}
             try{
-                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile'),customer=data.customer||{};
-                if(!customer.username)throw new Error('Customer details could not be loaded.');
+                const data=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(username)),customer=data.customer||{};
+                if(!customer.username)throw new Error('Customer details could not be loaded for '+username+'.');
                 await populateCustomerEditForm(customer,customer.username);
                 const modal=ensureCustomerEditFormModal();
                 if(!modal)throw new Error('Bootstrap modal is unavailable. Refresh the admin panel and try again.');
@@ -2813,7 +2816,8 @@ async function deletePlan(id,name){
 
         async function populateCustomerEditForm(customer,name){
             const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value??'';};
-            set('customerEditId',customer.id||name);set('username',customer.username||name);
+            // Submit the selected PPPoE username as the edit key; database/RouterOS IDs may collide.
+            set('customerEditId',customer.username||name);set('username',customer.username||name);
             set('fullName',customer.fullName||customer.full_name||customer.name||'');set('phoneNumber',customer.phone||customer.rawPhone||'');
             const activation=String(customer.connectionDate||customer.connection_date||'').slice(0,10)||localDateValue();
             set('connectionDate',activation);set('activationDate',activation);
