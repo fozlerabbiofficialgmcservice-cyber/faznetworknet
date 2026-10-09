@@ -324,7 +324,17 @@ async function profiles(req, res) {
 async function sync(req, res) {
   try {
     const result = await syncFromRouter();
-    res.json({ success: true, ...result, message: `Imported ${result.users} users and ${result.profiles} profiles from MikroTik.` });
+    const protectedCount = Array.isArray(result.skippedDeleted) ? result.skippedDeleted.length : 0;
+    const failedUsers = Array.isArray(result.failedUsers) ? result.failedUsers.length : 0;
+    const failedImports = Array.isArray(result.failedCustomerImports) ? result.failedCustomerImports.length : 0;
+    const message = [
+      `MikroTik sync finished: ${result.users} PPPoE users synced and ${result.profiles} profiles synced.`,
+      `${result.importedCustomers} new Billing customers imported; ${result.existingCustomers} existing panel customers preserved.`,
+      `${protectedCount} explicitly deleted usernames protected from automatic restore.`,
+      `${failedUsers} PPPoE sync failures; ${failedImports} Billing import failures.`,
+      `No customer was deleted by this sync.`
+    ].join(" ");
+    return res.json({ success: true, ...result, message });
   } catch (error) {
     return errorResponse(res, error);
   }
