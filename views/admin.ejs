@@ -2355,6 +2355,18 @@ async function deletePlan(id,name){
             });
         }
 
+        async function openCustomerEditModal(customerId) {
+            const id=String(customerId||'').trim();
+            if(!id)return;
+            try{
+                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile');
+                const customer=data.customer||{};
+                const username=String(customer.username||id).trim();
+                if(!username)throw new Error('Customer username is missing.');
+                await openCustomerProfile(username,data);
+            }catch(error){alert(error.message||'Unable to open Customer 360 / Master Management Hub.');}
+        }
+
         let customerEditFormOrigin=null;
         function ensureCustomerEditFormModal(){
             const form=document.getElementById('addCustomerForm'),modalEl=document.getElementById('customerEditFormModal'),body=document.getElementById('customerEditFormModalBody');
