@@ -36,3 +36,15 @@ test("admin dashboard avoids duplicate RouterOS polling and pauses hidden-dashbo
   assert.doesNotMatch(admin, /initial dashboard refresh/);
   assert.doesNotMatch(admin, /safeAdminBootStep\('router metrics'/);
 });
+
+test("admin inline script has no accidentally escaped line break before router test handler", () => {
+  const admin = read("views/admin.ejs");
+  assert.doesNotMatch(
+    admin,
+    /Boolean\(d\.success\)\);\\\\n\s*document\.getElementById\('generalRouterTestBtn'\)/
+  );
+  assert.match(
+    admin,
+    /Boolean\(d\.success\)\);\n\s*document\.getElementById\('generalRouterTestBtn'\)/
+  );
+});
