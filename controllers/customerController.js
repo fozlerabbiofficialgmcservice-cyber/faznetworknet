@@ -872,13 +872,16 @@ async function getCustomerUsageRecords(req,res){
     const result=await db.query("SELECT id,username,expiration_date,billing_cycle,billing_duration_days,connection_date FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
-    const today=usageDate(new Date());
+    const todayParts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+    const today=todayParts.find(p=>p.type==="year").value+"-"+todayParts.find(p=>p.type==="month").value+"-"+todayParts.find(p=>p.type==="day").value;
     const expiry=usageDate(customer.expiration_date)||today;
     const cycle=String(customer.billing_cycle||"monthly");
     const cycleStart=previousCycleStart(expiry,cycle,customer.billing_duration_days);
+    const ninetyDaysAgo=shiftUsageDate(today,-90);
+    const fromDate=cycleStart<ninetyDaysAgo?cycleStart:ninetyDaysAgo;
     const q=await db.query(
-      "SELECT usage_date,download_bytes,upload_bytes FROM customer_usage_daily WHERE customer_id=$1 AND usage_date >= (CURRENT_DATE-INTERVAL '90 days')::date AND usage_date <= CURRENT_DATE ORDER BY usage_date DESC",
-      [customer.id]
+      "SELECT usage_date,download_bytes,upload_bytes FROM customer_usage_daily WHERE customer_id=$1 AND usage_date >= $2::date AND usage_date <= $3::date ORDER BY usage_date DESC",
+      [customer.id,fromDate,today]
     );
     const rows=q.rows.map(row=>({date:usageDate(row.usage_date),downloadBytes:String(row.download_bytes||0),uploadBytes:String(row.upload_bytes||0),totalBytes:(BigInt(row.download_bytes||0)+BigInt(row.upload_bytes||0)).toString()}));
     const current=rows.filter(row=>row.date>=cycleStart&&row.date<=today);
