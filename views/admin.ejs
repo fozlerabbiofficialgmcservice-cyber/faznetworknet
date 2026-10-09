@@ -3250,7 +3250,7 @@ async function deletePlan(id,name){
             const original=button.innerHTML;
             button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing all customers...';
             try{
-                const data=await jsonFetch('/api/customers/sync-panel-to-mikrotik',{method:'POST'});
+                const data=await jsonFetch('/api/customers/sync-panel-to-mikrotik',{method:'POST',timeout:120000});
                 alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0));
                 await fetchCustomers();await refreshDashboard();
             }catch(error){alert('Sync to MikroTik failed: '+(error.message||'Unknown error'));}
