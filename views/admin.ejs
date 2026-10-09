@@ -887,7 +887,7 @@
             <!-- VIEW 3: ALL CUSTOMER -->
             <section id="view-all-customer" class="admin-view" style="display:none">
                 <div class="card card-custom">
-                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerSyncBtn" class="btn btn-outline-success btn-sm ms-auto" onclick="syncMikrotik(this)"><i class="bi bi-arrow-repeat"></i> 🔄 Sync MikroTik</button></div>
+                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerSyncBtn" class="btn btn-outline-success btn-sm ms-auto" onclick="syncMikrotik(this)"><i class="bi bi-arrow-repeat"></i> Sync from MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
                     <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Username</th><th>Profile</th><th>Phone</th><th>Status</th><th>Expiry Date</th><th>Action</th></tr></thead><tbody id="pppoeUserList"><tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr></tbody></table></div>
                 </div>
             </section>
@@ -3222,6 +3222,16 @@ async function deletePlan(id,name){
             } catch (error) { alert(error.message); }
         }
 
+        async function syncCustomerExpiryDates(btn) {
+            if (!confirm('Push EXP: YYYY-MM-DD comments for all customers with valid expiry dates to MikroTik? Profiles, passwords, and disabled states will not be changed.')) return;
+            const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = 'Pushing EXP dates…';
+            try {
+                const data = await jsonFetch('/api/customers/sync-expiry-dates', {method:'POST'});
+                alert('EXP sync finished. Updated: ' + Number(data.updated || 0) + ', skipped: ' + Number(data.skipped || 0) + ', failed: ' + Number(data.failed || 0));
+                await fetchCustomers(); await refreshDashboard();
+            } catch (error) { alert(error.message || 'Failed to push EXP dates to MikroTik.'); }
+            finally { btn.disabled = false; btn.innerHTML = old; }
+        }
         async function syncMikrotik(btn) {
             btn.disabled = true;
             const old = btn.innerHTML;
