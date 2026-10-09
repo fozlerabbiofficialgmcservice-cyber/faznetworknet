@@ -86,6 +86,12 @@ class MikroTikService {
   _number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
   _bool(value) { return String(value || "false").toLowerCase() === "true"; }
   _str(value) { return value === undefined || value === null ? "" : String(value); }
+  _isSystemProfileName(value) {
+    const name=this._str(value).trim().toLowerCase();
+    return !name || name.includes("default") || name === "vpn" ||
+      /^(?:template|internal|system)(?:[-_\s].*)?$/.test(name) ||
+      /^(?:default|default-encryption|vpn)(?:[-_\s].*)?$/.test(name);
+  }
   _writeParams(values) { return Object.entries(values).filter(([, value]) => value !== undefined && value !== null && String(value) !== "").map(([key, value]) => "=" + key + "=" + value); }
 
   async testConnection() { return this._withConnection("connection test", async (connection) => { const identity = this._firstRow(await connection.write("/system/identity/print"), "identity query"); const resources = this._firstRow(await connection.write("/system/resource/print"), "resource query"); return { routerName: this._str(identity.name) || "Unknown Router", version: this._str(resources.version) || "Unknown" }; }); }
@@ -146,7 +152,7 @@ class MikroTikService {
           comment:this._str(item.comment),
           raw:item
         };
-      }).filter((item) => item.name);
+      }).filter((item) => item.name && !this._isSystemProfileName(item.name));
     });
   }
   async getPppoeSecret(username) {
@@ -197,12 +203,13 @@ class MikroTikService {
   async getHotspotProfiles() {
     return this._withConnection("Hotspot profile query", async (connection) => {
       const rows = await connection.write("/ip/hotspot/user/profile/print");
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ id:this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), sharedUsers: this._str(item["shared-users"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), keepaliveTimeout: this._str(item["keepalive-timeout"]), statusAutorefresh: this._str(item["status-autorefresh"]), raw: item })).filter((item) => item.name);
+      return (Array.isArray(rows) ? rows : []).map((item) => ({ id:this._str(item[".id"]), name: this._str(item.name), rateLimit: this._str(item["rate-limit"]), sharedUsers: this._str(item["shared-users"]), sessionTimeout: this._str(item["session-timeout"]), idleTimeout: this._str(item["idle-timeout"]), keepaliveTimeout: this._str(item["keepalive-timeout"]), statusAutorefresh: this._str(item["status-autorefresh"]), raw: item })).filter((item) => item.name && !this._isSystemProfileName(item.name));
     });
   }
   async createHotspotProfile(data) {
     const name=this._str(data.name).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
+    if(this._isSystemProfileName(name)) throw new Error("System/internal profile names are reserved.");
     return this._withConnection("Hotspot profile creation",async(connection)=>{
       const params=this._writeParams({name,"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.clearSessionTimeout?undefined:data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout,"on-login":data.onLogin});
       await connection.write("/ip/hotspot/user/profile/add",params); return {name};
@@ -211,6 +218,7 @@ class MikroTikService {
   async updateHotspotProfile(data) {
     const name=this._str(data.name).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
+    if(this._isSystemProfileName(name)) throw new Error("System/internal MikroTik profiles are protected and cannot be edited.");
     return this._withConnection("Hotspot profile update",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/profile/print");
       const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
@@ -223,6 +231,7 @@ class MikroTikService {
   async deleteHotspotProfile(nameValue) {
     const name=this._str(nameValue).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
+    if(this._isSystemProfileName(name)) throw new Error("System/internal MikroTik profiles are protected and cannot be deleted.");
     return this._withConnection("Hotspot profile deletion",async(connection)=>{
       const rows=await connection.write("/ip/hotspot/user/profile/print");
       const item=(Array.isArray(rows)?rows:[]).find(x=>this._str(x.name)===name);
@@ -374,6 +383,7 @@ class MikroTikService {
   async createProfile(data) {
     const name=this._str(data.name).trim();
     if(!name)throw new Error("Profile name is required.");
+    if(this._isSystemProfileName(name))throw new Error("System/internal profile names are reserved.");
     return this._withConnection("PPPoE profile creation",async(connection)=>{
       const params=this._writeParams({
         name,
@@ -390,11 +400,13 @@ class MikroTikService {
 
   async updateProfile(identifier,data){
     const key=this._str(identifier).trim();
+    if(this._isSystemProfileName(data?.name)||this._isSystemProfileName(key)) throw new Error("System/internal MikroTik PPP profiles are protected and cannot be edited.");
     return this._withConnection("PPPoE profile update",async(connection)=>{
       const rows=await connection.write("/ppp/profile/print");
       const items=Array.isArray(rows)?rows:[];
       const item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);
       if(!item||!item[".id"])throw new Error("PPPoE profile not found.");
+      if(this._isSystemProfileName(item.name)||this._isSystemProfileName(data?.name))throw new Error("System/internal MikroTik PPP profiles are protected and cannot be edited.");
       const params=[
         "=.id="+item[".id"],
         "=name="+this._str(data.name).trim(),
@@ -420,13 +432,14 @@ class MikroTikService {
 
   async removeProfile(identifier){
     const key=this._str(identifier).trim();
+    if(this._isSystemProfileName(key)) throw new Error("System/internal MikroTik PPP profiles are protected and cannot be deleted.");
     return this._withConnection("PPPoE profile removal",async(connection)=>{
       const rows=await connection.write("/ppp/profile/print");
       const items=Array.isArray(rows)?rows:[];
       const item=items.find(x=>this._str(x[".id"])===key)||items.find(x=>this._str(x.name)===key);
       if(!item||!item[".id"])throw new Error("PPPoE profile not found.");
       const profileName=this._str(item.name);
-      if(/^default$/i.test(profileName))throw new Error('The default MikroTik PPP profile cannot be deleted.');
+      if(this._isSystemProfileName(profileName))throw new Error("System/internal MikroTik PPP profiles are protected and cannot be deleted.");
       try{
         await connection.write("/ppp/profile/remove",["=.id="+item[".id"]]);
       }catch(error){

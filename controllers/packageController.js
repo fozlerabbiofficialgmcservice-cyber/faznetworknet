@@ -2,6 +2,7 @@ const db=require("../db");
 const mikrotikService=require("../services/mikrotikService");
 
 const clean=(v,m=255)=>String(v??"").trim().slice(0,m);
+const isSystemProfile=(value)=>{const name=String(value??"").trim().toLowerCase();return !name||name.includes("default")||name==="vpn"||/^(?:template|internal|system)(?:[-_\\s].*)?$/.test(name);};
 const routerError=(e)=>String(e?.message||e||"Package operation failed.");
 
 function errorResponse(res,e,status=503){
@@ -34,7 +35,7 @@ function decorate(row,poolMap){
 
 async function list(req,res){
   try{
-    const [result,routerPools]=await Promise.all([db.query("SELECT * FROM packages ORDER BY plan_name"),mikrotikService.getIpPools()]);
+    const [result,routerPools]=await Promise.all([db.query("SELECT * FROM packages WHERE LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE '%default%' AND LOWER(COALESCE(profile_name,plan_name,'')) <> 'vpn' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'template%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'internal%' AND LOWER(COALESCE(profile_name,plan_name,'')) NOT LIKE 'system%' ORDER BY plan_name"),mikrotikService.getIpPools()]);
     const poolMap=new Map(routerPools.map(x=>[String(x.name).toLowerCase(),x]));
     res.json({success:true,packages:result.rows.map(row=>decorate(row,poolMap))});
   }catch(e){errorResponse(res,e);}
@@ -53,6 +54,7 @@ async function normalize(body){
     changeTcpMss:clean(b.changeTcpMss||"default",20).toLowerCase()
   };
   if(!value.planName)return{error:"Plan Name is required."};
+  if(isSystemProfile(value.planName))return{error:"System/internal MikroTik profiles are protected and cannot be used as internet plans."};
   if(!Number.isFinite(value.price)||value.price<=0)return{error:"Exact Monthly Price must be greater than 0."};
   if(!Number.isInteger(value.durationMonths)||value.durationMonths<1)return{error:"Duration must be at least 1 month."};
   if(!["yes","no","default"].includes(value.changeTcpMss))return{error:"Change TCP MSS must be yes, no, or default."};
@@ -178,7 +180,7 @@ async function remove(req,res){
     else{const name=clean(body.name||body.planName,120);if(!name)return errorResponse(res,new Error("Plan ID or name is required."),400);existing=await db.query("SELECT * FROM packages WHERE plan_name=$1 OR profile_name=$1 LIMIT 1",[name]);}
     if(!existing.rows.length)return errorResponse(res,new Error("Package not found."),404);
     const pkg=existing.rows[0],targetName=clean(pkg.profile_name||pkg.plan_name,120);
-    if(/^default$/i.test(targetName))return errorResponse(res,new Error("The default MikroTik PPP profile cannot be deleted."),400);
+    if(isSystemProfile(targetName))return errorResponse(res,new Error("System/internal MikroTik profiles are protected and cannot be deleted."),400);
     if(await mikrotikService.isProfileInUse(targetName))return errorResponse(res,new Error("Cannot delete: Profile is currently assigned to one or more PPPoE users."),409);
     const profile=await findProfileByName(targetName);
     if(profile)await mikrotikService.removeProfile(profile.id);
@@ -216,6 +218,7 @@ async function sync(req,res){
     );
 
     const rows=profiles
+      .filter(profile=>!isSystemProfile(profile.name))
       .map(profile=>{
         const raw=profile.raw||{};
         const name=String(profile.name||"").trim();
