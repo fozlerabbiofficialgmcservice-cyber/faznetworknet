@@ -17,7 +17,9 @@ let cached=null,expiresAt=0,refreshPromise=null;
 function bool(v){return v===true||String(v||"").toLowerCase()==="true"||String(v||"")==="1";}
 function normalize(map){
  const out={...DEFAULTS,...map};
- // Canonical SMS setting keys are kept compatible with the first settings-suite release.\n if(map.sms_provider_mode)out.sms_gateway_mode=map.sms_provider_mode;else out.sms_provider_mode=out.sms_gateway_mode;\n if(map.sms_device_webhook_url)out.sms_device_url=map.sms_device_webhook_url;else out.sms_device_webhook_url=out.sms_device_url;
+ // Canonical SMS setting keys are kept compatible with the first settings-suite release.
+ if(map.sms_provider_mode)out.sms_gateway_mode=map.sms_provider_mode;else out.sms_provider_mode=out.sms_gateway_mode;
+ if(map.sms_device_webhook_url)out.sms_device_url=map.sms_device_webhook_url;else out.sms_device_webhook_url=out.sms_device_url;
  out.company_name=String(out.company_name||DEFAULTS.company_name).slice(0,160);
  out.public_base_url=String(out.public_base_url||"").slice(0,500);
  out.logo_url=String(out.logo_url||"").slice(0,1000);
