@@ -745,7 +745,18 @@ async function updateCustomer(req,res){
   const body=req.body||{},id=clean(req.params.id||body.id||body.username,100);
   if(!id)return res.status(400).json({success:false,message:"Customer ID or username is required."});
   try{
-    let current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[id]);
+    const selectedUsername=clean(body.username,100);
+    let current;
+    if(selectedUsername && selectedUsername.toLowerCase()===id.toLowerCase()){
+      // The Online Customer editor sends the PPPoE username as both the route
+      // key and identity, so never let a numeric RouterOS username collide with
+      // another customer's numeric database ID.
+      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[selectedUsername]);
+    }else{
+      // Keep backwards compatibility for other panel screens that still submit
+      // a database ID rather than the PPPoE username.
+      current=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
+    }
     // Online Customer rows may exist only in MikroTik. When an admin edits one,
     // import its edited identity into billing first instead of returning 404 or
     // accidentally matching an unrelated customer by numeric RouterOS ID.
