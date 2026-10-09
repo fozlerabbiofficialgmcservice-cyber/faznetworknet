@@ -85,6 +85,8 @@ app.post("*",paymentController.dynamicWebhook);app.use("/api/router",requireAdmi
 app.get("/pppoe",requireAdmin,(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireAdmin,(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireAdmin,(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));
-initializeDatabase().catch(e=>console.error("[Database] Startup initialization failed:",e.message));
-startBillingCron();
+initializeDatabase().then(()=>startBillingCron()).catch(e=>{
+  console.error("[Database] Startup initialization failed:",e.message);
+  startBillingCron();
+});
 module.exports=app;
