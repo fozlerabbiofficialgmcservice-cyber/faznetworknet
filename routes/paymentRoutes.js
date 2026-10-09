@@ -1,10 +1,13 @@
 const express=require("express");
+const cors=require("cors");
 const controller=require("../controllers/paymentController");
 const {requireAdmin}=require("../middleware/adminAuth");
 const router=express.Router();
 router.post("/webhooks/macrodroid-sms",controller.webhook);
 router.post("/forward",controller.webhook);
-router.post("/verify-trx",controller.verifyTrx);
+const verifyTrxCors=cors({origin:"*",methods:["POST","OPTIONS"],allowedHeaders:["Content-Type","Authorization"]});
+router.options("/verify-trx",verifyTrxCors);
+router.post("/verify-trx",verifyTrxCors,controller.verifyTrx);
 router.get("/payments/transactions",requireAdmin,controller.list);
 router.post("/payments/manual-match",requireAdmin,controller.manualMatch);
 router.get("/payments/summary",requireAdmin,controller.summary);
