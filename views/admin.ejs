@@ -3267,10 +3267,21 @@ async function deletePlan(id,name){
             if (!parts) return '';
             return String(parts.year).padStart(4, '0') + '-' + String(parts.month).padStart(2, '0') + '-' + String(parts.day).padStart(2, '0');
         }
-        function formatDateForInput(value) {
-            const parts = parseCustomerDate(value, 'DMY');
+        // Display-only formatter. Never use this result as the RouterOS/API payload.
+        function formatMikrotikDate(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            const parts = parseCustomerDate(dateStr, 'DMY');
             if (!parts) return '';
-            return String(parts.day).padStart(2, '0') + '/' + String(parts.month).padStart(2, '0') + '/' + String(parts.year).padStart(4, '0');
+            const iso = String(parts.year).padStart(4, '0') + '-' +
+                String(parts.month).padStart(2, '0') + '-' +
+                String(parts.day).padStart(2, '0');
+            // Format only a validated calendar date; preserve the canonical date separately.
+            const match = iso.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+            return match ? `${match[3]}/${match[2]}/${match[1]}` : '';
+        }
+        function formatDateForInput(value) {
+            const formatted = formatMikrotikDate(value);
+            return formatted === '-' ? '' : formatted;
         }
         function initializeCustomerDatePickers(root = document) {
             if (typeof window.flatpickr !== 'function') {
