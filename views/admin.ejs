@@ -2040,17 +2040,23 @@ async function deletePlan(id,name){
             setPageTitleSafe(viewTitles[target] || 'Dashboard');
             currentPaymentChannel = channel || '';
             if (target === 'dashboard') {
-                refreshDashboard();
+                void refreshDashboard();
                 startTrafficPolling();
-            } else if (target === 'all-customer') {
-                fetchCustomers();
-            } else if (target === 'payments') {
-                fetchPayments(currentPaymentChannel);
-            } else if (target === 'general-settings') {
-                loadGeneralSettings();
-            } else if (target === 'hotspot-webhook') {
-                loadHotspotWebhookSettings();
-                loadHotspotProfileSettings();
+            } else {
+                if (trafficTimer) {
+                    clearInterval(trafficTimer);
+                    trafficTimer = null;
+                }
+                if (target === 'all-customer') {
+                    fetchCustomers();
+                } else if (target === 'payments') {
+                    fetchPayments(currentPaymentChannel);
+                } else if (target === 'general-settings') {
+                    loadGeneralSettings();
+                } else if (target === 'hotspot-webhook') {
+                    loadHotspotWebhookSettings();
+                    loadHotspotProfileSettings();
+                }
             }
             if (window.innerWidth < 768) closeSidebarMobile();
         }
@@ -3348,6 +3354,8 @@ async function deletePlan(id,name){
 
         async function pollTraffic() {
             if (trafficPollInFlight) return;
+            const dashboard = document.getElementById('view-dashboard');
+            if (!dashboard || dashboard.style.display === 'none') return;
             const select = document.getElementById('dashboardInterface');
             if (!select || !select.value) return;
             trafficPollInFlight = true;
@@ -3382,8 +3390,7 @@ async function deletePlan(id,name){
         function startTrafficPolling() {
             if (trafficTimer) clearInterval(trafficTimer);
             void loadInterfaces();
-            void pollTraffic();
-            trafficTimer = setInterval(() => { void pollTraffic(); }, 5000);
+            trafficTimer = setInterval(() => { void pollTraffic(); }, 10000);
         }
 
         async function safeAdminBootStep(label, task) {
@@ -3413,14 +3420,10 @@ async function deletePlan(id,name){
                 console.error('[Admin Boot] event binding failed:', error);
             }
 
+            // switchView('dashboard') owns the initial dashboard and traffic startup.
+            // Avoid issuing duplicate MikroTik requests during page initialization.
             try { void safeAdminBootStep('switch dashboard view', () => switchView('dashboard')); }
             catch (error) { console.error('[Admin Boot] switch dashboard failed:', error); }
-
-            try { void safeAdminBootStep('initial dashboard refresh', () => refreshDashboard()); }
-            catch (error) { console.error('[Admin Boot] dashboard refresh failed:', error); }
-
-            try { void safeAdminBootStep('traffic polling', () => startTrafficPolling()); }
-            catch (error) { console.error('[Admin Boot] traffic polling failed:', error); }
 
             try {
                 if (metricsTimer) clearInterval(metricsTimer);
@@ -3429,8 +3432,8 @@ async function deletePlan(id,name){
                     metricsPollInFlight = true;
                     (async () => {
                         try {
-                            await safeAdminBootStep('router metrics', () => loadRouterMetrics());
                             if (document.getElementById('view-dashboard')?.style.display !== 'none') {
+                                // refreshDashboard also updates router metrics; call it once per cycle.
                                 await safeAdminBootStep('dashboard refresh', () => refreshDashboard());
                             }
                             if (currentHotspotMode === 'dashboard' && document.getElementById('hotspotDashboardSessions')) {
@@ -3445,7 +3448,7 @@ async function deletePlan(id,name){
                             metricsPollInFlight = false;
                         }
                     })();
-                }, 5000);
+                }, 15000);
             } catch (error) {
                 console.error('[Admin Boot] metrics timer failed:', error);
             }
