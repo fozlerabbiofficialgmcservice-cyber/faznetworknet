@@ -226,3 +226,24 @@ ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_billing_cycle_check;
 ALTER TABLE customers ADD CONSTRAINT customers_billing_cycle_check CHECK (billing_cycle IN ('monthly','custom_days'));
 ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_billing_duration_days_check;
 ALTER TABLE customers ADD CONSTRAINT customers_billing_duration_days_check CHECK (billing_duration_days IS NULL OR billing_duration_days BETWEEN 1 AND 3650);
+
+
+-- Customer usage records: daily deltas collected from MikroTik PPPoE interface counters.
+CREATE TABLE IF NOT EXISTS customer_usage_daily (
+  customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  usage_date DATE NOT NULL,
+  download_bytes BIGINT NOT NULL DEFAULT 0 CHECK (download_bytes >= 0),
+  upload_bytes BIGINT NOT NULL DEFAULT 0 CHECK (upload_bytes >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (customer_id, usage_date)
+);
+CREATE INDEX IF NOT EXISTS idx_customer_usage_daily_date ON customer_usage_daily(usage_date DESC);
+CREATE TABLE IF NOT EXISTS customer_usage_counters (
+  customer_id BIGINT PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+  username VARCHAR(100) NOT NULL,
+  interface_name VARCHAR(150),
+  download_bytes BIGINT NOT NULL DEFAULT 0,
+  upload_bytes BIGINT NOT NULL DEFAULT 0,
+  session_id VARCHAR(80),
+  sampled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
