@@ -88,7 +88,7 @@ async function syncMikrotik(req,res){
 async function saveMfsAccounts(req,res){
  try{
   const body=req.body||{},normalized={};
-  for(const [name] of Object.entries(MFS_KEYS)){const value=String(body[name]??"").trim();if(value&&!/^[+()\\d\\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
+  for(const [name] of Object.entries(MFS_KEYS)){const value=String(body[name]??"").trim();if(value&&!/^[+()\d\s-]{8,24}$/.test(value))throw new Error("Enter a valid "+name+" Send Money number.");normalized[name]=value;}
   for(const [name,key] of Object.entries(MFS_KEYS))await upsertSetting(key,normalized[name]);
   return res.json({success:true,message:"Personal MFS Send Money accounts saved.",accounts:normalized});
  }catch(error){return errorResponse(res,error,400);}
