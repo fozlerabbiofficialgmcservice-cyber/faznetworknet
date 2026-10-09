@@ -2548,7 +2548,7 @@ async function deletePlan(id,name){
             }
             if (!raw) return '-';
             if (/^(?:EXPIRED_|UNLIMITED)/i.test(raw)) return 'EXP: ' + raw;
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return 'EXP: ' + FazDate.formatDate(raw) + ', 12:00 AM';
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return 'EXP: ' + FazDate.formatDate(raw);
             try {
                 const source = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw + 'T00:00:00+06:00' : raw;
                 const date = new Date(source);
@@ -2556,7 +2556,7 @@ async function deletePlan(id,name){
                 const dateFormatted = new Intl.DateTimeFormat('en-GB', {
                     timeZone: 'Asia/Dhaka', day: '2-digit', month: '2-digit', year: 'numeric'
                 }).format(date);
-                return 'EXP: ' + dateFormatted + ', 12:00 AM';
+                return 'EXP: ' + dateFormatted;
             } catch (_) {
                 return 'EXP: ' + raw;
             }
@@ -3161,7 +3161,7 @@ async function deletePlan(id,name){
                                 <div class="col-6"><small class="text-muted">${escapeHtml(t.full_name_phone)}</small><div>${escapeHtml(user.comment || '-')}</div><div>${escapeHtml(user.phone || '-')}</div></div>
                                 <div class="col-6"><small class="text-muted">${escapeHtml(t.package_profile)}</small><div>${escapeHtml(user.profile || '-')}</div></div>
                                 <div class="col-6"><small class="text-muted">${escapeHtml(t.ip_caller_id)}</small><div>${escapeHtml(user.session_ip || user.remote_address || '-')}</div><div>${escapeHtml(user.session_caller_id || user.caller_id || '-')}</div></div>
-                                <div class="col-6"><small class="text-muted">${escapeHtml(t.expiry_date)}</small><div>${escapeHtml(user.expiry_date ? FazDate.formatDateTime(user.expiry_date) : '-')}</div></div>
+                                <div class="col-6"><small class="text-muted">${escapeHtml(t.expiry_date)}</small><div>${escapeHtml(user.expiry_date ? FazDate.formatDate(user.expiry_date) : '-')}</div></div>
                             </div>
                         </div>
                     </div>
