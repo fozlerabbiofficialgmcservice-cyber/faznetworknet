@@ -3226,8 +3226,8 @@ async function deletePlan(id,name){
         function dateInputToIso(value) {
             const raw=String(value||'').trim();
             let year,month,day,match;
-            if((match=raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/))){year=Number(match[1]);month=Number(match[2]);day=Number(match[3]);}
-            else if((match=raw.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/))){day=Number(match[1]);month=Number(match[2]);year=Number(match[3]);}
+            if((match=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/))){year=Number(match[1]);month=Number(match[2]);day=Number(match[3]);}
+            else if((match=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/))){day=Number(match[1]);month=Number(match[2]);year=Number(match[3]);}
             else return '';
             const date=new Date(Date.UTC(year,month-1,day));
             if(date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return '';
