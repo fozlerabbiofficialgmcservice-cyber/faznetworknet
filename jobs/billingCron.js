@@ -49,11 +49,15 @@ async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
     await runExpiryWarnings();
+    const policyRows=await db.query("SELECT key,value FROM app_settings WHERE key IN ('grace_period_days','expiry_action')");
+    const policy=Object.fromEntries((policyRows.rows||[]).map(row=>[row.key,row.value]));
+    const graceDays=Math.max(0,Math.min(7,Number.parseInt(policy.grace_period_days||"0",10)||0));
+    const expiryAction=policy.expiry_action==="disable_secret"?"disable_secret":"quarantine";
     // Expiration dates are Bangladesh calendar dates. An explicit migration
     // override allows billing to be marked expired without changing live service.
     const q=await db.query(
-      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
-      [EXPIRED_PROFILE]
+      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE - $2::int AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
+      [EXPIRED_PROFILE,graceDays]
     );
     if(!q.rows.length){
       console.log("[BILLING EXPIRATION] No overdue customers found.");
@@ -62,7 +66,7 @@ async function runBillingExpiration(){
 
     // The quarantine profile is only needed for subscribers without an explicit
     // migration override. Never touch MikroTik for override customers.
-    if(q.rows.some(customer=>customer.billing_expiry_override!==true)){
+    if(expiryAction==="quarantine"&&q.rows.some(customer=>customer.billing_expiry_override!==true)){
       await mikrotikService.ensureExpiredProfile();
     }
     let expired=0,failed=0;
@@ -71,10 +75,13 @@ async function runBillingExpiration(){
         const overridden=customer.billing_expiry_override===true;
         let disconnected=false;
         if(!overridden){
-          // Keep the PPPoE secret enabled, move it to the quarantine profile,
-          // and reset its session so the profile's rate limit takes effect.
-          await mikrotikService.toggleSecret(customer.username,false);
-          await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
+          if(expiryAction==="disable_secret"){
+            await mikrotikService.toggleSecret(customer.username,true);
+          }else{
+            // Quarantine preserves the secret and MAC visibility while applying the expired profile.
+            await mikrotikService.toggleSecret(customer.username,false);
+            await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
+          }
           try{
             const result=await mikrotikService.kickActiveUser(customer.username);
             disconnected=Boolean(result?.kicked);
@@ -92,6 +99,11 @@ async function runBillingExpiration(){
           // active session for an explicitly overridden migration customer.
           await db.query(
             "UPDATE pppoe_users SET status='expired',billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
+            [customer.username]
+          );
+        }else if(expiryAction==="disable_secret"){
+          await db.query(
+            "UPDATE pppoe_users SET status='expired',disabled=TRUE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
             [customer.username]
           );
         }else{
@@ -115,7 +127,9 @@ async function runBillingExpiration(){
               :"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
             username:customer.username,
             expirationDate:customer.expiration_date,
-            expiredProfile:overridden?null:EXPIRED_PROFILE,
+            expiredProfile:overridden||expiryAction==="disable_secret"?null:EXPIRED_PROFILE,
+            expiryAction:overridden?"migration_override":expiryAction,
+            gracePeriodDays:graceDays,
             migrationOverride:overridden,
             sessionDisconnected:disconnected
           },
