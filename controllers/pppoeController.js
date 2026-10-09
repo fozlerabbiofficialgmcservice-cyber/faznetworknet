@@ -104,7 +104,7 @@ async function syncFromRouter(options = {}) {
         await client.query(
           `INSERT INTO pppoe_users
             (username, password, profile, service, caller_id, disabled, comment, phone, local_address, remote_address, router_id, raw_config, expiry_date, status, synced_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,NOW(),NOW())
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::date,CASE WHEN $13::date IS NOT NULL AND $13::date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,NOW(),NOW())
            ON CONFLICT (username) DO UPDATE SET
              password=COALESCE(EXCLUDED.password, pppoe_users.password), profile=EXCLUDED.profile, service=EXCLUDED.service,
              caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id), disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
@@ -151,8 +151,8 @@ async function syncFromRouter(options = {}) {
                 (full_name, phone, connection_date, username, password, package_name, profile,
                  monthly_bill, expiration_date, provisioning_status, status, router_id, created_at, updated_at)
                SELECT $1,$2,(NOW() AT TIME ZONE 'Asia/Dhaka')::date,$3,$4,
-                      LEFT(COALESCE(p.plan_name,$5),100),$5,COALESCE(p.price,0),$6,'provisioned',
-                      CASE WHEN $6 IS NOT NULL AND $6 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,
+                      LEFT(COALESCE(p.plan_name,$5),100),$5,COALESCE(p.price,0),$6::date,'provisioned',
+                      CASE WHEN $6::date IS NOT NULL AND $6::date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,
                       $7,NOW(),NOW()
                FROM (SELECT 1) seed
                LEFT JOIN LATERAL (
