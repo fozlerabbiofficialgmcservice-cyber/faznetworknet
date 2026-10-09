@@ -302,6 +302,34 @@ async function createCustomer(req, res) {
   }
 }
 
+async function syncPanelCustomersToMikroTik(req,res){
+  try{
+    if(!(await mikrotikService.testConnection()))return res.status(503).json({success:false,message:"MikroTik connection failed. No customer data was changed."});
+    const result=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
+      FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
+      WHERE c.username IS NOT NULL AND BTRIM(c.username)<>''
+      ORDER BY COALESCE(c.created_at,'1970-01-01'::timestamp) ASC,c.username ASC,c.id ASC`);
+    const outcomes=[];
+    for(const customer of result.rows){
+      const username=clean(customer.username,100);
+      if(!username){outcomes.push({username,status:"skipped",reason:"Missing username"});continue;}
+      try{
+        const secret=await mikrotikService.getPppoeSecret(username);
+        if(!secret){outcomes.push({username,status:"skipped",reason:"PPPoE secret not found on MikroTik"});continue;}
+        const expiry=normalizeDate(customer.expiration_date);
+        const comment=buildExpirationComment(customer.full_name,customer.phone,expiry,customer.remarks);
+        const expired=Boolean(expiry&&dateStatus(expiry)==="expired");
+        const preservePastDue=Boolean(customer.billing_expiry_override);
+        const profile=preservePastDue?clean(customer.profile||secret.profile,120):effectiveProfile(clean(customer.profile||secret.profile,120),expiry);
+        const disabled=preservePastDue?Boolean(customer.router_disabled):Boolean(expired||customer.router_disabled||["inactive","suspended"].includes(String(customer.status||"").toLowerCase()));
+        await mikrotikService.updateSecret(username,{password:customer.password||secret.password,profile,comment,disabled});
+        outcomes.push({username,status:"updated",profile,disabled});
+      }catch(error){outcomes.push({username,status:"failed",reason:error.message||"RouterOS update failed"});}
+    }
+    const updated=outcomes.filter(x=>x.status==="updated").length,failed=outcomes.filter(x=>x.status==="failed").length,skipped=outcomes.filter(x=>x.status==="skipped").length;
+    return res.json({success:failed===0,total:result.rows.length,updated,failed,skipped,results:outcomes,message:`Panel-to-MikroTik sync finished: ${updated} updated, ${skipped} skipped, ${failed} failed. Only existing PPPoE secrets were updated; users were not created or deleted.`});
+  }catch(error){console.error("[PANEL TO MIKROTIK SYNC]",error);return res.status(503).json({success:false,message:error.message||"Unable to sync panel customer data to MikroTik."});}
+}
 async function syncExpiryDatesToMikroTik(req,res){
   try{
     const result=await db.query("SELECT id,username,expiration_date FROM customers WHERE username IS NOT NULL AND BTRIM(username)<>'' ORDER BY COALESCE(created_at,'1970-01-01'::timestamp) ASC, username ASC, id ASC");
@@ -1104,4 +1132,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
