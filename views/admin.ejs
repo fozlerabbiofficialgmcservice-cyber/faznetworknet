@@ -7,6 +7,7 @@
     <% if (typeof brandSettings!=="undefined" && brandSettings.favicon_url) { %><link rel="icon" href="<%= brandSettings.favicon_url %>"><% } %>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary-color: #0a3d2e;
@@ -313,59 +314,67 @@
         .modal-backdrop { z-index: 1040 !important; }
         .modal { z-index: 1055 !important; }
         .modal.show { display: block; }
-        /* IPAM LIGHT THEME: scoped exclusively to the IP Pool page. */
-        .ipam-shell{background:#f8fafc!important;color:#0f172a!important;border:1px solid #e2e8f0!important;border-radius:16px;padding:clamp(12px,2vw,24px);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
-        .ipam-shell .ipam-loading{padding:44px;text-align:center;color:#64748b}
-        .ipam-shell .ipam-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:22px;border:1px solid #e2e8f0;border-radius:13px;background:#fff!important;box-shadow:0 1px 3px rgba(15,23,42,.05)}
-        .ipam-shell .ipam-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:800;color:#047857;margin-bottom:8px}
-        .ipam-shell .ipam-hero h3{font-size:clamp(20px,2vw,27px);font-weight:800;color:#0f172a!important;margin:0}
-        .ipam-shell .ipam-hero p{font-size:12px;color:#64748b!important;margin:8px 0 12px}
-        .ipam-shell .ipam-live-note{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#047857}
-        .ipam-shell .ipam-live-note span{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.1)}
+        /* IPAM MODERN LIGHT THEME: styles are scoped exclusively to IP Pool & Subnet Management. */
+        .ipam-shell{background:#f8fafc!important;color:#0f172a!important;border:1px solid #e2e8f0!important;border-radius:16px;padding:clamp(12px,1.8vw,22px);font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:14px;line-height:1.5}
+        .ipam-shell *{box-sizing:border-box}
+        .ipam-shell .ipam-loading{padding:36px;text-align:center;color:#475569}
+        .ipam-shell .ipam-hero{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;padding:20px;border:1px solid rgba(226,232,240,.95);border-radius:14px;background:#fff!important;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+        .ipam-shell .ipam-eyebrow{font-size:12px;letter-spacing:.12em;font-weight:800;color:#047857;margin-bottom:7px}
+        .ipam-shell .ipam-hero h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(21px,2vw,28px);line-height:1.25;font-weight:800;letter-spacing:-.035em;color:#0f172a!important;margin:0}
+        .ipam-shell .ipam-hero p{font-size:13px;color:#475569!important;margin:7px 0 10px;line-height:1.55}
+        .ipam-shell .ipam-live-note{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#047857}
+        .ipam-shell .ipam-live-note span{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}
         .ipam-shell .ipam-toolbar{display:flex;gap:8px;flex-wrap:wrap}
-        .ipam-shell .ipam-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0 20px}
-        .ipam-shell .ipam-metric{background:#fff!important;border:1px solid #e2e8f0;border-left:3px solid var(--ipam-metric-accent);border-radius:12px;padding:15px;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
-        .ipam-shell .ipam-metric span{font-size:11px;color:#64748b!important}
-        .ipam-shell .ipam-metric strong{display:block;font-size:24px;font-weight:800;letter-spacing:-.03em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f172a!important;margin-top:8px}
-        .ipam-shell .ipam-metric small{display:block;font-size:10px;color:#64748b!important;margin-top:5px}
+        .ipam-shell .ipam-toolbar .btn{font-size:12px;font-weight:650;padding:8px 12px;border-radius:9px}
+        .ipam-shell .ipam-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0 18px}
+        .ipam-shell .ipam-metric{background:#fff!important;border:1px solid rgba(226,232,240,.9);border-left:3px solid var(--ipam-metric-accent);border-radius:12px;padding:14px 15px;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:box-shadow .18s ease,transform .18s ease}
+        .ipam-shell .ipam-metric:hover{box-shadow:0 5px 14px rgba(15,23,42,.07);transform:translateY(-1px)}
+        .ipam-shell .ipam-metric span{font-size:12px;line-height:1.4;font-weight:700;color:#475569!important}
+        .ipam-shell .ipam-metric strong{display:block;font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:24px;font-weight:800;letter-spacing:-.035em;line-height:1.25;color:#0f172a!important;margin-top:7px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+        .ipam-shell .ipam-metric small{display:block;font-size:11px;line-height:1.45;color:#64748b!important;margin-top:5px}
         .ipam-shell .ipam-metric-sky{--ipam-metric-accent:#0ea5e9}.ipam-shell .ipam-metric-amber{--ipam-metric-accent:#f59e0b}.ipam-shell .ipam-metric-green{--ipam-metric-accent:#10b981}.ipam-shell .ipam-metric-util{--ipam-metric-accent:#8b5cf6}
-        .ipam-shell .ipam-util-line{display:flex;align-items:center;justify-content:space-between;gap:8px}.ipam-shell .ipam-util-line b{font-size:10px}
-        .ipam-shell .ipam-section{background:#fff!important;border:1px solid #e2e8f0;border-radius:13px;padding:16px;margin-top:16px;min-width:0;box-shadow:0 1px 3px rgba(15,23,42,.04)}
-        .ipam-shell .ipam-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px;flex-wrap:wrap}
-        .ipam-shell .ipam-section-head h4{font-size:14px;font-weight:800;color:#0f172a!important;margin:0}.ipam-shell .ipam-section-head p{font-size:11px;color:#64748b!important;margin:5px 0 0}
-        .ipam-shell .ipam-section-head>span{font-size:10px;color:#475569!important;border:1px solid #e2e8f0;border-radius:999px;padding:5px 9px;background:#f8fafc}
+        .ipam-shell .ipam-util-line{display:flex;align-items:center;justify-content:space-between;gap:8px}.ipam-shell .ipam-util-line b{font-size:11px;font-weight:700}
+        .ipam-shell .ipam-section{background:#fff!important;border:1px solid rgba(226,232,240,.95);border-radius:13px;padding:15px;margin-top:15px;min-width:0;box-shadow:0 1px 3px rgba(15,23,42,.035)}
+        .ipam-shell .ipam-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:13px;flex-wrap:wrap}
+        .ipam-shell .ipam-section-head h4{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;line-height:1.4;font-weight:800;color:#0f172a!important;margin:0;letter-spacing:-.015em}
+        .ipam-shell .ipam-section-head p{font-size:12px;line-height:1.5;color:#475569!important;margin:4px 0 0}
+        .ipam-shell .ipam-section-head>span{font-size:11px;font-weight:700;color:#334155!important;border:1px solid #e2e8f0;border-radius:999px;padding:5px 9px;background:#f8fafc}
         .ipam-shell .ipam-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-        .ipam-shell .ipam-pool-card{min-width:0;border:1px solid var(--ipam-accent);border-top:3px solid var(--ipam-accent);border-radius:12px;background:#fff!important;padding:16px;box-shadow:0 2px 7px rgba(15,23,42,.045);transition:transform .16s ease,border-color .16s ease}
-        .ipam-shell .ipam-pool-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.07)}
+        .ipam-shell .ipam-pool-card{display:flex;flex-direction:column;min-width:0;border:1px solid #e2e8f0;border-top:3px solid var(--ipam-accent);border-radius:12px;background:#fff!important;padding:14px;box-shadow:0 1px 3px rgba(15,23,42,.035);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+        .ipam-shell .ipam-pool-card:hover{transform:translateY(-1px);border-color:#cbd5e1;box-shadow:0 5px 14px rgba(15,23,42,.065)}
         .ipam-shell .ipam-pool-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-        .ipam-shell .ipam-type{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#64748b!important;font-weight:800}
-        .ipam-shell .ipam-pool-head h4{font-size:14px;font-weight:800;overflow-wrap:anywhere;color:#0f172a!important;margin:5px 0 0}
-        .ipam-shell .ipam-badge{display:inline-flex;align-items:center;white-space:nowrap;border:1px solid #e2e8f0;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:750}
-        .ipam-shell .ipam-healthy{color:#047857!important;background:#ecfdf5!important;border-color:#a7f3d0!important}.ipam-shell .ipam-warning{color:#b45309!important;background:#fffbeb!important;border-color:#fde68a!important}.ipam-shell .ipam-critical{color:#be123c!important;background:#fff1f2!important;border-color:#fecdd3!important}
-        .ipam-shell .ipam-pool-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:17px 0}
-        .ipam-shell .ipam-pool-data>div{min-width:0}.ipam-shell .ipam-pool-data span{display:block;font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:#64748b!important;margin-bottom:5px}
-        .ipam-shell .ipam-pool-data code,.ipam-shell .ipam-pool-data strong{font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#1e293b!important;overflow-wrap:anywhere;white-space:normal}
-        .ipam-shell .ipam-meter{height:7px;border-radius:999px;background:#e2e8f0!important;overflow:hidden}.ipam-shell .ipam-meter i{display:block;height:100%;border-radius:inherit;transition:width .2s ease}
-        .ipam-shell .ipam-pool-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid #f1f5f9}
-        .ipam-shell .ipam-pool-actions .btn{font-size:10px;border-radius:7px}.ipam-shell .ipam-pool-actions .btn:disabled{opacity:.45;cursor:not-allowed}
+        .ipam-shell .ipam-type{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#475569!important;font-weight:800}
+        .ipam-shell .ipam-pool-head h4{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;line-height:1.35;font-weight:800;overflow-wrap:anywhere;color:#0f172a!important;margin:4px 0 0}
+        .ipam-shell .ipam-badge{display:inline-flex;align-items:center;white-space:nowrap;border:1px solid #e2e8f0;border-radius:999px;padding:4px 8px;font-size:11px;line-height:1.3;font-weight:750}
+        .ipam-shell .ipam-healthy{color:#047857!important;background:#ecfdf5!important;border-color:#a7f3d0!important}.ipam-shell .ipam-warning{color:#92400e!important;background:#fffbeb!important;border-color:#fde68a!important}.ipam-shell .ipam-critical{color:#be123c!important;background:#fff1f2!important;border-color:#fecdd3!important}
+        .ipam-shell .ipam-pool-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin:13px 0}
+        .ipam-shell .ipam-pool-data>div{min-width:0;padding:0}
+        .ipam-shell .ipam-pool-data span{display:block;font-size:11px;line-height:1.35;letter-spacing:.065em;text-transform:uppercase;color:#475569!important;font-weight:750;margin-bottom:4px}
+        .ipam-shell .ipam-pool-data code,.ipam-shell .ipam-pool-data strong{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;font-weight:600;color:#1e293b!important;overflow-wrap:anywhere;white-space:normal;font-variant-numeric:tabular-nums}
+        .ipam-shell .ipam-meter{height:8px;flex:0 0 8px;border-radius:999px;background:#e2e8f0!important;overflow:hidden}.ipam-shell .ipam-meter i{display:block;height:100%;border-radius:inherit;transition:width .2s ease}
+        .ipam-shell .ipam-pool-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9}
+        .ipam-shell .ipam-pool-actions .btn{font-size:11px;line-height:1.35;font-weight:650;padding:5px 9px;border-radius:7px;white-space:nowrap}
+        .ipam-shell .ipam-pool-actions .btn:disabled{opacity:.5;cursor:not-allowed}
         .ipam-shell .ipam-filters{display:grid;grid-template-columns:minmax(220px,1fr) minmax(150px,220px) minmax(150px,200px);gap:8px;margin-bottom:12px}
-        .ipam-shell .ipam-filters .form-control,.ipam-shell .ipam-filters .form-select{background:#fff!important;color:#0f172a!important;border-color:#cbd5e1!important;font-size:11px;min-height:38px}
-        .ipam-shell .ipam-filters .form-control::placeholder{color:#94a3b8!important}
-        .ipam-shell .ipam-table{color:#334155!important;font-size:11px;min-width:800px;background:#fff!important}
-        .ipam-shell .ipam-table thead th{background:#f8fafc!important;color:#64748b!important;border-bottom:1px solid #e2e8f0;border-top:0;padding:12px;font-size:9px;letter-spacing:.09em;white-space:nowrap}
-        .ipam-shell .ipam-table tbody td{padding:11px 12px;border-color:#f1f5f9!important;color:#334155!important;background:#fff}
+        .ipam-shell .ipam-filters .form-control,.ipam-shell .ipam-filters .form-select{background:#fff!important;color:#0f172a!important;border-color:#cbd5e1!important;font-family:'Inter',sans-serif;font-size:12px;min-height:38px;border-radius:8px}
+        .ipam-shell .ipam-filters .form-control::placeholder{color:#64748b!important;opacity:1}
+        .ipam-shell .ipam-table{color:#334155!important;font-size:12px;min-width:800px;background:#fff!important}
+        .ipam-shell .ipam-table thead th{background:#f8fafc!important;color:#475569!important;border-bottom:1px solid #e2e8f0;border-top:0;padding:11px 12px;font-size:11px;font-weight:800;letter-spacing:.07em;white-space:nowrap}
+        .ipam-shell .ipam-table tbody td{padding:10px 12px;border-color:#f1f5f9!important;color:#334155!important;background:#fff;vertical-align:middle}
         .ipam-shell .ipam-table tbody tr:hover td{background:#f8fafc!important}
-        .ipam-shell .ipam-table code{font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f766e!important}
-        .ipam-shell .ipam-muted{font-size:10px;color:#64748b!important}
-        .ipam-shell .ipam-pool-tag{display:inline-block;max-width:180px;overflow-wrap:anywhere;border:1px solid #e2e8f0;background:#f8fafc!important;color:#475569!important;border-radius:6px;padding:4px 7px;font-size:10px}
-        .ipam-shell .ipam-table-foot{padding:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#64748b!important;line-height:1.5;background:#f8fafc}
-        .ipam-shell .ipam-empty{padding:35px;text-align:center;color:#64748b!important;border:1px dashed #cbd5e1;border-radius:10px;grid-column:1/-1}
+        .ipam-shell .ipam-table code{font:600 12px 'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f766e!important}
+        .ipam-shell .ipam-muted{font-size:12px;color:#475569!important}
+        .ipam-shell .ipam-pool-tag{display:inline-block;max-width:180px;overflow-wrap:anywhere;border:1px solid #e2e8f0;background:#f8fafc!important;color:#334155!important;border-radius:6px;padding:4px 7px;font-size:11px;font-weight:650}
+        .ipam-shell .ipam-table-foot{padding:11px 12px;border-top:1px solid #e2e8f0;font-size:11px;color:#475569!important;line-height:1.55;background:#f8fafc}
+        .ipam-shell .ipam-empty{padding:28px 18px;text-align:center;color:#475569!important;border:1px dashed #cbd5e1;border-radius:10px;grid-column:1/-1;font-size:13px}
         .ipam-shell .bg-slate-950,.ipam-shell .bg-slate-900,.ipam-shell .bg-slate-800{background-color:#fff!important}
         .ipam-shell .text-slate-100,.ipam-shell .text-slate-200,.ipam-shell .text-slate-300,.ipam-shell .text-white{color:#0f172a!important}
-        .ipam-shell .text-slate-400,.ipam-shell .text-slate-500,.ipam-shell .text-slate-600{color:#64748b!important}
+        .ipam-shell .text-slate-400,.ipam-shell .text-slate-500,.ipam-shell .text-slate-600{color:#475569!important}
         .ipam-shell .border-slate-800,.ipam-shell .border-slate-700{border-color:#e2e8f0!important}
-        @media(max-width:1100px){.ipam-shell .ipam-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media(max-width:768px){.ipam-shell{padding:10px}.ipam-shell .ipam-hero{padding:16px}.ipam-shell .ipam-toolbar{width:100%}.ipam-shell .ipam-toolbar .btn{flex:1}.ipam-shell .ipam-grid{grid-template-columns:1fr}.ipam-shell .ipam-filters{grid-template-columns:1fr}.ipam-shell .ipam-section{padding:12px}.ipam-shell .ipam-metrics{gap:8px}.ipam-shell .ipam-metric{padding:12px}.ipam-shell .ipam-metric strong{font-size:20px}.ipam-shell .ipam-pool-actions .btn{flex:1}}
+        @media(max-width:1100px){.ipam-shell .ipam-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ipam-shell .ipam-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.ipam-shell .ipam-filters #ipamSearch{grid-column:1/-1}}
+        @media(max-width:768px){.ipam-shell{padding:10px;border-radius:12px}.ipam-shell .ipam-hero{padding:15px}.ipam-shell .ipam-toolbar{width:100%}.ipam-shell .ipam-toolbar .btn{flex:1}.ipam-shell .ipam-grid{grid-template-columns:1fr}.ipam-shell .ipam-filters{grid-template-columns:1fr}.ipam-shell .ipam-filters #ipamSearch{grid-column:auto}.ipam-shell .ipam-section{padding:11px}.ipam-shell .ipam-metrics{gap:8px}.ipam-shell .ipam-metric{padding:11px}.ipam-shell .ipam-metric strong{font-size:21px}.ipam-shell .ipam-pool-actions .btn{flex:0 1 auto}.ipam-shell .ipam-pool-data{gap:10px}}
+        @media(max-width:420px){.ipam-shell .ipam-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ipam-shell .ipam-metric strong{font-size:19px}.ipam-shell .ipam-pool-actions .btn{flex:1}.ipam-shell .ipam-pool-head{gap:6px}.ipam-shell .ipam-badge{font-size:10px;padding:4px 6px}}
+        @media(prefers-reduced-motion:reduce){.ipam-shell .ipam-metric,.ipam-shell .ipam-pool-card{transition:none}.ipam-shell .ipam-pool-card:hover,.ipam-shell .ipam-metric:hover{transform:none}}
         
         /* IP Pools enterprise UI */
         .ip-pool-shell{position:relative}
