@@ -120,7 +120,7 @@ async function verifyTrx(req,res){
      WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1))
        AND (used = false OR used IS NULL)
        AND LOWER(TRIM(status)) IN ('unmatched', 'pending', 'received', 'paid')
-     LIMIT 1;`,[cleanTrx]);
+     LIMIT 1;`,[rawTrx]);
   console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
   if(!q.rows.length){
    const existing=await db.query("SELECT status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
