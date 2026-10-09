@@ -189,7 +189,7 @@ async function users(req, res) {
 
 async function profiles(req, res) {
   try {
-    const result = await db.query("SELECT * FROM pppoe_profiles ORDER BY name ASC");
+    const result = await db.query("SELECT * FROM pppoe_profiles WHERE LOWER(name) NOT LIKE '%default%' AND LOWER(name) <> 'vpn' AND LOWER(name) NOT LIKE 'template-%' AND LOWER(name) NOT LIKE 'internal-%' AND LOWER(name) NOT LIKE 'system-%' ORDER BY name ASC");
     res.json({ success: true, profiles: result.rows });
   } catch (error) {
     return errorResponse(res, error);
