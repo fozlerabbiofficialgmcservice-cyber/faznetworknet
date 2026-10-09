@@ -29,5 +29,5 @@ test("public homepage contains customer login and account status entry points", 
 
 test("test runner uses Node's built-in test framework", () => {
   const pkg = JSON.parse(read("package.json"));
-  assert.equal(pkg.scripts.test, "node --test test/**/*.test.js");
+  assert.equal(pkg.scripts.test, "node --test");
 });
