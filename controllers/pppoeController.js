@@ -72,7 +72,7 @@ async function syncFromRouter() {
       await client.query(
         `INSERT INTO pppoe_users
           (username, password, profile, service, caller_id, disabled, comment, phone, local_address, remote_address, router_id, raw_config, expiry_date, status, synced_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < CURRENT_DATE THEN 'expired' ELSE 'active' END,NOW(),NOW())
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,NOW(),NOW())
          ON CONFLICT (username) DO UPDATE SET
            password=COALESCE(EXCLUDED.password, pppoe_users.password), profile=EXCLUDED.profile, service=EXCLUDED.service,
            caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id), disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
@@ -111,22 +111,22 @@ async function users(req, res) {
 
     if (filter === "active") {
       conditions.push("u.status = 'active'");
-      conditions.push("(u.expiry_date IS NULL OR u.expiry_date >= CURRENT_DATE)");
+      conditions.push("(u.expiry_date IS NULL OR u.expiry_date >= (NOW() AT TIME ZONE 'Asia/Dhaka')::date)");
       conditions.push("u.disabled = FALSE");
     } else if (filter === "expire") {
       conditions.push("u.expiry_date IS NOT NULL");
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date < CURRENT_DATE");
+      conditions.push("u.expiry_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date");
     } else if (filter === "expire_today_yesterday") {
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date BETWEEN (CURRENT_DATE - INTERVAL '1 day') AND CURRENT_DATE");
+      conditions.push("u.expiry_date BETWEEN ((NOW() AT TIME ZONE 'Asia/Dhaka')::date - INTERVAL '1 day') AND (NOW() AT TIME ZONE 'Asia/Dhaka')::date");
     } else if (filter === "expire_7_days") {
       conditions.push("u.expiry_date IS NOT NULL");
-      conditions.push("u.expiry_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '7 days')");
+      conditions.push("u.expiry_date BETWEEN (NOW() AT TIME ZONE 'Asia/Dhaka')::date AND ((NOW() AT TIME ZONE 'Asia/Dhaka')::date + INTERVAL '7 days')");
     } else if (filter === "new") {
       conditions.push("u.created_at >= NOW() - INTERVAL '7 days'");
     } else if (filter === "due") {
-      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date < CURRENT_DATE) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
+      conditions.push("(u.expiry_date IS NOT NULL AND u.expiry_date < (NOW() AT TIME ZONE 'Asia/Dhaka')::date) OR LOWER(COALESCE(u.status, '')) IN ('disabled', 'left', 'terminated') OR u.disabled = TRUE");
     }
 
     const whereClause = conditions.length ? "WHERE " + conditions.map(c => "(" + c + ")").join(" AND ") : "";
