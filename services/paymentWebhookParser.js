@@ -30,9 +30,9 @@ function extractWebhookPayload(body,query={},headers={}){
   return {text:String(typeof text==="object"?JSON.stringify(text):text||""),sender:String(sender||"").trim(),token:String(token||"").trim()};
 }
 function normalizePhone(value){
-  let p=String(value||"").replace(/[^\d+]/g,"");
-  if(p.startsWith("+880"))p="0"+p.slice(4);
-  else if(p.startsWith("880"))p="0"+p.slice(3);
+  const bangla="০১২৩৪৫৬৭৮৯";
+  let p=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/[^0-9]/g,"");
+  if(p.startsWith("880")&&p.length===13)p="0"+p.slice(3);
   return p;
 }
 function normalizeAmount(value){
