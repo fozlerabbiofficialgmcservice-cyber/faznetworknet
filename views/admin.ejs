@@ -2466,11 +2466,14 @@ async function deletePlan(id,name){
             return window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
         }
         async function openCustomerEditForm(customerId,usernameFallback){
-            const id=String(customerId||usernameFallback||'').trim();
-            if(!id){alert('Customer ID or PPPoE username is missing.');return;}
+            // RouterOS IDs are not customer-table IDs and can collide with a
+            // panel-created customer's numeric database ID. Resolve edits by
+            // the selected PPPoE username, never by the row's router ID.
+            const username=String(usernameFallback||customerId||'').trim();
+            if(!username){alert('Customer ID or PPPoE username is missing.');return;}
             try{
-                const data=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/profile'),customer=data.customer||{};
-                if(!customer.username)throw new Error('Customer details could not be loaded.');
+                const data=await jsonFetch('/api/customers/profile?username='+encodeURIComponent(username)),customer=data.customer||{};
+                if(!customer.username)throw new Error('Customer details could not be loaded for '+username+'.');
                 await populateCustomerEditForm(customer,customer.username);
                 const modal=ensureCustomerEditFormModal();
                 if(!modal)throw new Error('Bootstrap modal is unavailable. Refresh the admin panel and try again.');
