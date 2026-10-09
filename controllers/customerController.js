@@ -73,6 +73,22 @@ function addBangladeshCalendarMonth(dateString) {
   const lastDay=new Date(Date.UTC(targetYear,targetMonth+1,0)).getUTCDate();
   return [targetYear,String(targetMonth+1).padStart(2,"0"),String(Math.min(day,lastDay)).padStart(2,"0")].join("-");
 }
+function nextBillingExpiryDate(currentExpiry,cycleValue,durationDaysValue) {
+  const parsed=normalizeDate(currentExpiry),today=bangladeshToday(),base=parsed&&parsed>=today?parsed:today;
+  if(String(cycleValue||"monthly").trim().toLowerCase()==="custom_days"){
+    const days=Number.parseInt(durationDaysValue,10);
+    if(!Number.isInteger(days)||days<1||days>3650)throw new Error("Custom billing duration must be between 1 and 3650 days.");
+    const [year,month,day]=base.split("-").map(Number),next=new Date(Date.UTC(year,month-1,day+days));
+    return [next.getUTCFullYear(),String(next.getUTCMonth()+1).padStart(2,"0"),String(next.getUTCDate()).padStart(2,"0")].join("-");
+  }
+  return addBangladeshCalendarMonth(base);
+}
+function validDateOnly(value) {
+  const raw=clean(value,20);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
+  const [year,month,day]=raw.split("-").map(Number),date=new Date(Date.UTC(year,month-1,day));
+  return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
+}
 function expirationEndOfDay(expirationDate) {
   const raw = normalizeDate(expirationDate);
   if (!raw) return null;
@@ -351,7 +367,7 @@ async function profile(req,res){
       fullName:clean(dbUser?.full_name||(nameMatch?nameMatch[1].trim():"")||username,200),
       phone:clean(dbUser?.phone||(phoneMatch?phoneMatch[1].trim():""),40),alternative_phone:clean(dbUser?.alternative_phone,40),
       profile:profileName||"—",package_name:clean(dbUser?.package_name||profileName||"—",120),password:clean(mtSecret?.password||dbUser?.password||"",255),
-      expiration_date:expiration||null,expirationDate:expiration||null,remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft,paid_until:paidUntil||null,
+      expiration_date:expiration||null,expirationDate:expiration||null,billing_cycle:clean(dbUser?.billing_cycle||"monthly",30),billing_duration_days:dbUser?.billing_duration_days==null?null:Number(dbUser.billing_duration_days),billing_expiry_override:Boolean(dbUser?.billing_expiry_override),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft,paid_until:paidUntil||null,
       disabled:Boolean(mtSecret?.disabled),remote_address:clean(mtSecret?.remoteAddress||dbUser?.remote_address,100),caller_id:clean(mtSecret?.callerId||dbUser?.caller_id,100),
       service:clean(mtSecret?.service||"pppoe",30),installation_address:dbUser?.installation_address||"",olt_pon_port:dbUser?.olt_pon_port||"",
       distribution_box:dbUser?.distribution_box||dbUser?.fiber_box||"",onu_mac:dbUser?.onu_mac||"",onu_serial:dbUser?.onu_serial||"",
@@ -604,8 +620,7 @@ async function renew(req,res){
     const customer=customerResult.rows[0]||null, routerUser=pppoeResult.rows[0]||null;
     if(!customer&&!routerUser)return res.status(404).json({success:false,message:"Customer not found."});
     const currentExp=normalizeDate(customer?.expiration_date||routerUser?.expiry_date);
-    const today=bangladeshToday(), base=currentExp&&currentExp>=today?currentExp:today;
-    const newExpDate=addBangladeshCalendarMonth(base);
+    const newExpDate=nextBillingExpiryDate(currentExp,customer?.billing_cycle,customer?.billing_duration_days);
     const phone=clean(customer?.phone||routerUser?.phone||"",40),fullName=clean(customer?.full_name||"",200);
     const comment=buildExpirationComment(fullName,phone,newExpDate,clean(customer?.remarks||"",1000));
     const packageProfileResult=customer?.package_name
@@ -733,12 +748,26 @@ async function updateCustomer(req,res){
     const current=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
     if(!current.rows.length)return res.status(404).json({success:false,message:"Customer not found."});
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
-    const alternativePhone=clean(body.alternativePhone||body.alternative_phone||row.alternative_phone,40),expirationDate=normalizeDate(body.expirationDate)||normalizeDate(row.expiration_date)||bangladeshToday();
+    const alternativePhone=clean(body.alternativePhone||body.alternative_phone||row.alternative_phone,40);
+    const hasOwn=(key)=>Object.prototype.hasOwnProperty.call(body,key);
+    const billingDateKey=["billing_expiry_date","next_billing_date","expirationDate","expiration_date"].find(hasOwn);
+    const rawBillingDate=billingDateKey?body[billingDateKey]:row.expiration_date;
+    if(["billing_expiry_date","next_billing_date"].includes(billingDateKey)&&!String(rawBillingDate||"").trim())return res.status(400).json({success:false,message:"Billing expiry date is required."});
+    if(billingDateKey&&String(rawBillingDate||"").trim()&&!validDateOnly(rawBillingDate))return res.status(400).json({success:false,message:"Billing expiry date must be a valid YYYY-MM-DD calendar date."});
+    const expirationDate=normalizeDate(rawBillingDate)||normalizeDate(row.expiration_date)||bangladeshToday();
+    const cycleRaw=body.billing_cycle??body.billingCycle??row.billing_cycle??"monthly";
+    const billingCycle=String(cycleRaw||"monthly").trim().toLowerCase().replace(/[ -]+/g,"_");
+    if(!["monthly","custom_days"].includes(billingCycle))return res.status(400).json({success:false,message:"Billing cycle must be Monthly or Custom Days."});
+    const durationRaw=body.billing_duration_days??body.billingDurationDays??row.billing_duration_days;
+    const billingDurationDays=billingCycle==="custom_days"?Number.parseInt(durationRaw,10):null;
+    if(billingCycle==="custom_days"&&(!Number.isInteger(billingDurationDays)||billingDurationDays<1||billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
+    const manualBillingOverride=["billing_expiry_date","next_billing_date","billing_cycle","billingCycle","billing_duration_days","billingDurationDays","billing_expiry_override"].some(hasOwn);
+    const billingExpiryOverride=hasOwn("billing_expiry_override")?["true","1","yes","on"].includes(String(body.billing_expiry_override).toLowerCase()):manualBillingOverride?true:Boolean(row.billing_expiry_override);
     const requestedProfile=clean(body.profile||body.packageProfile||row.profile,120),packageName=clean(body.package||body.packageName||row.package_name||requestedProfile,120);
     const packageDefinition=await resolvePackageDefinition(requestedProfile,packageName);
     if(!packageDefinition)return res.status(400).json({success:false,message:"Selected package/profile is not configured in the billing package table."});
     const profileName=packageDefinition.profileName||requestedProfile,password=clean(body.password||row.password,255);
-    const disabled=body.disabled===undefined?false:["true","yes","1"].includes(String(body.disabled).toLowerCase());
+    const disabled=body.disabled===undefined?["inactive","suspended"].includes(String(row.status||"").toLowerCase()):["true","yes","1"].includes(String(body.disabled).toLowerCase());
     const billingStatus=String(body.billingStatus||body.billing_status||row.billing_status||"unpaid").toLowerCase()==="paid"?"paid":"unpaid";
     const address=clean(body.installationAddress||body.address||row.installation_address,1000),areaZone=clean(body.areaZone||body.area_zone||row.area_zone,150),oltPonPort=clean(body.oltPonPort||body.olt_pon_port||row.olt_pon_port,120);
     const distributionBox=clean(body.distributionBox||body.distribution_box||body.fiberBox||row.distribution_box||row.fiber_box,150),onuMac=clean(body.onuMac||body.onu_mac||row.onu_mac,100);
@@ -746,19 +775,26 @@ async function updateCustomer(req,res){
     const usernameChanged=String(row.username).toLowerCase()!==username.toLowerCase(),packageChanged=String(row.profile||"").toLowerCase()!==profileName.toLowerCase();
     const duplicate=await db.query("SELECT id FROM customers WHERE id<>$1 AND (LOWER(username)=LOWER($2) OR phone=$3) LIMIT 1",[row.id,username,phone]);
     if(duplicate.rows.length)return res.status(409).json({success:false,message:"Another customer already uses this username or phone number."});
-    const comment=buildExpirationComment(fullName,phone,expirationDate,remarks),expired=dateStatus(expirationDate)==="expired",effectiveDisabled=expired||disabled,previousUsername=clean(row.username,100);
+    const comment=buildExpirationComment(fullName,phone,expirationDate,remarks),expired=dateStatus(expirationDate)==="expired",previousUsername=clean(row.username,100);
+    const nextBillingStatus=expired?"unpaid":billingStatus;
+    // Migration overrides preserve the chosen date without automatically moving a
+    // previously enabled subscriber to the EXPIRED profile or disabling their line.
+    const preservePastDueConnection=manualBillingOverride&&billingExpiryOverride;
+    const effectiveDisabled=preservePastDueConnection?disabled:(expired||disabled);
+    const routerProfile=preservePastDueConnection?profileName:effectiveProfile(profileName,expirationDate);
     if(await mikrotikService.testConnection()){
-      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:effectiveProfile(profileName,expirationDate),comment,disabled:effectiveDisabled});
-      else await mikrotikService.updateSecret(username,{password,profile:effectiveProfile(profileName,expirationDate),comment,disabled:effectiveDisabled});
+      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled});
+      else await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled});
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
-    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,provisioning_status='provisioned',status=$20,updated_at=NOW() WHERE id=$21 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,billingStatus,expired?"expired":effectiveDisabled?"inactive":"active",row.id]);
+    const nextStatus=expired?"expired":effectiveDisabled?"inactive":"active";
+    const result=await db.query(`UPDATE customers SET full_name=$1,phone=$2,username=$3,password=$4,package_name=$5,profile=$6,monthly_bill=$7,installation_address=$8,area_zone=$9,fiber_box=$10,onu_mac=$11,remarks=$12,expiration_date=$13,alternative_phone=$14,olt_pon_port=$15,distribution_box=$16,onu_serial=$17,fiber_drop_core=$18,billing_status=$19,paid_until=CASE WHEN $19='paid' THEN $13 ELSE paid_until END,billing_cycle=$20,billing_duration_days=$21,billing_expiry_override=$22,provisioning_status='provisioned',status=$23,updated_at=NOW() WHERE id=$24 RETURNING *`,[fullName,phone,username,password,packageDefinition.name,profileName,packageDefinition.price,address,areaZone,distributionBox,onuMac,remarks,expirationDate,alternativePhone,oltPonPort,distributionBox,onuSerial,fiberDropCore,nextBillingStatus,billingCycle,billingDurationDays,billingExpiryOverride,nextStatus,row.id]);
     if(usernameChanged)await db.query("DELETE FROM pppoe_users WHERE LOWER(username)=LOWER($1)",[previousUsername]);
     await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,billing_status,paid_until,synced_at,updated_at)
-      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN $10='paid' THEN $8 ELSE NULL END,NOW(),NOW())
+      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,$10,CASE WHEN $10='paid' THEN $8 ELSE NULL END,NOW(),NOW())
       ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=EXCLUDED.phone,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,billing_status=EXCLUDED.billing_status,paid_until=EXCLUDED.paid_until,synced_at=NOW(),updated_at=NOW()`,
-      [username,password,effectiveProfile(profileName,expirationDate),effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,expired?"expired":effectiveDisabled?"inactive":"active",billingStatus]);
-    await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"UPDATE_INFO",details:{message:"Updated customer profile details",previous:{name:row.full_name,phone:row.phone,username:row.username,package:row.package_name,profile:row.profile,area:row.area_zone,expirationDate:row.expiration_date},next:{name:fullName,phone,username,package:packageDefinition.name,profile:profileName,area:areaZone,expirationDate}},ipAddress:getIpAddress(req)});
+      [username,password,routerProfile,effectiveDisabled,comment,phone,String(process.env.ROUTER_HOST||""),expirationDate,nextStatus,nextBillingStatus]);
+    await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"UPDATE_INFO",details:{message:"Updated customer profile details",previous:{name:row.full_name,phone:row.phone,username:row.username,package:row.package_name,profile:row.profile,area:row.area_zone,expirationDate:row.expiration_date,billingCycle:row.billing_cycle,billingDurationDays:row.billing_duration_days,billingExpiryOverride:row.billing_expiry_override},next:{name:fullName,phone,username,package:packageDefinition.name,profile:profileName,area:areaZone,expirationDate,billingCycle,billingDurationDays,billingExpiryOverride,billingStatus:nextBillingStatus}},ipAddress:getIpAddress(req)});
     if(packageChanged) await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"CHANGE_PACKAGE",details:{message:`Package changed from ${row.package_name||row.profile} to ${packageDefinition.name}`,previousPackage:row.package_name,previousProfile:row.profile,newPackage:packageDefinition.name,newProfile:profileName},ipAddress:getIpAddress(req)});
     return res.json({success:true,message:"Customer profile saved and synchronized with MikroTik.",customer:result.rows[0],kicked:packageChanged});
   }catch(error){return errorResponse(res,error);}
@@ -791,7 +827,7 @@ async function resolveCustomer360(idValue){
    const formattedPhone=formatBdPhoneNumber(customer.phone);
   const status=disabled?(String(customer.status||"").toLowerCase()==="suspended"?"suspended":"inactive"):(expiration&&dateStatus(expiration)==="expired"?"expired":"active");
   return {
-    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),alternativePhone:formatBdPhoneNumber(customer.alternative_phone),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remoteAddress||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
+    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),alternativePhone:formatBdPhoneNumber(customer.alternative_phone),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remoteAddress||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
     live:{isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||"",100),uptime:clean(session?.uptime||"",100),bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||"0",lastDisconnectReason:clean(customer.last_disconnect_reason,255)},
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
@@ -801,7 +837,7 @@ async function resolveCustomer360(idValue){
 async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){return errorResponse(res,error);}}
 async function kickCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const result=await mikrotikService.kickActiveUser(payload.customer.username);if(result.kicked){await db.query("UPDATE customers SET last_disconnect_reason=$1,updated_at=NOW() WHERE id=$2",["Manual kick by admin",payload.customer.id]);await logAuditAction({customerId:payload.customer.id,adminId:getAdminId(req),action:"KICK",details:{message:"Customer PPPoE session force-disconnected from MikroTik",username:payload.customer.username,sessions:result.count||0},ipAddress:getIpAddress(req)});}return res.json({success:true,...result});}catch(error){return errorResponse(res,error);}}
 async function toggleCustomerStatus(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const suspend=Boolean(req.body?.suspend);if(!suspend&&payload.customer.expirationDate&&dateStatus(payload.customer.expirationDate)==="expired")return res.status(409).json({success:false,message:"Customer is expired. Renew the package before reactivating the line."});const row=(await db.query("SELECT * FROM customers WHERE id=$1 LIMIT 1",[payload.customer.id])).rows[0];const targetProfile=suspend?clean(process.env.EXPIRED_PROFILE_NAME||"EXPIRED",100):clean(row.profile,100);const comment=buildExpirationComment(row.full_name,row.phone,normalizeDate(row.expiration_date)||bangladeshToday(),row.remarks);await mikrotikService.updateSecret(row.username,{password:row.password,profile:targetProfile,remoteAddress:row.remote_address,comment,disabled:suspend});await db.query("UPDATE customers SET status=$1,updated_at=NOW() WHERE id=$2",[suspend?"suspended":"active",row.id]);await db.query("UPDATE pppoe_users SET profile=$1,disabled=$2,status=$3,updated_at=NOW(),synced_at=NOW() WHERE LOWER(username)=LOWER($4)",[targetProfile,suspend,suspend?"suspended":"active",row.username]);if(suspend)await mikrotikService.kickActiveUser(row.username);await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:suspend?"SUSPEND":"REACTIVATE",details:{message:suspend?"Account suspended. Moved to EXPIRED profile in MikroTik":`Account reactivated. Restored to ${row.profile} profile`,previousStatus:row.status,newStatus:suspend?"suspended":"active",previousProfile:row.profile,newProfile:targetProfile},ipAddress:getIpAddress(req)});return res.json({success:true,suspended,profile:targetProfile,message:suspend?"Customer line suspended.":"Customer line reactivated."});}catch(error){return errorResponse(res,error);}}
-async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),today=bangladeshToday(),base=currentExp&&currentExp>=today?currentExp:today,newExpDate=addBangladeshCalendarMonth(base);
+async function renewCustomerById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});const amount=Number(req.body?.amount),method=clean(req.body?.paymentMethod||req.body?.method||"cash",20).toLowerCase();let trxId=clean(req.body?.trxId,100);const price=Number(payload.package?.price||0);if(!Number.isFinite(amount)||Math.abs(amount-price)>0.009)return res.status(400).json({success:false,message:"Payment amount must exactly match the current package price of ৳"+price.toFixed(2)+"."});if(!["cash","bkash","nagad","rocket"].includes(method))return res.status(400).json({success:false,message:"Unsupported payment method."});if(method!=="cash"&&!trxId)return res.status(400).json({success:false,message:"Trx ID is required for mobile banking payments."});if(!trxId)trxId="CASH-"+Date.now()+"-"+payload.customer.id;const currentExp=normalizeDate(payload.customer.expirationDate),newExpDate=nextBillingExpiryDate(currentExp,payload.customer.billingCycle,payload.customer.billingDurationDays);
     // Always restore the configured package profile, never EXPIRED.
     const activeProfile=clean(payload.package?.profileName||payload.customer.profile,100);
     if(!activeProfile||activeProfile.toUpperCase()==="EXPIRED")throw new Error("Customer package profile is missing or invalid.");

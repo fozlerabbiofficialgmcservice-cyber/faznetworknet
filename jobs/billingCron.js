@@ -7,10 +7,10 @@ const EXPIRED_PROFILE=String(process.env.EXPIRED_PROFILE_NAME||"EXPIRED").trim()
 async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
-    // expiration_date is a Bangladesh calendar date. A subscriber is overdue
-    // once that calendar date has fully passed, regardless of router/session state.
+    // expiration_date is a Bangladesh calendar date. Migration overrides still
+    // transition to expired billing status, but the worker preserves the live line.
     const q=await db.query(
-      "SELECT id,username,full_name,phone,expiration_date,status FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) <> 'expired' ORDER BY expiration_date ASC,id ASC"
+      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) <> 'expired' ORDER BY expiration_date ASC,id ASC"
     );
     if(!q.rows.length){
       console.log("[BILLING EXPIRATION] No overdue customers found.");
@@ -20,6 +20,15 @@ async function runBillingExpiration(){
     let expired=0,failed=0;
     for(const customer of q.rows){
       try{
+        if(customer.billing_expiry_override){
+          // Migration override means expiry still updates billing status, but must
+          // not change the live router profile, disable the secret, or kick sessions.
+          await db.query("UPDATE customers SET status='expired',billing_status='unpaid',updated_at=NOW() WHERE id=$1",[customer.id]);
+          await db.query("UPDATE pppoe_users SET status='expired',billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",[customer.username]);
+          await logAuditAction({customerId:customer.id,adminId:"billing-cron",action:"AUTO_EXPIRE_STATUS_ONLY",details:{message:"Billing expiry reached; migration override preserved the live connection",username:customer.username,expirationDate:customer.expiration_date,connectionPreserved:true},ipAddress:null});
+          expired++;
+          continue;
+        }
         // changeSecretProfile resolves the live /ppp/secret .id and emits exactly:
         // ['/ppp/secret/set', '=.id=<secretId>', '=profile=EXPIRED']
         await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
