@@ -2852,6 +2852,7 @@ async function deletePlan(id,name){
                                     <input id="customerLiveSearch" type="search" class="form-control" placeholder="${escapeHtml(t.search_customers)}" data-placeholder-key="search_customers" oninput="filterCustomerRows(this.value)">
                                 </div>
                             </div>
+                            <button class="btn btn-success btn-sm mt-2 mt-md-0" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button>
                             <button class="btn btn-outline-success btn-sm mt-2 mt-md-0" onclick="refreshCustomerSection()"><i class="bi bi-arrow-clockwise"></i></button>
                         </div>
                         <div id="customerBillingTabs" class="px-3 pt-3 d-flex flex-wrap gap-2">
