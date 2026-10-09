@@ -29,7 +29,8 @@ async function webhook(req,res){
    user=found.rows[0]||null;
   }
   if(!user&&payment.senderPhone){
-   const found=await db.query("SELECT username FROM pppoe_users WHERE phone=$1 LIMIT 1",[payment.senderPhone]);
+   const found=await db.query("SELECT username,phone FROM pppoe_users WHERE phone IS NOT NULL");
+   user=found.rows.find(row=>normalizePhone(row.phone)===payment.senderPhone)||null;
    user=found.rows[0]||null;
   }
   let status="unmatched";
@@ -44,7 +45,8 @@ async function webhook(req,res){
     await renewCustomer(customer);status="PAID";
    }
   }
-  await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,user?user.username:null,payment.rawSms,Boolean(user)]);
+  const renewalCompleted=status==="PAID";
+  await db.query("INSERT INTO transactions(channel,trx_id,sender_phone,amount,status,matched_username,raw_sms,used) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[payment.channel,payment.trxId,payment.senderPhone,payment.amount,status,renewalCompleted&&user?user.username:null,payment.rawSms,renewalCompleted]);
   return res.json({success:true,status,trx_id:payment.trxId,customerRef:payment.customerRef,matched_username:user?user.username:null,amount:payment.amount,channel:payment.channel});
  }catch(error){return errorResponse(res,error,400);}
 }
@@ -87,16 +89,22 @@ async function manualMatch(req,res){
   const trxId=String(req.body.trxId||req.body.trxid||req.body.txnId||"").trim().toUpperCase();
   const username=String(req.body.username||"").trim();
   if(!trxId||!username)return res.status(400).json({success:false,error:"trxId and username are required."});
-
-  const t=await db.query("SELECT * FROM transactions WHERE LOWER(trx_id)=LOWER($1) LIMIT 1",[trxId]);
+  const t=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trxId]);
   if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});
-  const tx=t.rows[0];
-  if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be manually matched."});
-
+  const tx=t.rows[0],status=String(tx.status||"").trim().toLowerCase();
+  if(tx.used===true||["paid","processed","processing","duplicate"].includes(status))return res.status(409).json({success:false,error:"This transaction has already been claimed or processed and cannot be manually matched."});
+  if(status!=="unmatched")return res.status(409).json({success:false,error:"Only unmatched transactions can be manually matched."});
   const user=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
   if(!user.rows.length)return res.status(404).json({success:false,error:"PPPoE customer not found."});
-
-  const customer=await getCustomerPackage(user.rows[0].username);if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});const expected=Number(customer.price||0);if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expected.toFixed(2)} is required to activate or renew service.`,expectedAmount:expected,paidAmount:Number(tx.amount)});const expiration=await renewCustomer(customer);await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2",[user.rows[0].username,tx.id]);return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
+  const customer=await getCustomerPackage(user.rows[0].username);
+  if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});
+  const expected=Number(customer.price||0);
+  if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:"Payment rejected. Exact bill amount of ৳"+expected.toFixed(2)+" is required to activate or renew service.",expectedAmount:expected,paidAmount:Number(tx.amount)});
+  const claim=await db.query("UPDATE transactions SET status='processing',used=true,matched_username=$1 WHERE id=$2 AND used=false AND LOWER(TRIM(status))='unmatched' RETURNING id",[user.rows[0].username,tx.id]);
+  if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another request."});
+  const expiration=await renewCustomer(customer);
+  await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND status='processing' AND used=true",[user.rows[0].username,tx.id]);
+  return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){return errorResponse(res,e,503);}
 }
 async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status IN ('processed','PAID')) AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:r.rows});}catch(e){return errorResponse(res,e,503);}}
@@ -119,7 +127,7 @@ async function verifyTrx(req,res){
   const q=await db.query(`SELECT * FROM transactions
      WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1))
        AND (used = false OR used IS NULL)
-       AND LOWER(TRIM(status)) IN ('unmatched', 'pending', 'received', 'paid')
+       AND LOWER(TRIM(status)) = 'unmatched'
      LIMIT 1;`,[rawTrx]);
   console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
   if(!q.rows.length){
@@ -152,7 +160,7 @@ async function verifyTrx(req,res){
   const claim=await db.query(`UPDATE transactions
      SET used=true,status='processing',matched_username=$1
      WHERE id=$2 AND (used=false OR used IS NULL)
-       AND LOWER(TRIM(status)) IN ('unmatched','pending','received','paid')
+       AND LOWER(TRIM(status)) = 'unmatched'
      RETURNING id;`,[phone,tx.id]);
   if(!claim.rows.length)return res.status(409).json({success:false,error:"This transaction has already been claimed by another verification request."});
   claimedTransactionId=tx.id;
