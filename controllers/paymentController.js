@@ -116,10 +116,16 @@ async function verifyTrx(req,res){
  try{
   const phone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
   if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
-  const trx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.trxid||body.txnId||body.txnid||query.trxId||"").trim();
-  if(!trx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
-  const q=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1)) AND (used = false OR LOWER(TRIM(status)) = 'unmatched') ORDER BY created_at DESC, id DESC LIMIT 1",[trx]);
-  console.log('[VERIFY DB RESULT]', q.rows);
+  const rawTrx = req.body.trxId || req.body.trx_id || req.body.transaction_id || req.body.trx || req.body.txnid || req.query.trxId || '';
+  const cleanTrx = String(rawTrx).trim().toUpperCase();
+  if(!cleanTrx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
+  console.log('[VERIFY-TRX QUERY PARAM]:', cleanTrx);
+  const q=await db.query(`SELECT * FROM transactions
+     WHERE UPPER(TRIM(trx_id)) = $1
+       AND (used = false OR used IS NULL)
+       AND (LOWER(TRIM(status)) IN ('unmatched', 'pending', 'received') OR status IS NULL)
+     LIMIT 1;`,[cleanTrx]);
+  console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
   if(!q.rows.length)return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});
   const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(String(tx.status||"").trim().toLowerCase()==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
   const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
@@ -143,7 +149,7 @@ async function verifyTrx(req,res){
   if(!validity&&!Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0))return res.status(400).json({success:false,error:"The selected Hotspot profile has no usable validity or data quota configured."});
   await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+trx.trim().toUpperCase()+" | Paid: ৳"+amount});
   await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[phone,tx.id]);
-  return res.json({success:true,username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
+  return res.json({success:true,message:'সফল হয়েছে!',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){return errorResponse(res,e,503);}
 }
 
