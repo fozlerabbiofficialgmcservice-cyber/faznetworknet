@@ -85,13 +85,16 @@ async function manualMatch(req,res){
   const trxId=String(req.body.trxId||req.body.trxid||req.body.txnId||"").trim().toUpperCase();
   const username=String(req.body.username||"").trim();
   if(!trxId||!username)return res.status(400).json({success:false,error:"trxId and username are required."});
+
   const t=await db.query("SELECT * FROM transactions WHERE LOWER(trx_id)=LOWER($1) LIMIT 1",[trxId]);
   if(!t.rows.length)return res.status(404).json({success:false,error:"Transaction not found."});
   const tx=t.rows[0];
-  if(tx.status==="duplicate"||tx.used||tx.status==="processing")return res.status(409).json({success:false,error:"This transaction is already used or being processed and cannot be manually matched."});
+  if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be manually matched."});
+
   const user=await db.query("SELECT username FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
   if(!user.rows.length)return res.status(404).json({success:false,error:"PPPoE customer not found."});
-  const customer=await getCustomerPackage(user.rows[0].username);if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});const expected=Number(customer.price||0);if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expected.toFixed(2)} is required to activate or renew service.`,expectedAmount:expected,paidAmount:Number(tx.amount)});const expiration=await renewCustomer(customer);await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2 AND used=false",[user.rows[0].username,tx.id]);return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
+
+  const customer=await getCustomerPackage(user.rows[0].username);if(!customer||!customer.plan_name)return res.status(400).json({success:false,error:"Customer has no linked billing package."});const expected=Number(customer.price||0);if(moneyCents(tx.amount)!==moneyCents(expected))return res.status(400).json({success:false,message:`Payment rejected. Exact bill amount of ৳${expected.toFixed(2)} is required to activate or renew service.`,expectedAmount:expected,paidAmount:Number(tx.amount)});const expiration=await renewCustomer(customer);await db.query("UPDATE transactions SET status='PAID',matched_username=$1,used=true WHERE id=$2",[user.rows[0].username,tx.id]);return res.json({success:true,trxId:tx.trx_id,username:user.rows[0].username,expiration,message:"Exact payment accepted; customer renewed and MikroTik service activated."});
  }catch(e){return errorResponse(res,e,503);}
 }
 async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(amount),0) AS today_collection,COUNT(*) FILTER(WHERE status IN ('processed','PAID')) AS processed_today FROM transactions WHERE created_at::date=CURRENT_DATE");const recent=await db.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 8");res.json({success:true,summary:r.rows[0],recent:r.rows});}catch(e){return errorResponse(res,e,503);}}
