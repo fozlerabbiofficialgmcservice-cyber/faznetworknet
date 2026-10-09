@@ -1,0 +1,11 @@
+const express=require("express");
+const router=express.Router();
+const reports=require("../controllers/reportController");
+router.get("/collection",reports.collection);
+router.get("/due",reports.due);
+router.get("/hotspot-revenue",reports.hotspot);
+router.get("/expenses",reports.expenses);
+router.post("/expenses",reports.addExpense);
+router.put("/expenses/:id",reports.updateExpense);
+router.delete("/expenses/:id",reports.deleteExpense);
+module.exports=router;

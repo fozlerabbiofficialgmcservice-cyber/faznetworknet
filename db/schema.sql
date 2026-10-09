@@ -248,3 +248,18 @@ CREATE TABLE IF NOT EXISTS customer_usage_counters (
   session_id VARCHAR(80),
   sampled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+-- Reporting suite: expense tracking.
+CREATE TABLE IF NOT EXISTS expenses (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(160) NOT NULL,
+  category VARCHAR(80) NOT NULL,
+  amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+  date DATE NOT NULL,
+  notes TEXT,
+  created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_category_date ON expenses(category,date DESC);
