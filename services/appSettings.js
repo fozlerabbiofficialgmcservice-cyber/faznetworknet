@@ -6,14 +6,20 @@ const DEFAULTS={
  support_phone:"01339932887",whatsapp_number:"8801339932887",office_address:"FAZ NETWORK, Bangladesh",
  btrc_license_number:"",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved.",
  billing_cycle_type:"rolling_30",grace_period_days:"0",expiry_action:"quarantine",
- sms_gateway_mode:"disabled",sms_api_url:"",sms_api_key:"",sms_sender_id:"",
- sms_device_url:"",sms_device_token:"",sms_event_expiry_warning:"true",
- sms_event_payment_receipt:"true",sms_event_line_expiry:"true"
+  sms_gateway_mode:"disabled",sms_provider_mode:"disabled",sms_api_url:"",sms_api_key:"",sms_sender_id:"",sms_api_method:"POST",
+ sms_device_url:"",sms_device_webhook_url:"",sms_device_token:"",sms_event_expiry_warning:"true",
+ sms_event_payment_receipt:"true",sms_event_line_expiry:"true",
+ sms_template_expiry_warning:"Dear {name}, your FAZ NETWORK bill of Tk {amount} is expiring on {expiry_date}. Please pay to avoid line cut. Helpline: {support_phone}",
+ sms_template_payment_receipt:"Dear {name}, payment of Tk {amount} received successfully via {gateway}. TrxID: {trx_id}. Your line is active till {new_expiry_date}. Thank you, FAZ NETWORK.",
+ sms_template_line_block:"Dear {name}, your internet connection has expired. Please recharge via bKash/Nagad to reactivate your internet immediately. Helpline: {support_phone}"
 };
 let cached=null,expiresAt=0,refreshPromise=null;
 function bool(v){return v===true||String(v||"").toLowerCase()==="true"||String(v||"")==="1";}
 function normalize(map){
  const out={...DEFAULTS,...map};
+ // Canonical SMS setting keys are kept compatible with the first settings-suite release.
+ if(map.sms_provider_mode)out.sms_gateway_mode=map.sms_provider_mode;else out.sms_provider_mode=out.sms_gateway_mode;
+ if(map.sms_device_webhook_url)out.sms_device_url=map.sms_device_webhook_url;else out.sms_device_webhook_url=out.sms_device_url;
  out.company_name=String(out.company_name||DEFAULTS.company_name).slice(0,160);
  out.public_base_url=String(out.public_base_url||"").slice(0,500);
  out.logo_url=String(out.logo_url||"").slice(0,1000);

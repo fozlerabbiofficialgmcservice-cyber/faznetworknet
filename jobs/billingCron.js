@@ -11,7 +11,7 @@ async function runExpiryWarnings(){
     if(!["bulk_sms","personal_device"].includes(String(settings.sms_gateway_mode||"disabled"))||
        !require("../services/appSettings").bool(settings.sms_event_expiry_warning))return {checked:0,sent:0};
     const due=await db.query(
-      "SELECT username,phone,expiration_date FROM customers WHERE expiration_date=CURRENT_DATE+3 AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"
+      "SELECT username,full_name,monthly_bill,phone,expiration_date FROM customers WHERE expiration_date=CURRENT_DATE+3 AND phone IS NOT NULL AND BTRIM(phone)<>'' AND LOWER(COALESCE(status,'')) NOT IN ('expired','inactive','left','suspended') ORDER BY expiration_date,username"
     );
     let sent=0;
     for(const customer of due.rows||[]){
@@ -25,7 +25,7 @@ async function runExpiryWarnings(){
         const result=await require("../services/smsService").sendNotification({
           to:customer.phone,
           message:"Reminder from FAZ NETWORK: your internet bill expires in 3 days. Please renew on time to avoid service interruption.",
-          event:"expiry_warning"
+          event:"expiry_warning",variables:{name:customer.full_name||customer.username,username:customer.username,amount:customer.monthly_bill,expiry_date:String(customer.expiration_date).slice(0,10)}
         });
         if(result.skipped){
           await db.query("DELETE FROM sms_notification_log WHERE event_key=$1",[eventKey]);
@@ -114,7 +114,7 @@ async function runBillingExpiration(){
         }
 
         if(!overridden&&customer.phone){
-          Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Your FAZ NETWORK internet service has expired due to unpaid bill. Please renew to restore service.",event:"line_expiry"})).catch(error=>console.warn("[SMS] Expiry notice failed for "+customer.username+":",error.message));
+          Promise.resolve().then(()=>require("../services/smsService").sendNotification({to:customer.phone,message:"Your FAZ NETWORK internet service has expired due to unpaid bill. Please renew to restore service.",event:"line_expiry",variables:{name:customer.full_name||customer.username,username:customer.username}})).catch(error=>console.warn("[SMS] Expiry notice failed for "+customer.username+":",error.message));
         }
 
         await logAuditAction({
