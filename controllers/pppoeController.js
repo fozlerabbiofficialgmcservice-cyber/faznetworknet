@@ -35,13 +35,10 @@ function extractExpiryDate(comment) {
     : "";
 }
 
-function extractPhone(comment) {
-  const text = String(comment || "");
-  const match = text.match(/(?:phone|mobile|tel|মোবাইল|ফোন)\s*[:=-]?\s*([+\d][\d\s-]{7,})/i);
-  return match ? match[1].trim() : "";
-}
-
-async function syncFromRouter(options = {}) {
+function buildSyncPhone(username) {
+  const crypto = require("crypto");
+  const normalized = String(username || "").trim().toLowerCase();
+  const slug = normalized.replace(/[^a-z0-9]/g, "").slice(0, 20) || "async function syncFromRouter(options = {}) {
   const onlyUsername = clean(options.onlyUsername, 100).toLowerCase();
   const [profiles, fetchedSecrets] = await Promise.all([
     onlyUsername ? Promise.resolve([]) : mikrotikService.fetchExistingProfiles(),
@@ -51,9 +48,19 @@ async function syncFromRouter(options = {}) {
     ? fetchedSecrets.filter(user => String(user.name || "").trim().toLowerCase() === onlyUsername)
     : fetchedSecrets;
   const routerId = String(process.env.ROUTER_HOST || "");
+  const summary = {
+    profiles: 0,
+    users: 0,
+    importedCustomers: 0,
+    existingCustomers: 0,
+    skippedDeleted: [],
+    failedUsers: [],
+    failedCustomerImports: []
+  };
 
-  const result = await db.withTransaction(async (client) => {
-    // Never resurrect a username explicitly deleted by an admin.
+  await db.withTransaction(async (client) => {
+    // An explicit admin deletion is authoritative. A sync must NEVER delete a
+    // panel customer, and it must not recreate a deliberately deleted username.
     const tombstoneResult = await client.query("SELECT LOWER(username) AS username FROM customer_deletion_tombstones");
     const deletedUsernames = new Set(tombstoneResult.rows.map(row => String(row.username || "").toLowerCase()));
 
@@ -72,51 +79,117 @@ async function syncFromRouter(options = {}) {
           profile.idleTimeout, profile.onlyOne, profile.changeTcpMss, profile.comment, routerId, JSON.stringify(profile.raw || {})
         ]
       );
+      summary.profiles++;
     }
 
     for (const user of secrets) {
-      const usernameKey = String(user.name || "").trim().toLowerCase();
-      if (!usernameKey || deletedUsernames.has(usernameKey)) {
-        if (usernameKey) console.log("[PPPoE SYNC] Skipping admin-deleted username:", user.name);
+      const username = String(user.name || "").trim().slice(0, 100);
+      const usernameKey = username.toLowerCase();
+      if (!usernameKey) continue;
+
+      if (deletedUsernames.has(usernameKey)) {
+        summary.skippedDeleted.push(username);
+        console.log("[PPPoE SYNC] Explicitly deleted username remains protected; sync did not restore or delete it:", username);
         continue;
       }
-      const comment = user.comment || "";
-      await client.query(
-        `INSERT INTO pppoe_users
-          (username, password, profile, service, caller_id, disabled, comment, phone, local_address, remote_address, router_id, raw_config, expiry_date, status, synced_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,NOW(),NOW())
-         ON CONFLICT (username) DO UPDATE SET
-           password=COALESCE(EXCLUDED.password, pppoe_users.password), profile=EXCLUDED.profile, service=EXCLUDED.service,
-           caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id), disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
-           phone=COALESCE(NULLIF(EXCLUDED.phone,''), pppoe_users.phone), local_address=EXCLUDED.local_address,
-           remote_address=EXCLUDED.remote_address, router_id=EXCLUDED.router_id, raw_config=EXCLUDED.raw_config, expiry_date=EXCLUDED.expiry_date,
-           status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()`,
-        [
-          user.name, user.password, user.profile, user.service, user.callerId, user.disabled, comment,
-          extractPhone(comment), user.localAddress, user.remoteAddress, routerId, JSON.stringify(user.raw || {}), extractExpiryDate(comment)
-        ]
-      );
 
-      // Router-only PPPoE users must also appear in All Customers, which reads
-      // from the customers table. Create a minimal import record only when no
-      // billing customer exists; never overwrite existing billing/payment data.
-      const importedName = (String(comment).match(/Customer:\s*([^|]+)/i)?.[1] || user.name).trim().slice(0, 200);
-      const importedPhone = extractPhone(comment) || ("SYNC-" + String(user.name).trim()).slice(0, 40);
-      const importedExpiry = extractExpiryDate(comment) || null;
-      const importedProfile = String(user.profile || "Imported").trim().slice(0, 100);
-      await client.query(
-        `INSERT INTO customers
-          (full_name, phone, connection_date, username, password, package_name, profile,
-           monthly_bill, expiration_date, provisioning_status, status, router_id, created_at, updated_at)
-         SELECT $1,$2,(NOW() AT TIME ZONE 'Asia/Dhaka')::date,$3,$4,
-                COALESCE(p.plan_name,$5),$5,COALESCE(p.price,0),$6,'provisioned',
-                CASE WHEN $6 IS NOT NULL AND $6 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,
-                $7,NOW(),NOW()
-         FROM (SELECT 1) seed
-         LEFT JOIN LATERAL (
-           SELECT plan_name, price FROM packages
-           WHERE LOWER(profile_name)=LOWER($5) OR LOWER(plan_name)=LOWER($5)
-           ORDER BY CASE WHEN LOWER(profile_name)=LOWER($5) THEN 0 ELSE 1 END
+      await client.query("SAVEPOINT pppoe_user_sync");
+      try {
+        const comment = user.comment || "";
+        await client.query(
+          `INSERT INTO pppoe_users
+            (username, password, profile, service, caller_id, disabled, comment, phone, local_address, remote_address, router_id, raw_config, expiry_date, status, synced_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,CASE WHEN $13 IS NOT NULL AND $13 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,NOW(),NOW())
+           ON CONFLICT (username) DO UPDATE SET
+             password=COALESCE(EXCLUDED.password, pppoe_users.password), profile=EXCLUDED.profile, service=EXCLUDED.service,
+             caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id), disabled=EXCLUDED.disabled, comment=EXCLUDED.comment,
+             phone=COALESCE(NULLIF(EXCLUDED.phone,''), pppoe_users.phone), local_address=EXCLUDED.local_address,
+             remote_address=EXCLUDED.remote_address, router_id=EXCLUDED.router_id, raw_config=EXCLUDED.raw_config, expiry_date=EXCLUDED.expiry_date,
+             status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()`,
+          [
+            username, user.password, user.profile, user.service, user.callerId, user.disabled, comment,
+            extractPhone(comment).slice(0, 40), user.localAddress, user.remoteAddress, routerId, JSON.stringify(user.raw || {}), extractExpiryDate(comment)
+          ]
+        );
+        summary.users++;
+
+        // Import into the billing table ONLY when that username has no panel
+        // record yet. Existing configured customer data is never overwritten.
+        await client.query("SAVEPOINT billing_customer_import");
+        try {
+          const existingCustomer = await client.query(
+            "SELECT id FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",
+            [username]
+          );
+          if (existingCustomer.rows.length) {
+            summary.existingCustomers++;
+          } else {
+            const importedName = (String(comment).match(/Customer:\\s*([^|]+)/i)?.[1] || username).trim().slice(0, 200);
+            const importedExpiry = extractExpiryDate(comment) || null;
+            const importedProfile = String(user.profile || "Imported").trim().slice(0, 100) || "Imported";
+            const phoneFromComment = extractPhone(comment).slice(0, 40);
+            let importedPhone = phoneFromComment || buildSyncPhone(username);
+            const phoneTaken = await client.query(
+              "SELECT 1 FROM customers WHERE phone=$1 LIMIT 1",
+              [importedPhone]
+            );
+            if (phoneTaken.rows.length) importedPhone = buildSyncPhone(username);
+
+            // Synthetic phone values must also be unique. This only affects a
+            // new router-only import; existing panel phone numbers stay intact.
+            let salt = 0;
+            while (true) {
+              const syntheticTaken = await client.query(
+                "SELECT 1 FROM customers WHERE phone=$1 LIMIT 1",
+                [importedPhone]
+              );
+              if (!syntheticTaken.rows.length) break;
+              salt++;
+              importedPhone = buildSyncPhone(username + ":" + salt);
+              if (salt > 5) throw new Error("Could not generate a unique import phone placeholder.");
+            }
+
+            const inserted = await client.query(
+              `INSERT INTO customers
+                (full_name, phone, connection_date, username, password, package_name, profile,
+                 monthly_bill, expiration_date, provisioning_status, status, router_id, created_at, updated_at)
+               SELECT $1,$2,(NOW() AT TIME ZONE 'Asia/Dhaka')::date,$3,$4,
+                      LEFT(COALESCE(p.plan_name,$5),100),$5,COALESCE(p.price,0),$6,'provisioned',
+                      CASE WHEN $6 IS NOT NULL AND $6 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,
+                      $7,NOW(),NOW()
+               FROM (SELECT 1) seed
+               LEFT JOIN LATERAL (
+                 SELECT plan_name, price FROM packages
+                 WHERE LOWER(profile_name)=LOWER($5) OR LOWER(plan_name)=LOWER($5)
+                 ORDER BY CASE WHEN LOWER(profile_name)=LOWER($5) THEN 0 ELSE 1 END
+                 LIMIT 1
+               ) p ON TRUE
+               ON CONFLICT (username) DO NOTHING`,
+              [importedName, importedPhone, username, user.password || "", importedProfile, importedExpiry, routerId]
+            );
+            if (inserted.rowCount) summary.importedCustomers++;
+            else summary.existingCustomers++;
+          }
+          await client.query("RELEASE SAVEPOINT billing_customer_import");
+        } catch (importError) {
+          await client.query("ROLLBACK TO SAVEPOINT billing_customer_import");
+          await client.query("RELEASE SAVEPOINT billing_customer_import");
+          summary.failedCustomerImports.push({ username, reason: importError.message || "Billing customer import failed." });
+          console.warn("[PPPoE SYNC] Router user synced, but Billing customer import failed for " + username + ":", importError.message);
+        }
+
+        await client.query("RELEASE SAVEPOINT pppoe_user_sync");
+      } catch (error) {
+        await client.query("ROLLBACK TO SAVEPOINT pppoe_user_sync");
+        await client.query("RELEASE SAVEPOINT pppoe_user_sync");
+        summary.failedUsers.push({ username, reason: error.message || "Router user sync failed." });
+        console.warn("[PPPoE SYNC] One user failed; other customer rows are preserved and continue syncing:", username, error.message);
+      }
+    }
+  });
+
+  return summary;
+}Y CASE WHEN LOWER(profile_name)=LOWER($5) THEN 0 ELSE 1 END
            LIMIT 1
          ) p ON TRUE
          ON CONFLICT (username) DO NOTHING`,
