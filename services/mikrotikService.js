@@ -221,8 +221,15 @@ class MikroTikService {
   async syncPanelCustomerSecrets(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
     return this._withConnection("bulk panel-to-MikroTik PPPoE sync", async (connection) => {
-      const rows = await connection.write("/ppp/secret/print", ["?service=pppoe"]);
-      const secrets = new Map((Array.isArray(rows) ? rows : []).map(item => [this._str(item.name).trim().toLowerCase(), item]));
+      // Match both explicit PPPoE and RouterOS service=any secrets. Never
+      // touch PPTP/L2TP/OVPN/SSTP-specific users through the PPPoE panel sync.
+      const rows = await connection.write("/ppp/secret/print");
+      const secrets = new Map((Array.isArray(rows) ? rows : [])
+        .filter(item => {
+          const service = this._str(item.service).trim().toLowerCase() || "any";
+          return ["pppoe", "any"].includes(service);
+        })
+        .map(item => [this._str(item.name).trim().toLowerCase(), item]));
       const results = []; let updated = 0, skipped = 0, failed = 0;
       for (const customer of customers) {
         const username = this._str(customer && customer.username).trim();
@@ -267,8 +274,24 @@ class MikroTikService {
   }
   async fetchExistingSecrets() {
     return this._withConnection("PPPoE secret sync", async (connection) => {
-      const rows = await connection.write("/ppp/secret/print", ["?service=pppoe"]);
-      return (Array.isArray(rows) ? rows : []).map((item) => ({ id: this._str(item[".id"]), name: this._str(item.name), password: this._str(item.password), profile: this._str(item.profile), service: this._str(item.service) || "pppoe", callerId: this._str(item["caller-id"]), disabled: this._bool(item.disabled), comment: this._str(item.comment), localAddress: this._str(item["local-address"]), remoteAddress: this._str(item["remote-address"]), raw: item })).filter((item) => item.name);
+      // RouterOS defaults PPP secrets to service=any. Include those records
+      // as PPPoE-capable users; querying only service=pppoe silently omitted them.
+      const rows = await connection.write("/ppp/secret/print");
+      return (Array.isArray(rows) ? rows : [])
+        .map((item) => ({
+          id: this._str(item[".id"]),
+          name: this._str(item.name),
+          password: this._str(item.password),
+          profile: this._str(item.profile),
+          service: this._str(item.service) || "any",
+          callerId: this._str(item["caller-id"]),
+          disabled: this._bool(item.disabled),
+          comment: this._str(item.comment),
+          localAddress: this._str(item["local-address"]),
+          remoteAddress: this._str(item["remote-address"]),
+          raw: item
+        }))
+        .filter((item) => item.name && ["pppoe", "any"].includes(item.service.trim().toLowerCase()));
     });
   }
   async getActiveSessions() {
