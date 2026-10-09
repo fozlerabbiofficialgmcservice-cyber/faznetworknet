@@ -1,7 +1,11 @@
 process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
-const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
+const path=require("path");const crypto=require("crypto");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
 const db=require("./db");const publicMikrotikService=require("./services/mikrotikService");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
+const isProduction=process.env.NODE_ENV==="production";
+const configuredSessionSecret=String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"").trim();
+if(isProduction&&!configuredSessionSecret){throw new Error("ADMIN_SESSION_SECRET or SESSION_SECRET must be configured in production.");}
+const sessionSecret=configuredSessionSecret||crypto.randomBytes(32).toString("hex");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 app.use(session({
@@ -11,14 +15,14 @@ app.use(session({
     createTableIfMissing:true,
     pruneSessionInterval:60*15
   }),
-  secret:String(process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||"faz_network_super_secret_session_2026"),
+  secret:sessionSecret,
   resave:false,
   saveUninitialized:false,
   rolling:true,
   cookie:{
     maxAge:30*24*60*60*1000,
     httpOnly:true,
-    secure:false,
+    secure:isProduction,
     sameSite:"lax"
   }
 }));
