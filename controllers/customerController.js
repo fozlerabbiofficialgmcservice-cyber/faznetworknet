@@ -755,8 +755,47 @@ async function updateCustomer(req,res){
   const body=req.body||{},id=clean(req.params.id||body.id||body.username,100);
   if(!id)return res.status(400).json({success:false,message:"Customer ID or username is required."});
   try{
-    const current=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
-    if(!current.rows.length)return res.status(404).json({success:false,message:"Customer not found."});
+    const selectedUsername=clean(body.username,100);
+    let current;
+    if(selectedUsername && selectedUsername.toLowerCase()===id.toLowerCase()){
+      // The Online Customer editor sends the PPPoE username as both the route
+      // key and identity, so never let a numeric RouterOS username collide with
+      // another customer's numeric database ID.
+      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[selectedUsername]);
+    }else{
+      // Keep backwards compatibility for other panel screens that still submit
+      // a database ID rather than the PPPoE username.
+      current=await db.query("SELECT * FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[id]);
+    }
+    // Online Customer rows may exist only in MikroTik. When an admin edits one,
+    // import its edited identity into billing first instead of returning 404 or
+    // accidentally matching an unrelated customer by numeric RouterOS ID.
+    if(!current.rows.length){
+      const username=clean(body.username||id,100);
+      if(username.toLowerCase()!==id.toLowerCase())return res.status(409).json({success:false,message:"Change the PPPoE username only after the original customer has been imported into billing."});
+      let secret=null;
+      try{secret=await mikrotikService.getPppoeSecret(username);}catch(error){return res.status(404).json({success:false,message:"This customer is not in Billing Panel and MikroTik could not be read: "+(error.message||"router lookup failed")});}
+      if(!secret)return res.status(404).json({success:false,message:"Customer not found in Billing Panel or MikroTik."});
+      const fullName=clean(body.fullName||body.name||"",200),phone=clean(body.phone,40);
+      const connectionDate=normalizeDate(body.connectionDate||body.activationDate)||bangladeshToday();
+      const expirationDate=normalizeDate(body.expirationDate)||bangladeshToday();
+      const requestedProfile=clean(body.packageProfile||body.profile||secret.profile,120);
+      const packageName=clean(body.package||body.packageName||requestedProfile,120);
+      if(!fullName||!phone||!requestedProfile||!clean(body.password||secret.password,255)){
+        return res.status(400).json({success:false,message:"Name, phone, password, and a configured package/profile are required to import this MikroTik customer into Billing Panel."});
+      }
+      const packageDefinition=await resolvePackageDefinition(requestedProfile,packageName);
+      if(!packageDefinition)return res.status(400).json({success:false,message:"Selected MikroTik profile is not mapped to a Billing Panel package. Configure the package/profile first."});
+      const duplicate=await db.query("SELECT id,username FROM customers WHERE phone=$1 LIMIT 1",[phone]);
+      if(duplicate.rows.length)return res.status(409).json({success:false,message:"This phone number is already assigned to Billing Panel customer "+duplicate.rows[0].username+"."});
+      const imported=await db.query(`INSERT INTO customers
+        (full_name,phone,connection_date,username,password,package_name,profile,monthly_bill,installation_address,area_zone,fiber_box,onu_mac,remarks,expiration_date,provisioning_status,status,created_at,updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'provisioned',$15,NOW(),NOW())
+        ON CONFLICT (username) DO NOTHING RETURNING id`,
+        [fullName,phone,connectionDate,username,clean(body.password||secret.password,255),packageDefinition.name,packageDefinition.profileName||requestedProfile,packageDefinition.price,clean(body.installationAddress||body.address,1000)||null,clean(body.areaZone||body.area_zone,150)||null,clean(body.fiberBox||body.distributionBox,150)||null,clean(body.onuMac,100)||null,clean(body.remarks||body.note,1000)||null,expirationDate,dateStatus(expirationDate)]);
+      current=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);
+      if(!current.rows.length)return res.status(409).json({success:false,message:"Could not create the Billing Panel record for this MikroTik customer. Check for a duplicate username or database constraint."});
+    }
     const row=current.rows[0],username=clean(body.username||row.username,100),fullName=clean(body.fullName||body.name||row.full_name,200),phone=clean(body.phone||row.phone,40);
     const alternativePhone=clean(body.alternativePhone||body.alternative_phone||row.alternative_phone,40);
     const hasOwn=(key)=>Object.prototype.hasOwnProperty.call(body,key);
