@@ -818,6 +818,21 @@ async function updateCustomer(req,res){
     if(!current.rows.length){
       const username=clean(body.username||id,100);
       if(username.toLowerCase()!==id.toLowerCase())return res.status(409).json({success:false,message:"Change the PPPoE username only after the original customer has been imported into billing."});
+
+      // An admin deletion is authoritative. RouterOS presence alone must never
+      // recreate a billing customer through the edit/import fallback.
+      const deleted=await db.query(
+        "SELECT 1 FROM customer_deletion_tombstones WHERE LOWER(username)=LOWER($1) LIMIT 1",
+        [username]
+      );
+      if(deleted.rows.length){
+        return res.status(410).json({
+          success:false,
+          code:"CUSTOMER_ADMIN_DELETED",
+          message:"This PPPoE username was explicitly deleted by an administrator. It cannot be auto-imported; create a new customer intentionally to restore it."
+        });
+      }
+
       let secret=null;
       try{secret=await mikrotikService.getPppoeSecret(username);}catch(error){return res.status(404).json({success:false,message:"This customer is not in Billing Panel and MikroTik could not be read: "+(error.message||"router lookup failed")});}
       if(!secret)return res.status(404).json({success:false,message:"Customer not found in Billing Panel or MikroTik."});
