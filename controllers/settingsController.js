@@ -110,9 +110,10 @@ const SETTINGS_RULES={
  billing_cycle_type:{oneOf:["monthly_1st","rolling_30"]},grace_period_days:{numberMin:0,numberMax:7},expiry_action:{oneOf:["quarantine","disable_secret"]},
  personal_payment_webhook_url:{pathOrUrl:true,max:500},personal_payment_webhook_enabled:{bool:true},personal_payment_webhook_secret:{secret:true,max:300},
  mfs_bkash_number:{phone:true,max:24},mfs_nagad_number:{phone:true,max:24},mfs_rocket_number:{phone:true,max:24},mfs_upay_number:{phone:true,max:24},
- sms_gateway_mode:{oneOf:["bulk_sms","personal_device","disabled"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},
- sms_device_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},
- sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true}
+ sms_gateway_mode:{oneOf:["bulk_sms","personal_device","disabled"]},sms_provider_mode:{oneOf:["bulk_sms","personal_device","disabled"]},sms_api_url:{url:true,max:1000},sms_api_key:{secret:true,max:1000},sms_sender_id:{max:80},sms_api_method:{oneOf:["GET","POST"]},
+ sms_device_url:{url:true,max:1000},sms_device_webhook_url:{url:true,max:1000},sms_device_token:{secret:true,max:500},
+ sms_event_expiry_warning:{bool:true},sms_event_payment_receipt:{bool:true},sms_event_line_expiry:{bool:true},
+ sms_template_expiry_warning:{max:1200},sms_template_payment_receipt:{max:1200},sms_template_line_block:{max:1200}
 };
 function validateSettingValue(key,value,rule){
  if(rule.bool)return parseBool(value)?"true":"false";
