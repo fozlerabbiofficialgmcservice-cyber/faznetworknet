@@ -93,4 +93,4 @@ async function renew(req,res){
  }catch(e){console.error("[Customer self-care renewal]",e);return res.status(503).json({success:false,message:claimed?"Payment was reserved but renewal needs administrator review. Please contact support with your TrxID.":"Unable to verify or renew this payment right now."});}
 }
 
-module.exports={login,logout,profile,renew,readToken};
+module.exports={login,logout,profile,renew,readToken,issueToken};
