@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS pppoe_profiles (
 
 -- RouterOS change-tcp-mss is a tri-state string (yes/no/default), not a boolean.
 -- Convert legacy cache columns safely so a single profile cannot abort the full PPPoE sync.
-DO $
+DO $faz_schema$
 DECLARE current_type TEXT;
 BEGIN
   SELECT data_type INTO current_type
@@ -33,7 +33,8 @@ BEGIN
       ALTER COLUMN change_tcp_mss TYPE TEXT
       USING CASE WHEN change_tcp_mss THEN 'yes' ELSE 'default' END;
   END IF;
-END $;
+END;
+$faz_schema$;
 ALTER TABLE pppoe_profiles ALTER COLUMN change_tcp_mss SET DEFAULT 'default';
 
 CREATE TABLE IF NOT EXISTS pppoe_users (
