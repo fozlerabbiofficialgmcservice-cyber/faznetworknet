@@ -209,6 +209,7 @@ class MikroTikService {
   async createHotspotProfile(data) {
     const name=this._str(data.name).trim();
     if(!name) throw new Error("Hotspot profile name is required.");
+    if(this._isSystemProfileName(name)) throw new Error("System/internal profile names are reserved.");
     return this._withConnection("Hotspot profile creation",async(connection)=>{
       const params=this._writeParams({name,"rate-limit":data.rateLimit,"shared-users":data.sharedUsers||1,"session-timeout":data.clearSessionTimeout?undefined:data.sessionTimeout,"keepalive-timeout":data.keepaliveTimeout,"on-login":data.onLogin});
       await connection.write("/ip/hotspot/user/profile/add",params); return {name};
@@ -382,6 +383,7 @@ class MikroTikService {
   async createProfile(data) {
     const name=this._str(data.name).trim();
     if(!name)throw new Error("Profile name is required.");
+    if(this._isSystemProfileName(name))throw new Error("System/internal profile names are reserved.");
     return this._withConnection("PPPoE profile creation",async(connection)=>{
       const params=this._writeParams({
         name,
