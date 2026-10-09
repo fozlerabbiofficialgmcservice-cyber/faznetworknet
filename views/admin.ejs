@@ -887,7 +887,7 @@
             <!-- VIEW 3: ALL CUSTOMER -->
             <section id="view-all-customer" class="admin-view" style="display:none">
                 <div class="card card-custom">
-                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerSyncBtn" class="btn btn-outline-success btn-sm ms-auto" onclick="syncMikrotik(this)"><i class="bi bi-arrow-repeat"></i> Sync from MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
+                    <div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>PPPoE Customer Records</span><button id="customerSyncBtn" class="btn btn-outline-success btn-sm ms-auto" onclick="syncMikrotik(this)"><i class="bi bi-arrow-repeat"></i> Sync from MikroTik</button><button id="customerPushSyncBtn" class="btn btn-success btn-sm" onclick="syncPanelCustomersToMikroTik(this)"><i class="bi bi-cloud-arrow-up"></i> Sync to MikroTik</button><button id="customerExpiryPushBtn" class="btn btn-primary btn-sm" onclick="syncCustomerExpiryDates(this)"><i class="bi bi-calendar-check"></i> Push EXP Dates</button></div>
                     <div class="card-body p-0 table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>Username</th><th>Profile</th><th>Phone</th><th>Status</th><th>Expiry Date</th><th>Action</th></tr></thead><tbody id="pppoeUserList"><tr><td colspan="6" class="text-center py-3 text-muted">Loading customer records...</td></tr></tbody></table></div>
                 </div>
             </section>
@@ -3243,6 +3243,19 @@ async function deletePlan(id,name){
             } catch (error) { alert(error.message); }
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
+
+        async function syncPanelCustomersToMikroTik(button){
+            if(!confirm('Sync all customer records from the Billing Panel to existing MikroTik PPPoE secrets? This updates passwords, profiles, comments and disabled state. It does not create or delete users.'))return;
+            const original=button.innerHTML;
+            button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing all customers...';
+            try{
+                const data=await jsonFetch('/api/customers/sync-panel-to-mikrotik',{method:'POST'});
+                alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0));
+                await fetchCustomers();await refreshDashboard();
+            }catch(error){alert('Sync to MikroTik failed: '+(error.message||'Unknown error'));}
+            finally{button.disabled=false;button.innerHTML=original;}
+        }
+        window.syncPanelCustomersToMikroTik=syncPanelCustomersToMikroTik;
 
         // Customer-facing dates are DD/MM/YYYY; API and date arithmetic use YYYY-MM-DD.
         // Slash dates default to DMY; unambiguous dates are resolved automatically.
