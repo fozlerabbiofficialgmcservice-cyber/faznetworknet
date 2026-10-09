@@ -30,8 +30,17 @@ function normalizePayload(body){
 }
 async function list(req,res){
   try{
-    const rows=await mikrotikService.getIpPools();
-    return res.json(rows.filter(pool=>!/^default(?:[-_].*)?$/i.test(String(pool.name||"").trim())).map(pool=>({id:pool.id,name:pool.name,ranges:pool.ranges,nextPool:pool.nextPool||""})));
+    const [rows,usedRows]=await Promise.all([mikrotikService.getIpPools(),mikrotikService.getUsedIpPools()]);
+    let metadata=[];
+    try{const result=await db.query("SELECT name,ranges,local_address,subnet,device_name,next_pool FROM ip_pools ORDER BY name ASC");metadata=result.rows||[];}catch(dbError){console.warn("[IP POOL metadata warning]:",dbError.message);}
+    const byName=new Map(metadata.map(row=>[String(row.name||"").toLowerCase(),row]));
+    const usageByPool=new Map();
+    for(const item of usedRows){const key=String(item.pool||"").toLowerCase();if(!usageByPool.has(key))usageByPool.set(key,[]);usageByPool.get(key).push(item);}
+    const pools=rows.filter(pool=>!/^default(?:[-_].*)?$/i.test(String(pool.name||"").trim())).map(pool=>{
+      const meta=byName.get(String(pool.name||"").toLowerCase())||{};
+      return {id:pool.id,name:pool.name,ranges:pool.ranges,nextPool:pool.nextPool||"",localAddress:meta.local_address||"",subnet:meta.subnet||"",deviceName:meta.device_name||"",allocations:usageByPool.get(String(pool.name||"").toLowerCase())||[]};
+    });
+    return res.json(pools);
   }catch(error){return errorResponse(res,error);}
 }
 async function saveOrUpdateIpPool(req,res){

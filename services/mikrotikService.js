@@ -362,6 +362,19 @@ class MikroTikService {
     });
   }
 
+  async getUsedIpPools() {
+    return this._withConnection("IP pool allocation query", async (connection) => {
+      const rows = await connection.write("/ip/pool/used/print");
+      return (Array.isArray(rows) ? rows : []).map((item) => ({
+        id: this._str(item[".id"]),
+        pool: this._str(item.pool),
+        address: this._str(item.address),
+        owner: this._str(item.owner),
+        info: this._str(item.info)
+      })).filter((item) => item.pool && item.address);
+    });
+  }
+
   async createIpPool(data) {
     const name=this._str(data.name).trim(), ranges=this._str(data.ranges).trim(), nextPool=this._str(data.nextPool).trim() || "none";
     if(!name||!ranges) throw new Error("IP pool name and ranges are required.");
