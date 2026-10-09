@@ -30,9 +30,9 @@ function extractWebhookPayload(body,query={},headers={}){
   return {text:String(typeof text==="object"?JSON.stringify(text):text||""),sender:String(sender||"").trim(),token:String(token||"").trim()};
 }
 function normalizePhone(value){
-  let p=String(value||"").replace(/[^\d+]/g,"");
-  if(p.startsWith("+880"))p="0"+p.slice(4);
-  else if(p.startsWith("880"))p="0"+p.slice(3);
+  const bangla="০১২৩৪৫৬৭৮৯";
+  let p=String(value||"").replace(/[০-৯]/g,ch=>String(bangla.indexOf(ch))).replace(/[^0-9]/g,"");
+  if(p.startsWith("880")&&p.length===13)p="0"+p.slice(3);
   return p;
 }
 function normalizeAmount(value){
@@ -67,7 +67,7 @@ function extractAmount(text){
   return NaN;
 }
 function extractSenderPhone(text,sender){
-  const matches=String(text||"").match(/(?:\+?880|0)1\d{9}/g)||[];
+  const matches=String(text||"").match(/(?:\+?880[\s-]*|0)1(?:[\s-]*\d){9}/g)||[];
   const normalized=matches.map(normalizePhone).filter(v=>/^01\d{9}$/.test(v));
   if(normalized.length)return normalized[0];
   const normalizedSender=normalizePhone(sender);

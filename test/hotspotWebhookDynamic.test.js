@@ -21,7 +21,9 @@ test("verifyTrx uses the current database profile price after a 10 to 15 Tk edit
     // Simulate the admin saving the profile price from Tk 10 to Tk 15 in app_settings.
     profileMetadata={Weekend:{price:15,validityValue:2,validityUnit:"days",validityLabel:"2 Days",limitBytesTotal:0}};
     db.query=async(sql,params=[])=>{
-      if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:params[0]==="PRICE10"?72:71,trx_id:params[0],amount:params[0]==="PRICE10"?10:15,used:false,status:"PAID"}]};
+      if(sql.includes("SELECT * FROM transactions"))return {rows:[{id:params[0]==="PRICE10"?72:71,trx_id:params[0],amount:params[0]==="PRICE10"?10:15,used:false,status:"unmatched",matched_username:null}]};
+      if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
+      if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify(profileMetadata)}]};
       if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
@@ -78,7 +80,9 @@ test("verifyTrx accepts username and trx_id aliases with case/whitespace-insensi
   let lookupSql="",lookupValue="",rechargePayload=null;
   try{
     db.query=async(sql,params=[])=>{
-      if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched"}]};}
+      if(sql.includes("SELECT * FROM transactions")){lookupSql=sql;lookupValue=params[0];return {rows:[{id:91,trx_id:"AbC-123",amount:15,used:false,status:"Unmatched",matched_username:null}]};}
+      if(sql.includes("SELECT 1 FROM pppoe_users"))return {rows:[]};
+      if(sql.includes("FROM packages WHERE ROUND(price*100)"))return {rows:[]};
       if(sql.includes("key='hotspot_profile_metadata'"))return {rows:[{value:JSON.stringify({Weekend:{price:15,validityValue:2,validityUnit:"days",limitBytesTotal:0}})}]};
       if(sql.includes("SET used=true,status='processing'"))return {rows:[{id:params[1]}]};
       if(sql.startsWith("UPDATE transactions"))return {rows:[]};
