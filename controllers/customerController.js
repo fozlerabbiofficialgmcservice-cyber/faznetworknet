@@ -57,18 +57,34 @@ function errorResponse(res, error) {
 }
 
 function normalizeDate(value) {
-  const raw = clean(value, 30);
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Dhaka", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(value);
+    const part = type => parts.find(item => item.type === type)?.value;
+    return [part("year"), part("month"), part("day")].join("-");
+  }
+  const raw = clean(value, 40);
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     const [year, month, day] = raw.split("-").map(Number);
     const date = new Date(Date.UTC(year, month - 1, day));
     return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? raw : "";
   }
   const dayFirst = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!dayFirst) return "";
-  const day = Number(dayFirst[1]), month = Number(dayFirst[2]), year = Number(dayFirst[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
-  return [year, String(month).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
+  if (dayFirst) {
+    const day = Number(dayFirst[1]), month = Number(dayFirst[2]), year = Number(dayFirst[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+    return [year, String(month).padStart(2, "0"), String(day).padStart(2, "0")].join("-");
+  }
+  // Timestamp inputs are instants; convert them to the Bangladesh calendar date.
+  if (/^\d{4}-\d{2}-\d{2}[T\s]/.test(raw)) {
+    const instant = new Date(raw);
+    if (Number.isNaN(instant.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Dhaka", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(instant);
+    const part = type => parts.find(item => item.type === type)?.value;
+    return [part("year"), part("month"), part("day")].join("-");
+  }
+  return "";
 }
 
 function bangladeshToday() {
@@ -123,7 +139,7 @@ function buildExpirationComment(fullName, phone, expirationDate, remarks) {
 }
 
 function extractExpirationDate(comment) {
-  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2})/i);
+  const match = String(comment || "").match(/(?:^|[|;\\s])EXP:\\s*(\\d{4}-\\d{2}-\\d{2}|\\d{2}\\/\\d{2}\\/\\d{4})/i);
   return match ? normalizeDate(match[1]) : "";
 }
 
