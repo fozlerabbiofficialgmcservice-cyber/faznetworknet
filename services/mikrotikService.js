@@ -1,21 +1,17 @@
 const RouterOS = require("node-routeros");
 const { RouterOSAPI } = RouterOS;
 
-// RouterOS v7.19+ may return "!empty" for a successful query with zero rows.
-// node-routeros treats every unknown sentence as a thrown RosException from an
-// EventEmitter callback; that exception can crash Node and take the whole panel
-// down (Customer 360 then shows a generic "Request failed"). Handle ONLY this
-// known empty-result sentence as a normal empty result; preserve other errors.
+// RouterOS can send "!empty" before its normal "!done" terminator when a
+// query matches no rows. node-routeros treats it as an unknown sentence and
+// throws from an EventEmitter callback, which can crash the process. Ignore
+// only that intermediate sentence; let the normal "!done" resolve the query
+// to [] and close the channel normally.
 const RouterOSChannel = RouterOS.Channel;
 if (RouterOSChannel?.prototype && !RouterOSChannel.prototype.__fazHandlesEmptyReply) {
-  const originalOnUnknown = RouterOSChannel.prototype.onUnknown;
-  RouterOSChannel.prototype.onUnknown = function(reply) {
-    if (reply === "!empty") {
-      const rows = Array.isArray(this.data) ? this.data : [];
-      this.emit("done", rows);
-      return;
-    }
-    return originalOnUnknown.call(this, reply);
+  const originalProcessPacket = RouterOSChannel.prototype.processPacket;
+  RouterOSChannel.prototype.processPacket = function(packet) {
+    if (Array.isArray(packet) && packet[0] === "!empty") return;
+    return originalProcessPacket.call(this, packet);
   };
   Object.defineProperty(RouterOSChannel.prototype, "__fazHandlesEmptyReply", {
     value: true,
