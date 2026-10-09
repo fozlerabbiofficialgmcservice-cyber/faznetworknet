@@ -92,6 +92,32 @@ async function syncFromRouter() {
           extractPhone(comment), user.localAddress, user.remoteAddress, routerId, JSON.stringify(user.raw || {}), extractExpiryDate(comment)
         ]
       );
+
+      // Router-only PPPoE users must also appear in All Customers, which reads
+      // from the customers table. Create a minimal import record only when no
+      // billing customer exists; never overwrite existing billing/payment data.
+      const importedName = (String(comment).match(/Customer:\\s*([^|]+)/i)?.[1] || user.name).trim().slice(0, 200);
+      const importedPhone = extractPhone(comment) || ("SYNC-" + String(user.name).trim()).slice(0, 40);
+      const importedExpiry = extractExpiryDate(comment) || null;
+      const importedProfile = String(user.profile || "Imported").trim().slice(0, 100);
+      await client.query(
+        `INSERT INTO customers
+          (full_name, phone, connection_date, username, password, package_name, profile,
+           monthly_bill, expiration_date, provisioning_status, status, router_id, created_at, updated_at)
+         SELECT $1,$2,(NOW() AT TIME ZONE 'Asia/Dhaka')::date,$3,$4,
+                COALESCE(p.plan_name,$5),$5,COALESCE(p.price,0),$6,'provisioned',
+                CASE WHEN $6 IS NOT NULL AND $6 < (NOW() AT TIME ZONE 'Asia/Dhaka')::date THEN 'expired' ELSE 'active' END,
+                $7,NOW(),NOW()
+         FROM (SELECT 1) seed
+         LEFT JOIN LATERAL (
+           SELECT plan_name, price FROM packages
+           WHERE LOWER(profile_name)=LOWER($5) OR LOWER(plan_name)=LOWER($5)
+           ORDER BY CASE WHEN LOWER(profile_name)=LOWER($5) THEN 0 ELSE 1 END
+           LIMIT 1
+         ) p ON TRUE
+         ON CONFLICT (username) DO NOTHING`,
+        [importedName, importedPhone, user.name, user.password || "", importedProfile, importedExpiry, routerId]
+      );
     }
     return { profiles: profiles.length, users: secrets.length };
   });
