@@ -124,7 +124,9 @@ async function runBillingExpiration(){
           details:{
             message:overridden
               ?"Billing marked expired under explicit migration override; live PPPoE service unchanged"
-              :"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
+              :expiryAction==="disable_secret"
+                ?"Auto-expired: PPPoE secret disabled due to unpaid bill"
+                :"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
             username:customer.username,
             expirationDate:customer.expiration_date,
             expiredProfile:overridden||expiryAction==="disable_secret"?null:EXPIRED_PROFILE,
