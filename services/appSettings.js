@@ -26,11 +26,12 @@ function normalize(map){
  out.brand_name=out.company_name;
  return out;
 }
+async function queryWithTimeout(promise,ms){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Settings lookup timed out.")),ms);})]);}finally{if(timer)clearTimeout(timer);}}
 async function load(force=false){
  if(!force&&cached&&Date.now()<expiresAt)return cached;
  if(refreshPromise)return refreshPromise;
  refreshPromise=(async()=>{try{
-  const result=await Promise.race([db.query("SELECT key,value FROM app_settings"),new Promise((_,reject)=>setTimeout(()=>reject(new Error("Settings lookup timed out.")),1200))]);
+  const result=await queryWithTimeout(db.query("SELECT key,value FROM app_settings"),1200);
   const map=Object.fromEntries((result.rows||[]).map(r=>[r.key,r.value]));
   cached=normalize(map);expiresAt=Date.now()+CACHE_TTL_MS;return cached;
  }catch(error){if(cached)return cached;cached=normalize({});expiresAt=Date.now()+CACHE_TTL_MS;return cached;}finally{refreshPromise=null;}})();
