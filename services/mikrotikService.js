@@ -526,19 +526,39 @@ class MikroTikService {
     const name = this._str(username).trim();
     if (!name) throw new Error("PPPoE username is required.");
     return this._withConnection("PPPoE customer removal", async (connection) => {
-      const secrets = await connection.write("/ppp/secret/print");
-      const secret = (Array.isArray(secrets) ? secrets : []).find(item => this._str(item.name).trim() === name);
-      if (!secret || !secret[".id"]) throw new Error('PPPoE user "' + name + '" was not found on MikroTik.');
-
+      // Remove active sessions even if the secret was already removed manually.
       const activeRows = await connection.write("/ppp/active/print");
       const active = (Array.isArray(activeRows) ? activeRows : []).filter(item =>
-        this._str(item.name).trim() === name && item[".id"]
+        this._str(item.name).trim().toLowerCase() === name.toLowerCase() && item[".id"]
       );
       for (const session of active) {
         await connection.write("/ppp/active/remove", ["=.id=" + session[".id"]]);
       }
-      await connection.write("/ppp/secret/remove", ["=.id=" + secret[".id"]]);
-      return { username: name, secretId: this._str(secret[".id"]), terminatedSessions: active.length, removed: true };
+
+      const secretRows = await connection.write("/ppp/secret/print");
+      const secret = (Array.isArray(secretRows) ? secretRows : []).find(item =>
+        this._str(item.name).trim().toLowerCase() === name.toLowerCase()
+      );
+      if (secret && secret[".id"]) {
+        await connection.write("/ppp/secret/remove", ["=.id=" + secret[".id"]]);
+      }
+
+      // Confirm RouterOS has no matching secret before reporting success.
+      const remainingRows = await connection.write("/ppp/secret/print");
+      const remains = (Array.isArray(remainingRows) ? remainingRows : []).some(item =>
+        this._str(item.name).trim().toLowerCase() === name.toLowerCase()
+      );
+      if (remains) {
+        throw new Error('MikroTik still reports PPPoE secret "' + name + '" after removal.');
+      }
+      return {
+        username: name,
+        secretId: this._str(secret?.[".id"]),
+        terminatedSessions: active.length,
+        removed: Boolean(secret),
+        alreadyAbsent: !secret,
+        verifiedAbsent: true
+      };
     });
   }
 
