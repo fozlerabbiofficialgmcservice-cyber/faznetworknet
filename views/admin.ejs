@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         :root {
             --primary-color: #0a3d2e;
@@ -1548,7 +1549,8 @@
             }
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script>
         const translations = {
@@ -2944,8 +2946,8 @@ async function deletePlan(id,name){
                 const data=prefetchedData||await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
                 const customer=data.customer||{},live=data.live||{},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
                 const setText=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent=value??'—';};
-                const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(el)el.value=value??'';};
-                const safeDate=String(customer.expirationDate||customer.expiration_date||'').slice(0,10);
+                const setVal=(id,value)=>{const el=modalEl.querySelector('#'+id);if(!el)return;if(id==='cpExpiration'){setCustomerDateValue(el,value);return;}el.value=value??'';};
+                const safeDate=dateInputToIso(customer.expirationDate||customer.expiration_date||customer.billing_expiry_date||customer.billingExpiryDate)||'';
                 const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
                 const days=safeDate?Math.ceil((Date.parse(safeDate+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
                 const statusText=live.online?'Online':'Offline';
@@ -3002,7 +3004,8 @@ async function deletePlan(id,name){
         }
 
         async function populateCustomerEditForm(customer,name){
-            const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value??'';};
+            initializeCustomerDatePickers(document.getElementById('addCustomerForm')||document);
+            const set=(id,value)=>{const el=document.getElementById(id);if(!el)return;if(['connectionDate','activationDate','expirationDate'].includes(id)){setCustomerDateValue(el,value);return;}el.value=value??'';};
             // Submit the selected PPPoE username as the edit key; database/RouterOS IDs may collide.
             set('customerEditId',customer.username||name);set('username',customer.username||name);
             set('fullName',customer.fullName||customer.full_name||customer.name||'');set('phoneNumber',customer.phone||customer.rawPhone||'');
@@ -3231,23 +3234,89 @@ async function deletePlan(id,name){
             finally { btn.disabled = false; btn.innerHTML = old; }
         }
 
-        // All customer date text inputs display DD/MM/YYYY. Keep ISO dates
-        // internally for calendar arithmetic; never pass slash dates to Date().
+        // Customer-facing dates are DD/MM/YYYY; API and date arithmetic use YYYY-MM-DD.
+        // Slash dates default to DMY; unambiguous dates are resolved automatically.
+        function parseCustomerDate(value, slashOrder = 'DMY') {
+            if (value == null || value === '') return null;
+            if (value instanceof Date) {
+                if (Number.isNaN(value.getTime())) return null;
+                return validateCustomerDate(value.getFullYear(), value.getMonth() + 1, value.getDate());
+            }
+            const raw = String(value).trim();
+            if (!raw) return null;
+            let match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T|\s)/);
+            if (match) return validateCustomerDate(Number(match[1]), Number(match[2]), Number(match[3]));
+            match = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+            if (!match) return null;
+            const first = Number(match[1]), second = Number(match[2]), year = Number(match[3]);
+            let day, month;
+            if (first > 12) { day = first; month = second; }
+            else if (second > 12) { month = first; day = second; }
+            else if (String(slashOrder).toUpperCase() === 'MDY') { month = first; day = second; }
+            else { day = first; month = second; }
+            return validateCustomerDate(year, month, day);
+        }
+        function validateCustomerDate(year, month, day) {
+            if (year < 1000 || year > 9999) return null;
+            const date = new Date(Date.UTC(year, month - 1, day));
+            if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+            return { year, month, day };
+        }
         function dateInputToIso(value) {
-            const raw=String(value||'').trim();
-            let year,month,day,match;
-            if((match=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/))){year=Number(match[1]);month=Number(match[2]);day=Number(match[3]);}
-            else if((match=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/))){day=Number(match[1]);month=Number(match[2]);year=Number(match[3]);}
-            else return '';
-            const date=new Date(Date.UTC(year,month-1,day));
-            if(date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return '';
-            return [String(year).padStart(4,'0'),String(month).padStart(2,'0'),String(day).padStart(2,'0')].join('-');
+            const parts = parseCustomerDate(value, 'DMY');
+            if (!parts) return '';
+            return String(parts.year).padStart(4, '0') + '-' + String(parts.month).padStart(2, '0') + '-' + String(parts.day).padStart(2, '0');
         }
         function formatDateForInput(value) {
-            const iso=dateInputToIso(value);
-            if(!iso)return '';
-            const [year,month,day]=iso.split('-');
-            return day+'/'+month+'/'+year;
+            const parts = parseCustomerDate(value, 'DMY');
+            if (!parts) return '';
+            return String(parts.day).padStart(2, '0') + '/' + String(parts.month).padStart(2, '0') + '/' + String(parts.year).padStart(4, '0');
+        }
+        function initializeCustomerDatePickers(root = document) {
+            if (typeof window.flatpickr !== 'function') {
+                console.error('[Customer Date Picker] Flatpickr did not load.');
+                return;
+            }
+            const selectors = '#connectionDate, #activationDate, #expirationDate, #cpExpiration';
+            const candidates = [];
+            if (root instanceof Element && root.matches?.(selectors)) candidates.push(root);
+            if (root.querySelectorAll) root.querySelectorAll(selectors).forEach(input => candidates.push(input));
+            candidates.forEach(input => {
+                if (!(input instanceof HTMLInputElement)) return;
+                if (input.type !== 'text') input.type = 'text';
+                input.placeholder = 'DD/MM/YYYY';
+                input.inputMode = 'numeric';
+                input.autocomplete = 'off';
+                input.maxLength = 10;
+                input.setAttribute('pattern', '\\d{2}/\\d{2}/\\d{4}');
+                input.dataset.dateFormat = 'DD/MM/YYYY';
+                if (input._flatpickr) return;
+                const prior = input.value;
+                window.flatpickr(input, {
+                    dateFormat: 'd/m/Y',
+                    allowInput: true,
+                    disableMobile: true,
+                    clickOpens: true,
+                    onClose(selectedDates, dateStr, instance) {
+                        if (!dateStr) {
+                            instance.input.setCustomValidity('');
+                            return;
+                        }
+                        const iso = dateInputToIso(dateStr);
+                        instance.input.setCustomValidity(iso ? '' : 'Enter a valid date in DD/MM/YYYY format.');
+                        if (iso) instance.setDate(iso, false, 'Y-m-d');
+                    }
+                });
+                const iso = dateInputToIso(prior);
+                if (iso) input._flatpickr.setDate(iso, false, 'Y-m-d');
+            });
+        }
+        function setCustomerDateValue(input, value) {
+            if (!input) return;
+            const iso = dateInputToIso(value);
+            if (input._flatpickr) input._flatpickr.setDate(iso || '', false, 'Y-m-d');
+            else input.value = iso ? formatDateForInput(iso) : '';
+            input.setCustomValidity('');
         }
         function localDateValue() {
             const now = new Date();
@@ -3269,11 +3338,11 @@ async function deletePlan(id,name){
         function applyBillingPreset(months) {
             const activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'); if(!activation||!expiration)return;
             const activationIso=dateInputToIso(activation.value)||localDateValue();
-            activation.value=formatDateForInput(activationIso);
-            expiration.value=formatDateForInput(addCalendarMonths(activationIso,months));
+            setCustomerDateValue(activation,activationIso);
+            setCustomerDateValue(expiration,addCalendarMonths(activationIso,months));
             document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.toggle('active',Number(btn.dataset.months)===Number(months))); updateCustomerValidityStatus();
         }
-        function syncActivationDate(){const activation=document.getElementById('activationDate'),expiration=document.getElementById('expirationDate');if(!activation||!expiration)return;const activationIso=dateInputToIso(activation.value)||localDateValue();if(!dateInputToIso(activation.value))activation.value=formatDateForInput(activationIso);expiration.value=formatDateForInput(addCalendarMonths(activationIso,1));document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();}
+        function syncActivationDate(){const activation=document.getElementById('activationDate'),expiration=document.getElementById('expirationDate');if(!activation||!expiration)return;const activationIso=dateInputToIso(activation.value)||localDateValue();if(!dateInputToIso(activation.value))setCustomerDateValue(activation,activationIso);setCustomerDateValue(expiration,addCalendarMonths(activationIso,1));document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();}
 
 
         async function loadCustomerPackages(selectedProfile = '') {
@@ -3321,7 +3390,7 @@ async function deletePlan(id,name){
             purgeStuckBackdrops(); switchView('add-customer');
             const form=document.getElementById('addCustomerForm'); if(form){form.reset();form.classList.remove('was-validated');}
             const today=localDateValue(), connection=document.getElementById('connectionDate'), activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'), editId=document.getElementById('customerEditId');
-            if(connection)connection.value=formatDateForInput(today);if(activation)activation.value=formatDateForInput(today);if(expiration)expiration.value=formatDateForInput(addCalendarMonths(today,1));if(editId)editId.value='';
+            setCustomerDateValue(connection,today);setCustomerDateValue(activation,today);setCustomerDateValue(expiration,addCalendarMonths(today,1));if(editId)editId.value='';
             document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();await loadCustomerPackages();
             const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-person-plus-fill me-1"></i><span>Save & Provision Customer</span>';
             if(window.innerWidth<=768&&typeof closeSidebarMobile==='function')closeSidebarMobile();
@@ -3452,6 +3521,7 @@ async function deletePlan(id,name){
                     : 'Customer saved and provisioned successfully in MikroTik.'));
 
                 form.reset();
+                form.querySelectorAll('#connectionDate, #activationDate, #expirationDate').forEach(input => { if (input._flatpickr) input._flatpickr.clear(); });
                 form.classList.remove('was-validated');
                 const editField = document.getElementById('customerEditId');
                 if (editField) editField.value = '';
@@ -3602,30 +3672,28 @@ async function deletePlan(id,name){
             catch (error) { console.error('[Admin Boot] ' + label + ' failed:', error); return null; }
         }
 
-        // Defensive date-format guard for Customer 360 and legacy edit-modal markup.
-        // Native date controls display according to browser locale (MM/DD/YYYY in some browsers).
+        // Defensive guard: customer date fields use text + Flatpickr, never native date controls.
         function enforceCustomerDateDisplay(root) {
             const scope = root && root.querySelectorAll ? root : document;
             const selector = '#connectionDate, #activationDate, #expirationDate, #cpExpiration, #editCustomerModal input[type="date"], #customerEditFormModal input[type="date"], #customerProfileModal input[type="date"]';
             const candidates = [];
             if (scope.matches && scope.matches(selector)) candidates.push(scope);
-            scope.querySelectorAll(selector).forEach(input => candidates.push(input));
+            if (scope.querySelectorAll) scope.querySelectorAll(selector).forEach(input => candidates.push(input));
             candidates.forEach(input => {
                 if (!(input instanceof HTMLInputElement)) return;
-                const wasNativeDate = input.type === 'date';
-                const isKnownCustomerDate = ['connectionDate','activationDate','expirationDate','cpExpiration'].includes(input.id);
-                if (!wasNativeDate && !isKnownCustomerDate) return;
                 const previousValue = String(input.value || '').trim();
-                if (wasNativeDate) input.type = 'text';
-                input.setAttribute('placeholder', 'DD/MM/YYYY');
-                input.setAttribute('inputmode', 'numeric');
-                input.setAttribute('autocomplete', 'off');
-                input.setAttribute('maxlength', '10');
+                if (input.type === 'date') input.type = 'text';
+                if (!['connectionDate', 'activationDate', 'expirationDate', 'cpExpiration'].includes(input.id) && !previousValue) return;
+                input.placeholder = 'DD/MM/YYYY';
+                input.inputMode = 'numeric';
+                input.autocomplete = 'off';
+                input.maxLength = 10;
                 input.setAttribute('pattern', '\\d{2}/\\d{2}/\\d{4}');
                 input.dataset.dateFormat = 'DD/MM/YYYY';
                 const iso = dateInputToIso(previousValue);
                 if (iso) input.value = formatDateForInput(iso);
             });
+            initializeCustomerDatePickers(scope);
         }
 
         function initializeCustomerDateFormatGuard() {
