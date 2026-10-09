@@ -111,7 +111,7 @@ function validDateOnly(value) {
   const raw=clean(value,20);
   // Accept the strict UI format DD/MM/YYYY and legacy API ISO dates only.
   // normalizeDate validates calendar ranges without locale-dependent parsing.
-  if(!/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(raw)&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw))return false;
+  if(!/^\d{2}\/\d{2}\/\d{4}$/.test(raw)&&!/^\d{4}-\d{2}-\d{2}$/.test(raw))return false;
   return Boolean(normalizeDate(raw));
 }
 function expirationEndOfDay(expirationDate) {
