@@ -2975,7 +2975,7 @@ async function deletePlan(id,name){
                 setText('cpCurrentExpiry',formatExpiry(safeDate));
                 setText('cpCurrentCycle',billingCycle==='monthly'?'Billing cycle: Monthly (30-day renewal)':billingCycle==='15_days'?'Billing cycle: 15 Days':billingCycle==='30_days'?'Billing cycle: 30 Days':'Billing cycle: Custom Days ('+(storedDays||'—')+' days)');
                 const expiryInput=modalEl.querySelector('#cpExpiration'),cycleEl=modalEl.querySelector('#cpBillingCycle'),daysEl=modalEl.querySelector('#cpBillingDays');
-                if(expiryInput)expiryInput.dataset.initialValue=safeDate;
+                if(expiryInput)expiryInput.dataset.initialValue=formatDateForInput(safeDate);
                 if(cycleEl)cycleEl.dataset.initialValue=billingCycle;
                 if(daysEl)daysEl.dataset.initialValue=String(customer.billing_duration_days??customer.billingDurationDays??'');
                 if(autoExpire)autoExpire.dataset.initialValue=String(autoExpire.checked);
@@ -3321,7 +3321,7 @@ async function deletePlan(id,name){
             purgeStuckBackdrops(); switchView('add-customer');
             const form=document.getElementById('addCustomerForm'); if(form){form.reset();form.classList.remove('was-validated');}
             const today=localDateValue(), connection=document.getElementById('connectionDate'), activation=document.getElementById('activationDate'), expiration=document.getElementById('expirationDate'), editId=document.getElementById('customerEditId');
-            if(connection)connection.value=today;if(activation)activation.value=today;if(expiration)expiration.value=addCalendarMonths(today,1);if(editId)editId.value='';
+            if(connection)connection.value=formatDateForInput(today);if(activation)activation.value=formatDateForInput(today);if(expiration)expiration.value=formatDateForInput(addCalendarMonths(today,1));if(editId)editId.value='';
             document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();await loadCustomerPackages();
             const save=document.getElementById('saveCustomerBtn');if(save)save.innerHTML='<i class="bi bi-person-plus-fill me-1"></i><span>Save & Provision Customer</span>';
             if(window.innerWidth<=768&&typeof closeSidebarMobile==='function')closeSidebarMobile();
@@ -3357,7 +3357,7 @@ async function deletePlan(id,name){
         document.getElementById('addCustomerForm').addEventListener('reset', function(){
             setTimeout(function(){
                 const dateInput=document.getElementById('connectionDate');
-                if(dateInput) dateInput.value=localDateValue();
+                if(dateInput) dateInput.value=formatDateForInput(localDateValue());
                 applyCustomerPackagePrice();
             },0);
         });
@@ -3602,7 +3602,49 @@ async function deletePlan(id,name){
             catch (error) { console.error('[Admin Boot] ' + label + ' failed:', error); return null; }
         }
 
+        // Defensive date-format guard for Customer 360 and legacy edit-modal markup.
+        // Native date controls display according to browser locale (MM/DD/YYYY in some browsers).
+        function enforceCustomerDateDisplay(root) {
+            const scope = root && root.querySelectorAll ? root : document;
+            const selector = '#connectionDate, #activationDate, #expirationDate, #cpExpiration, #editCustomerModal input[type="date"], #customerEditFormModal input[type="date"], #customerProfileModal input[type="date"]';
+            const candidates = [];
+            if (scope.matches && scope.matches(selector)) candidates.push(scope);
+            scope.querySelectorAll(selector).forEach(input => candidates.push(input));
+            candidates.forEach(input => {
+                if (!(input instanceof HTMLInputElement)) return;
+                const wasNativeDate = input.type === 'date';
+                const isKnownCustomerDate = ['connectionDate','activationDate','expirationDate','cpExpiration'].includes(input.id);
+                if (!wasNativeDate && !isKnownCustomerDate) return;
+                const previousValue = String(input.value || '').trim();
+                if (wasNativeDate) input.type = 'text';
+                input.setAttribute('placeholder', 'DD/MM/YYYY');
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('autocomplete', 'off');
+                input.setAttribute('maxlength', '10');
+                input.setAttribute('pattern', '\\d{2}/\\d{2}/\\d{4}');
+                input.dataset.dateFormat = 'DD/MM/YYYY';
+                const iso = dateInputToIso(previousValue);
+                if (iso) input.value = formatDateForInput(iso);
+            });
+        }
+
+        function initializeCustomerDateFormatGuard() {
+            enforceCustomerDateDisplay(document);
+            if (document.documentElement.dataset.customerDateGuardBound === '1') return;
+            document.documentElement.dataset.customerDateGuardBound = '1';
+            document.addEventListener('show.bs.modal', event => enforceCustomerDateDisplay(event.target), true);
+            document.addEventListener('shown.bs.modal', event => enforceCustomerDateDisplay(event.target), true);
+            const observer = new MutationObserver(records => {
+                records.forEach(record => record.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) enforceCustomerDateDisplay(node);
+                }));
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+        }
+
         function initializeAdminRuntime() {
+            try { initializeCustomerDateFormatGuard(); }
+            catch (error) { console.error('[Customer Date Format] guard initialization failed:', error); }
             try {
                 const dashboardInterface = document.getElementById('dashboardInterface');
                 if (dashboardInterface && !dashboardInterface.dataset.runtimeBound) {
