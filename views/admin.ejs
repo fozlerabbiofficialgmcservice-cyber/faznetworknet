@@ -421,6 +421,9 @@
             </li>
 
             <li class="menu-item">
+                <a href="javascript:void(0)" onclick="switchView('general-settings'); return false;"><i class="bi bi-sliders2-vertical"></i><span>General Settings</span></a>
+            </li>
+            <li class="menu-item">
                 <button class="dropdown-toggle" onclick="toggleSubmenu(event, this)">
                     <i class="bi bi-gear-wide-connected"></i> <span data-key="core_system">Core System</span>
                     <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
@@ -576,6 +579,46 @@
                         <tbody id="recentPaymentsBody"><tr><td colspan="5" class="text-center py-3 text-muted">Loading payments...</td></tr></tbody></table>
                     </div>
                 </div>
+            </section>
+
+            <!-- VIEW: CENTRALIZED GENERAL SETTINGS -->
+            <section id="view-general-settings" class="admin-view" style="display:none">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">General Settings</h2><p class="text-muted mb-0">Manage router connectivity, payment automation and subscriber-facing payment accounts in one place.</p></div><span class="badge rounded-pill text-bg-success px-3 py-2"><i class="bi bi-shield-check me-1"></i>Central configuration</span></div>
+              <div class="d-flex flex-wrap gap-2 mb-4" role="tablist" aria-label="General settings sections">
+                <button class="btn btn-success general-settings-tab" data-settings-tab="router" type="button" role="tab" aria-selected="true"><i class="bi bi-router me-1"></i> MikroTik Router</button>
+                <button class="btn btn-outline-success general-settings-tab" data-settings-tab="webhook" type="button" role="tab" aria-selected="false"><i class="bi bi-webhook me-1"></i> Payment Webhook</button>
+                <button class="btn btn-outline-success general-settings-tab" data-settings-tab="mfs" type="button" role="tab" aria-selected="false"><i class="bi bi-wallet2 me-1"></i> MFS Accounts</button>
+              </div>
+              <div id="general-settings-panel-router" class="general-settings-panel">
+                <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-router text-success fs-5"></i><div><div class="fw-semibold">MikroTik Router Configuration</div><small class="text-muted fw-normal">Credentials are saved in PostgreSQL and used by the shared RouterOS service.</small></div><span id="generalRouterBadge" class="badge bg-secondary ms-auto">Not tested</span></div>
+                  <div class="card-body p-4"><form id="generalRouterForm" novalidate><div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="generalRouterHost">Router Host / IP</label><input id="generalRouterHost" class="form-control" maxlength="253" placeholder="103.54.37.182" required></div>
+                    <div class="col-md-6"><label class="form-label" for="generalRouterPort">API Port</label><input id="generalRouterPort" class="form-control" type="number" min="1" max="65535" placeholder="8728" required></div>
+                    <div class="col-md-6"><label class="form-label" for="generalRouterUser">API Username</label><input id="generalRouterUser" class="form-control" maxlength="128" autocomplete="username" placeholder="smsbot" required></div>
+                    <div class="col-md-6"><label class="form-label" for="generalRouterPassword">API Password</label><input id="generalRouterPassword" class="form-control" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved password"><div id="generalRouterPasswordHint" class="form-text">Password is never returned to the browser.</div></div>
+                  </div><div id="generalRouterResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex flex-wrap gap-2 justify-content-end mt-4"><button type="button" id="generalRouterTestBtn" class="btn btn-outline-success"><i class="bi bi-plug me-1"></i>Test Connection</button><button type="button" id="generalRouterSyncBtn" class="btn btn-outline-primary"><i class="bi bi-arrow-repeat me-1"></i>Sync Profiles</button><button type="submit" id="generalRouterSaveBtn" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save &amp; Sync Router</button></div></form></div>
+                </div>
+              </div>
+              <div id="general-settings-panel-webhook" class="general-settings-panel" style="display:none">
+                <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-webhook text-success fs-5"></i><div><div class="fw-semibold">Universal Payment Webhook</div><small class="text-muted fw-normal">Works with MacroDroid, Tasker and custom SMS forwarders.</small></div><span id="generalWebhookBadge" class="badge bg-secondary ms-auto">Disabled</span></div>
+                  <div class="card-body p-4"><form id="generalWebhookForm" novalidate><div class="row g-3">
+                    <div class="col-12"><label class="form-label" for="generalWebhookPath">Inbound Endpoint Path or Full URL</label><input id="generalWebhookPath" class="form-control font-monospace" placeholder="/api/webhooks/macrodroid-sms" required><div class="form-text">Use a unique absolute path. Changes take effect immediately after saving; no server restart is needed.</div></div>
+                    <div class="col-12"><div class="p-3 rounded border bg-light"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><span class="small fw-semibold text-muted">Full endpoint URL</span><button id="generalWebhookCopyBtn" type="button" class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copy URL</button></div><code id="generalWebhookFullUrl" class="d-block text-break mt-2"></code></div></div>
+                    <div class="col-md-8"><label class="form-label" for="generalWebhookSecret">Secret Key / Token</label><input id="generalWebhookSecret" class="form-control font-monospace" type="password" autocomplete="new-password" placeholder="Leave blank to keep existing secret"><div id="generalWebhookSecretHint" class="form-text">Secret is write-only and never sent back to the browser.</div></div>
+                    <div class="col-md-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" id="generalWebhookEnabled" type="checkbox" role="switch"><label class="form-check-label fw-semibold" for="generalWebhookEnabled">Automation Enabled</label></div></div>
+                  </div><div id="generalWebhookResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalWebhookSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Webhook Settings</button></div></form></div>
+                </div>
+              </div>
+              <div id="general-settings-panel-mfs" class="general-settings-panel" style="display:none">
+                <div class="card card-custom border-0 shadow-sm"><div class="card-custom-header"><i class="bi bi-wallet2 text-success fs-5"></i><div><div class="fw-semibold">Personal MFS Send Money Accounts</div><small class="text-muted fw-normal">Saved numbers appear in the subscriber self-care portal.</small></div></div>
+                  <div class="card-body p-4"><form id="generalMfsForm" novalidate><div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="generalMfsBkash">bKash Personal Number</label><input id="generalMfsBkash" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
+                    <div class="col-md-6"><label class="form-label" for="generalMfsNagad">Nagad Personal Number</label><input id="generalMfsNagad" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
+                    <div class="col-md-6"><label class="form-label" for="generalMfsRocket">Rocket Personal Number</label><input id="generalMfsRocket" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
+                    <div class="col-md-6"><label class="form-label" for="generalMfsUpay">Upay Personal Number</label><input id="generalMfsUpay" class="form-control" inputmode="tel" maxlength="24" placeholder="01XXXXXXXXX"></div>
+                  </div><div id="generalMfsResult" class="small mt-3" role="status" aria-live="polite"></div><div class="d-flex justify-content-end mt-4"><button id="generalMfsSaveBtn" type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Payment Accounts</button></div></form></div>
+                </div>
+              </div>
             </section>
 
             <!-- VIEW: HOTSPOT WEBHOOK SETTINGS -->
@@ -1495,6 +1538,7 @@
             'add-customer': 'Add New Customer',
             'all-customer': 'All Customer (PPPoE)',
             payments: 'All Payments',
+            'general-settings': 'General Settings',
             'hotspot-webhook': 'Hotspot Webhook Settings'
         };
 
@@ -1919,6 +1963,38 @@ async function deletePlan(id,name){
         let trafficPollInFlight = false;
         let metricsPollInFlight = false;
 
+
+        let generalSettingsLoaded=false;
+        function generalSettingsResult(id,message,ok=true){const el=document.getElementById(id);if(el){el.className='small mt-3 '+(ok?'text-success':'text-danger')+' fw-semibold';el.textContent=message;}}
+        function generalWebhookRenderUrl(){const input=document.getElementById('generalWebhookPath'),out=document.getElementById('generalWebhookFullUrl');if(!input||!out)return;const value=input.value.trim();if(!value){out.textContent='Enter an endpoint path';return;}try{out.textContent=value.startsWith('/')?location.origin+value:new URL(value,location.origin).href;}catch(_){out.textContent=value;}}
+        async function loadGeneralSettings(force=false){
+          if(generalSettingsLoaded&&!force)return;
+          try{
+            const d=await jsonFetch('/api/settings/general'),s=d.settings||{},r=s.router||{},w=s.webhook||{},m=s.mfs||{};
+            document.getElementById('generalRouterHost').value=r.host||'';document.getElementById('generalRouterPort').value=r.port||8728;document.getElementById('generalRouterUser').value=r.user||'';document.getElementById('generalRouterPassword').value='';
+            document.getElementById('generalRouterPasswordHint').textContent=r.passwordConfigured?'Password saved ('+(r.passwordSource==='environment'?'environment fallback':'database')+'). Leave blank to retain it.':'No password configured yet.';
+            document.getElementById('generalWebhookPath').value=w.url||'/api/webhooks/macrodroid-sms';document.getElementById('generalWebhookEnabled').checked=Boolean(w.enabled);document.getElementById('generalWebhookSecret').value='';
+            document.getElementById('generalWebhookSecretHint').textContent=w.secretConfigured?'Secret is already saved. Leave blank to keep it unchanged.':'No secret configured yet.';
+            document.getElementById('generalWebhookBadge').textContent=w.enabled?'Enabled':'Disabled';document.getElementById('generalWebhookBadge').className='badge ms-auto '+(w.enabled?'bg-success':'bg-secondary');
+            document.getElementById('generalMfsBkash').value=m.bkash||'';document.getElementById('generalMfsNagad').value=m.nagad||'';document.getElementById('generalMfsRocket').value=m.rocket||'';document.getElementById('generalMfsUpay').value=m.upay||'';
+            generalWebhookRenderUrl();generalSettingsLoaded=true;
+          }catch(error){generalSettingsResult('generalRouterResult',error.message||'Unable to load settings.',false);}
+        }
+        document.querySelectorAll('[data-settings-tab]').forEach(tab=>tab.addEventListener('click',()=>{const target=tab.dataset.settingsTab;document.querySelectorAll('[data-settings-tab]').forEach(t=>{const active=t===tab;t.classList.toggle('btn-success',active);t.classList.toggle('btn-outline-success',!active);t.setAttribute('aria-selected',String(active));});document.querySelectorAll('.general-settings-panel').forEach(panel=>panel.style.display=panel.id==='general-settings-panel-'+target?'block':'none');}));
+        document.getElementById('generalWebhookPath')?.addEventListener('input',generalWebhookRenderUrl);
+        document.getElementById('generalWebhookCopyBtn')?.addEventListener('click',async()=>{const value=document.getElementById('generalWebhookFullUrl')?.textContent||'';try{await navigator.clipboard.writeText(value);generalSettingsResult('generalWebhookResult','Full webhook URL copied.');}catch(_){generalSettingsResult('generalWebhookResult','Copy failed. Select and copy the URL manually.',false);}});
+        async function generalSettingsPost(url,payload,buttonId,resultId,loadingText){
+          const btn=document.getElementById(buttonId),original=btn?.innerHTML;if(btn){btn.disabled=true;btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span>'+loadingText;}
+          try{const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload),cache:'no-store'});const d=await response.json().catch(()=>({}));if(!response.ok||d.success===false)throw new Error(d.message||d.error||'Settings request failed.');generalSettingsResult(resultId,d.message||'Settings saved successfully.');return d;}
+          catch(error){generalSettingsResult(resultId,error.message||'Settings request failed.',false);throw error;}
+          finally{if(btn){btn.disabled=false;btn.innerHTML=original;}}
+        }
+        document.getElementById('generalRouterTestBtn')?.addEventListener('click',async()=>{const badge=document.getElementById('generalRouterBadge');if(badge){badge.textContent='Testing…';badge.className='badge bg-info ms-auto';}try{const d=await generalSettingsPost('/api/settings/mikrotik/test',{host:document.getElementById('generalRouterHost').value.trim(),port:Number(document.getElementById('generalRouterPort').value),user:document.getElementById('generalRouterUser').value.trim(),password:document.getElementById('generalRouterPassword').value},'generalRouterTestBtn','generalRouterResult','Testing connection…');if(badge){badge.textContent='Connected · '+(d.router?.version||'RouterOS');badge.className='badge bg-success ms-auto';}generalSettingsResult('generalRouterResult','Connected to '+(d.router?.routerName||'MikroTik')+' · RouterOS '+(d.router?.version||'unknown')+' · '+(d.router?.model||'RouterOS device'));}catch(_){if(badge){badge.textContent='Connection failed';badge.className='badge bg-danger ms-auto';}}});
+        document.getElementById('generalRouterForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await generalSettingsPost('/api/settings/mikrotik',{host:document.getElementById('generalRouterHost').value.trim(),port:Number(document.getElementById('generalRouterPort').value),user:document.getElementById('generalRouterUser').value.trim(),password:document.getElementById('generalRouterPassword').value},'generalRouterSaveBtn','generalRouterResult','Saving & syncing…');document.getElementById('generalRouterPassword').value='';generalSettingsLoaded=false;await loadGeneralSettings(true);}catch(_){}});
+        document.getElementById('generalRouterSyncBtn')?.addEventListener('click',async()=>{try{const d=await generalSettingsPost('/api/settings/mikrotik/sync',{},'generalRouterSyncBtn','generalRouterResult','Syncing profiles…');const v=d.sync||{};generalSettingsResult('generalRouterResult','Synced '+(v.pppoeProfiles||0)+' PPPoE profiles and '+(v.hotspotProfiles||0)+' Hotspot profiles. Existing customer and price records preserved.');}catch(_){}});
+        document.getElementById('generalWebhookForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await generalSettingsPost('/api/settings/hotspot-webhook',{webhookUrl:document.getElementById('generalWebhookPath').value.trim(),webhookSecret:document.getElementById('generalWebhookSecret').value,webhookEnabled:document.getElementById('generalWebhookEnabled').checked},'generalWebhookSaveBtn','generalWebhookResult','Saving webhook…');document.getElementById('generalWebhookSecret').value='';generalSettingsLoaded=false;await loadGeneralSettings(true);}catch(_){}});
+        document.getElementById('generalMfsForm')?.addEventListener('submit',async e=>{e.preventDefault();try{await generalSettingsPost('/api/settings/mfs-accounts',{bkash:document.getElementById('generalMfsBkash').value.trim(),nagad:document.getElementById('generalMfsNagad').value.trim(),rocket:document.getElementById('generalMfsRocket').value.trim(),upay:document.getElementById('generalMfsUpay').value.trim()},'generalMfsSaveBtn','generalMfsResult','Saving accounts…');}catch(_){}});
+
         let hotspotWebhookSettingsLoaded=false;
         function renderWebhookEndpointDisplay(){
             const input=document.getElementById('paymentWebhookUrl'),display=document.getElementById('webhookEndpointDisplay');
@@ -1981,6 +2057,8 @@ async function deletePlan(id,name){
                 fetchCustomers();
             } else if (target === 'payments') {
                 fetchPayments(currentPaymentChannel);
+            } else if (target === 'general-settings') {
+                loadGeneralSettings();
             } else if (target === 'hotspot-webhook') {
                 loadHotspotWebhookSettings();
                 loadHotspotProfileSettings();
