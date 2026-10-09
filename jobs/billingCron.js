@@ -10,7 +10,7 @@ async function runBillingExpiration(){
     // expiration_date is a Bangladesh calendar date. Migration overrides still
     // transition to expired billing status, but the worker preserves the live line.
     const q=await db.query(
-      "SELECT c.id,c.username,c.full_name,c.phone,c.expiration_date,c.status,c.billing_expiry_override,u.profile AS router_profile,u.disabled AS router_disabled FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE c.expiration_date IS NOT NULL AND c.expiration_date < CURRENT_DATE AND (LOWER(COALESCE(c.status,'')) <> 'expired' OR LOWER(COALESCE(u.profile,'')) <> LOWER($1) OR COALESCE(u.disabled,FALSE)=TRUE) ORDER BY c.expiration_date ASC,c.id ASC",
+      "SELECT c.id,c.username,c.full_name,c.phone,c.expiration_date,c.status,c.billing_expiry_override,u.profile AS router_profile,u.disabled AS router_disabled FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE c.expiration_date IS NOT NULL AND c.expiration_date < CURRENT_DATE AND LOWER(COALESCE(c.status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(c.status,'')) <> 'expired' OR LOWER(COALESCE(u.profile,'')) <> LOWER($1)) ORDER BY c.expiration_date ASC,c.id ASC",
       [EXPIRED_PROFILE]
     );
     if(!q.rows.length){
@@ -24,6 +24,8 @@ async function runBillingExpiration(){
       try{
         // changeSecretProfile resolves the live /ppp/secret .id and emits exactly:
         // ['/ppp/secret/set', '=.id=<secretId>', '=profile=EXPIRED-PROFILE']
+        // Expiration must leave the secret enabled; repair legacy disabled state for eligible expired subscribers.
+        await mikrotikService.toggleSecret(customer.username,false);
         await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
 
         // Force a fresh PPPoE authentication so the EXPIRED profile's pool is used.
