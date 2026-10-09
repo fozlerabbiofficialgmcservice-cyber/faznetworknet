@@ -752,6 +752,7 @@ async function updateCustomer(req,res){
     const hasOwn=(key)=>Object.prototype.hasOwnProperty.call(body,key);
     const billingDateKey=["billing_expiry_date","next_billing_date","expirationDate","expiration_date"].find(hasOwn);
     const rawBillingDate=billingDateKey?body[billingDateKey]:row.expiration_date;
+    if(["billing_expiry_date","next_billing_date"].includes(billingDateKey)&&!String(rawBillingDate||"").trim())return res.status(400).json({success:false,message:"Billing expiry date is required."});
     if(billingDateKey&&String(rawBillingDate||"").trim()&&!validDateOnly(rawBillingDate))return res.status(400).json({success:false,message:"Billing expiry date must be a valid YYYY-MM-DD calendar date."});
     const expirationDate=normalizeDate(rawBillingDate)||normalizeDate(row.expiration_date)||bangladeshToday();
     const cycleRaw=body.billing_cycle??body.billingCycle??row.billing_cycle??"monthly";
