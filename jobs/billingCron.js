@@ -7,10 +7,10 @@ const EXPIRED_PROFILE="EXPIRED-PROFILE";
 async function runBillingExpiration(){
   const startedAt=Date.now();
   try{
-    // expiration_date is a Bangladesh calendar date. Expired billing accounts are
-    // quarantined in a throttled PPPoE profile without disabling their secrets.
+    // Expiration dates are Bangladesh calendar dates. An explicit migration
+    // override allows billing to be marked expired without changing live service.
     const q=await db.query(
-      "SELECT c.id,c.username,c.full_name,c.phone,c.expiration_date,c.status FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE c.expiration_date IS NOT NULL AND c.expiration_date < CURRENT_DATE AND LOWER(COALESCE(c.status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(c.status,'')) <> 'expired' OR LOWER(COALESCE(u.profile,'')) <> LOWER($1)) ORDER BY c.expiration_date ASC,c.id ASC",
+      "SELECT id,username,full_name,phone,expiration_date,status,billing_expiry_override FROM customers WHERE expiration_date IS NOT NULL AND expiration_date < CURRENT_DATE AND LOWER(COALESCE(status,'')) NOT IN ('suspended','inactive','left') AND (LOWER(COALESCE(status,'')) <> 'expired' OR NOT EXISTS (SELECT 1 FROM pppoe_users u WHERE LOWER(u.username)=LOWER(customers.username) AND LOWER(COALESCE(u.profile,''))=LOWER($1))) ORDER BY expiration_date ASC,id ASC",
       [EXPIRED_PROFILE]
     );
     if(!q.rows.length){
@@ -18,43 +18,59 @@ async function runBillingExpiration(){
       return {checked:0,expired:0,failed:0};
     }
 
-    await mikrotikService.ensureExpiredProfile();
+    // The quarantine profile is only needed for subscribers without an explicit
+    // migration override. Never touch MikroTik for override customers.
+    if(q.rows.some(customer=>customer.billing_expiry_override!==true)){
+      await mikrotikService.ensureExpiredProfile();
+    }
     let expired=0,failed=0;
     for(const customer of q.rows){
       try{
-        // changeSecretProfile resolves the live /ppp/secret .id and emits exactly:
-        // ['/ppp/secret/set', '=.id=<secretId>', '=profile=EXPIRED-PROFILE']
-        // Expiration must leave the secret enabled; repair legacy disabled state for eligible expired subscribers.
-        await mikrotikService.toggleSecret(customer.username,false);
-        await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
-
-        // Force a fresh PPPoE authentication so the EXPIRED profile's pool is used.
+        const overridden=customer.billing_expiry_override===true;
         let disconnected=false;
-        try{
-          const result=await mikrotikService.kickActiveUser(customer.username);
-          disconnected=Boolean(result?.kicked);
-        }catch(kickError){
-          console.warn("[BILLING EXPIRATION] Session reset warning for "+customer.username+":",kickError.message);
+        if(!overridden){
+          // Keep the PPPoE secret enabled, move it to the quarantine profile,
+          // and reset its session so the profile's rate limit takes effect.
+          await mikrotikService.toggleSecret(customer.username,false);
+          await mikrotikService.changeSecretProfile(customer.username,EXPIRED_PROFILE);
+          try{
+            const result=await mikrotikService.kickActiveUser(customer.username);
+            disconnected=Boolean(result?.kicked);
+          }catch(kickError){
+            console.warn("[BILLING EXPIRATION] Session reset warning for "+customer.username+":",kickError.message);
+          }
         }
 
         await db.query(
           "UPDATE customers SET status='expired',billing_status='unpaid',updated_at=NOW() WHERE id=$1",
           [customer.id]
         );
-        await db.query(
-          "UPDATE pppoe_users SET profile=$1,status='expired',disabled=FALSE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
-          [EXPIRED_PROFILE,customer.username]
-        );
+        if(overridden){
+          // Persist the billing state only; preserve profile, disabled flag and
+          // active session for an explicitly overridden migration customer.
+          await db.query(
+            "UPDATE pppoe_users SET status='expired',billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($1)",
+            [customer.username]
+          );
+        }else{
+          await db.query(
+            "UPDATE pppoe_users SET profile=$1,status='expired',disabled=FALSE,billing_status='unpaid',synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",
+            [EXPIRED_PROFILE,customer.username]
+          );
+        }
 
         await logAuditAction({
           customerId:customer.id,
           adminId:"billing-cron",
           action:"AUTO_EXPIRE",
           details:{
-            message:"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
+            message:overridden
+              ?"Billing marked expired under explicit migration override; live PPPoE service unchanged"
+              :"Auto-expired: Moved to EXPIRED-PROFILE (1k/1k) due to unpaid bill",
             username:customer.username,
             expirationDate:customer.expiration_date,
-            expiredProfile:EXPIRED_PROFILE,
+            expiredProfile:overridden?null:EXPIRED_PROFILE,
+            migrationOverride:overridden,
             sessionDisconnected:disconnected
           },
           ipAddress:null
