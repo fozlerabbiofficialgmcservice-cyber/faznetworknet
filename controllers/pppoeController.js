@@ -162,12 +162,13 @@ async function users(req, res) {
       const session = sessionMap.get(String(user.username || "").trim().toLowerCase());
       // Billing/customer metadata must come from the same canonical row as All Customer.
       // MikroTik/pppoe_users is authoritative only for live session and router fields.
-      const canonicalExpiry = user.customer_expiration_date || user.expiry_date || null;
+      const hasCustomerRecord = user.customer_id != null;
+      const canonicalExpiry = hasCustomerRecord ? (user.customer_expiration_date || null) : (user.expiry_date || null);
       const billing=evaluateCustomerBillingStatus({expiration_date:canonicalExpiry});
       return {
         ...user,
-        package_name: user.customer_package_name || user.package_name || user.customer_profile || user.profile || "",
-        profile: user.customer_profile || user.profile || "",
+        package_name: (hasCustomerRecord ? user.customer_package_name : null) || user.package_name || user.customer_profile || user.profile || "",
+        profile: (hasCustomerRecord ? user.customer_profile : null) || user.profile || "",
         expiration_date: canonicalExpiry,
         expiry_date: canonicalExpiry,
         customer_billing_state: user.customer_billing_state || null,
