@@ -1,11 +1,10 @@
 const { Pool } = require("pg");
 
-const DEFAULT_DATABASE_URL = "postgresql://faznetwork_db_user:yzIAqmOwHF7iTgmgILod5BYc1PE5Qs3A@dpg-db3arnajnfac7398sp0g-a/faznetwork_db";
 let pool;
 let dbConnected = false;
 let warnedDatabaseFailure = false;
 
-function getDatabaseUrl() { return String(process.env.DATABASE_URL || DEFAULT_DATABASE_URL).trim(); }
+function getDatabaseUrl() { return String(process.env.DATABASE_URL || "").trim(); }
 function isConfigured() { return Boolean(getDatabaseUrl()); }
 
 function getPool() {
