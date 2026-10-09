@@ -1,5 +1,5 @@
 <!doctype html>
-<% const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{}; const brandName=String(brand.company_name||"FAZ NETWORK"); const brandCopyright=String(brand.footer_copyright||"© {year} {company_name}. All Rights Reserved.").replace(/\\{year\\}/g,String(new Date().getFullYear())).replace(/\\{company_name\\}/g,brandName); %>
+<% const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{}; const brandName=String(brand.company_name||"FAZ NETWORK"); const brandCopyright=String(brand.footer_copyright||"© {year} {company_name}. All Rights Reserved.").replace(/\{year\}/g,String(new Date().getFullYear())).replace(/\{company_name\}/g,brandName); %>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
