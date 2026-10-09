@@ -2595,8 +2595,14 @@ async function deletePlan(id,name){
 
         function filterCustomerRows(query) {
             const q = String(query || '').trim().toLowerCase();
+            // Keep the selected billing filter applied when the search box changes.
+            const activeTab = document.querySelector('#customerBillingTabs button[data-billing-filter].active');
+            const wanted = String(activeTab?.getAttribute('data-billing-filter') || 'all').toLowerCase();
             document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(row => {
-                row.style.display = row.innerText.toLowerCase().includes(q) ? '' : 'none';
+                const rowStatus = String(row.getAttribute('data-billing-status') || 'unpaid').toLowerCase();
+                const matchesStatus = wanted === 'all' || rowStatus === wanted;
+                const matchesSearch = !q || row.innerText.toLowerCase().includes(q);
+                row.style.display = matchesStatus && matchesSearch ? '' : 'none';
             });
         }
 
@@ -2804,10 +2810,14 @@ async function deletePlan(id,name){
         }
 
         function setCustomerBillingFilter(status, button) {
-            const wanted=String(status||'all').toLowerCase();
-            document.querySelectorAll('#customerBillingTabs button[data-billing-filter]').forEach(function(btn){btn.classList.toggle('active',btn.getAttribute('data-billing-filter')===wanted);});
-            document.querySelectorAll('#customerFilterBody tr[data-customer-row]').forEach(function(row){const rowStatus=String(row.getAttribute('data-billing-status')||'unpaid').toLowerCase();row.style.display=(wanted==='all'||rowStatus===wanted)?'':'none';});
-            filterCustomerRows(document.getElementById('customerLiveSearch')?.value||'');
+            const wanted = String(status || 'all').toLowerCase();
+            document.querySelectorAll('#customerBillingTabs button[data-billing-filter]').forEach(function(btn) {
+                const active = btn.getAttribute('data-billing-filter') === wanted;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+            // One combined filtering path prevents search from revealing rows excluded by the tab.
+            filterCustomerRows(document.getElementById('customerLiveSearch')?.value || '');
         }
         function renderCustomerTable(users) {
             const sourceUsers = Array.isArray(users) ? users : [];
@@ -2863,7 +2873,7 @@ async function deletePlan(id,name){
                                     </tr>
                                 </thead>
                                 <tbody id="customerFilterBody">
-                                    ${users.length ? users.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
+                                    ${visibleUsers.length ? visibleUsers.map((user, index) => customerRowHtml(user, index + 1, t)).join('') : `<tr><td colspan="8" class="text-center py-5 text-muted" data-key="no_customers">${escapeHtml(t.no_customers)}</td></tr>`}
                                 </tbody>
                             </table>
                         </div>
