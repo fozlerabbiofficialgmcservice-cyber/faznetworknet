@@ -56,4 +56,33 @@ async function profile(req,res){
   return res.json({success:true,customer:{type:"pppoe",name:s.name||c?.full_name||username,username,phone:c?.phone||u?.phone||s.phone||null,status,online:Boolean(live),ip:traffic?.ip||live?.address||null,uptime:traffic?.uptime||live?.uptime||null,profile:clean(c?.linked_profile_name||c?.profile||u?.profile,100),planName:clean(c?.linked_plan_name||c?.package_name||c?.profile||u?.profile,120),monthlyFee:Number(c?.monthly_bill??c?.linked_price??0),expiryDate:expiry,remainingDays:remaining,billingStatus:clean(c?.billing_status||u?.billing_status||"unpaid",30),downloadMbps:Number(traffic?.rxBitsPerSecond||0)/1000000,uploadMbps:Number(traffic?.txBitsPerSecond||0)/1000000,bytesIn:Number(traffic?.bytesIn||0),bytesOut:Number(traffic?.bytesOut||0),payments}});
  }catch(e){console.error("[Customer self-care profile]",e);return res.status(503).json({success:false,message:"Unable to load live account data right now."});}
 }
-module.exports={login,logout,profile,readToken};
+async function renew(req,res){
+ const s=readToken(req);if(!s)return res.status(401).json({success:false,message:"Please sign in first."});
+ if(s.type!=="pppoe")return res.status(400).json({success:false,message:"This renewal form is for PPPoE subscribers."});
+ const trx=clean(req.body?.trxId||req.body?.trx_id,100).toUpperCase();if(!trx)return res.status(400).json({success:false,message:"TrxID is required."});
+ let claimed=null;
+ try{
+  const cResult=await db.query("SELECT c.*,p.plan_name AS linked_plan_name,p.profile_name AS linked_profile_name,p.price AS linked_price,p.duration_months FROM customers c LEFT JOIN packages p ON (LOWER(p.profile_name)=LOWER(c.profile) OR LOWER(p.plan_name)=LOWER(c.package_name)) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[s.sub]);
+  const c=cResult.rows[0]||null,uResult=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[s.sub]),u=uResult.rows[0]||null;
+  if(!c&&!u)return res.status(404).json({success:false,message:"Customer account not found."});
+  const expected=Number(c?.monthly_bill??c?.linked_price??0);if(!(expected>0))return res.status(400).json({success:false,message:"Your billing amount is not configured. Contact support."});
+  const txResult=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[trx]);const tx=txResult.rows[0];
+  if(!tx)return res.status(404).json({success:false,message:"Transaction not found. Please wait for payment SMS verification."});
+  if(tx.used||!["unmatched","received","pending"].includes(String(tx.status||"").toLowerCase()))return res.status(409).json({success:false,message:"This transaction has already been used or cannot be verified."});
+  if(Math.round(Number(tx.amount)*100)!==Math.round(expected*100))return res.status(400).json({success:false,message:"Payment amount does not match your bill of ৳"+expected.toFixed(2)+".",expectedAmount:expected,paidAmount:Number(tx.amount)});
+  const claim=await db.query("UPDATE transactions SET used=true,status='processing',matched_username=$1 WHERE id=$2 AND (used=false OR used IS NULL) AND LOWER(status) IN ('unmatched','received','pending') RETURNING id",[s.sub,tx.id]);
+  if(!claim.rows.length)return res.status(409).json({success:false,message:"This transaction has already been claimed."});claimed=tx.id;
+  const months=Math.max(1,Number(c?.duration_months||1)),now=new Date(),today=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).format(now),current=String(c?.expiration_date||u?.expiry_date||"").slice(0,10),base=current&&current>=today?current:today;
+  const [yy,mm,dd]=base.split("-").map(Number),target=new Date(Date.UTC(yy,mm-1+months,1)),last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();target.setUTCDate(Math.min(dd,last));const expiry=target.toISOString().slice(0,10);
+  const profile=clean(c?.linked_profile_name||c?.profile||u?.profile,100),password=String(c?.password||u?.password||"");
+  const comment="Customer: "+String(c?.full_name||s.name||s.sub)+" | Phone: "+String(c?.phone||u?.phone||s.phone||"")+" | EXP: "+expiry+" | TrxID: "+trx;
+  await mikrotikService.updateSecret(s.sub,{password,profile,comment,disabled:false});
+  await mikrotikService.kickActiveUser(s.sub).catch(()=>({kicked:false}));
+  if(c)await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',paid_until=$1,monthly_bill=$2,updated_at=NOW() WHERE id=$3",[expiry,expected,c.id]);
+  await db.query("UPDATE pppoe_users SET profile=$1,disabled=false,status='active',expiry_date=$2,billing_status='paid',paid_until=$2,comment=$3,updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[profile,expiry,comment,s.sub]);
+  await db.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing'",[s.sub,claimed]);
+  return res.json({success:true,message:"Payment verified and PPPoE service renewed.",username:s.sub,expiration:expiry});
+ }catch(e){console.error("[Customer self-care renewal]",e);return res.status(503).json({success:false,message:claimed?"Payment was reserved but renewal needs administrator review. Please contact support with your TrxID.":"Unable to verify or renew this payment right now."});}
+}
+
+module.exports={login,logout,profile,renew,readToken};
