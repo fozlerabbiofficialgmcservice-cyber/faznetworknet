@@ -18,7 +18,9 @@ async function webhook(req,res){
   const provided=String((req.get("x-webhook-token")||req.get("x-macrodroid-token")||req.body?.token||req.body?.secret||req.query?.token)||"").trim();
   if(!expected||provided!==expected)return res.status(401).json({success:false,error:"Unauthorized webhook."});
   const payment=parseSms(req.body,req.query,req.headers);
-  const existing=await db.query("SELECT id,status,used FROM transactions WHERE trx_id=$1",[payment.trxId]);
+  payment.trxId=String(payment.trxId||"").trim().toUpperCase();
+  if(!payment.trxId)return res.status(400).json({success:false,error:"A valid TrxID is required."});
+  const existing=await db.query("SELECT id,status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[payment.trxId]);
   // Never mutate the original transaction when MacroDroid retries delivery.
   if(existing.rows.length)return res.json({success:true,status:"duplicate",trx_id:payment.trxId,alreadyUsed:Boolean(existing.rows[0].used)});
   let user=null;
