@@ -189,7 +189,7 @@ const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt
       location.href=d.redirect||"/customer/dashboard";
     }catch(ex){err.textContent=ex.message;err.classList.remove("hidden");}
     finally{btn.disabled=false;btn.textContent="Login to Account";}
-  });;
+  });
 })();
 </script>
 </body>
