@@ -41,10 +41,8 @@ async function syncFromRouter() {
   const routerId = String(process.env.ROUTER_HOST || "");
 
   const result = await db.withTransaction(async (client) => {
-    // Never resurrect a username explicitly deleted by an admin.
-    const tombstoneResult = await client.query("SELECT LOWER(username) AS username FROM customer_deletion_tombstones");
-    const deletedUsernames = new Set(tombstoneResult.rows.map(row => String(row.username || "").toLowerCase()));
-
+    // Serialize each username against admin deletion. The advisory lock is shared
+    // with removeCustomer so a concurrent sync cannot recreate a row after delete.
     for (const profile of profiles) {
       await client.query(
         `INSERT INTO pppoe_profiles
@@ -64,8 +62,11 @@ async function syncFromRouter() {
 
     for (const user of secrets) {
       const usernameKey = String(user.name || "").trim().toLowerCase();
-      if (!usernameKey || deletedUsernames.has(usernameKey)) {
-        if (usernameKey) console.log("[PPPoE SYNC] Skipping admin-deleted username:", user.name);
+      if (!usernameKey) continue;
+      await client.query("SELECT pg_advisory_xact_lock(hashtext(LOWER($1)))", [usernameKey]);
+      const tombstone = await client.query("SELECT 1 FROM customer_deletion_tombstones WHERE LOWER(username)=LOWER($1) LIMIT 1", [usernameKey]);
+      if (tombstone.rows.length) {
+        console.log("[PPPoE SYNC] Skipping admin-deleted username:", user.name);
         continue;
       }
       const comment = user.comment || "";
