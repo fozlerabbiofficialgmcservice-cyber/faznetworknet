@@ -12,12 +12,10 @@ async function mikrotikTest(req, res) {
   } catch (error) {
     routerError = "Database check failed: " + String(error?.message || "unavailable");
   }
-  if (dbStatus === "healthy") {
-    try {
-      router = await mikrotikService.testConnection();
-    } catch (error) {
-      routerError = String(error?.message || "MikroTik connection failed");
-    }
+  try {
+    router = await mikrotikService.testConnection();
+  } catch (error) {
+    routerError = String(error?.message || "MikroTik connection failed");
   }
   const routerStatus = router ? "connected" : "unavailable";
   const success = dbStatus === "healthy" && routerStatus === "connected";
