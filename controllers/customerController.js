@@ -345,6 +345,64 @@ async function syncExpiryDatesToMikroTik(req,res){
     return res.json({success:(sync.failed||0)===0,total:customers.length,eligible:eligible.length,updated:sync.updated||0,skipped,failed:sync.failed||0,results:sync.results||[],message:"EXP dates pushed to MikroTik. PPPoE profiles, passwords, and disabled states were not changed."});
   }catch(error){console.error("[CUSTOMER EXP SYNC]",error);return res.status(503).json({success:false,message:error.message||"Unable to sync customer expiry dates to MikroTik."});}
 }
+async function getCustomerSyncDiagnostics(req,res){
+  try{
+    const [
+      customerCountResult,
+      pppoeCountResult,
+      tombstoneCountResult,
+      customersResult,
+      pppoeUsersResult,
+      tombstonesResult,
+      customersMissingPppoeResult,
+      pppoeUsersMissingCustomerResult
+    ]=await Promise.all([
+      db.query("SELECT COUNT(*)::int AS count FROM customers"),
+      db.query("SELECT COUNT(*)::int AS count FROM pppoe_users"),
+      db.query("SELECT COUNT(*)::int AS count FROM customer_deletion_tombstones"),
+      db.query("SELECT username,full_name,created_at FROM customers ORDER BY created_at ASC,username ASC,id ASC LIMIT 200"),
+      db.query("SELECT username,service,created_at FROM pppoe_users ORDER BY created_at ASC,username ASC LIMIT 200"),
+      db.query("SELECT username,deleted_at FROM customer_deletion_tombstones ORDER BY deleted_at DESC LIMIT 200"),
+      db.query("SELECT c.username FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE u.username IS NULL ORDER BY c.created_at ASC,c.username ASC LIMIT 200"),
+      db.query("SELECT u.username FROM pppoe_users u LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username) WHERE c.username IS NULL ORDER BY u.created_at ASC,u.username ASC LIMIT 200")
+    ]);
+
+    let routerPppoeUsers=[];
+    let routerReadError=null;
+    try{
+      const secrets=await withTimeout(()=>mikrotikService.fetchExistingSecrets(),8000);
+      routerPppoeUsers=(Array.isArray(secrets)?secrets:[]).map(user=>({
+        username:String(user.username||user.name||"").trim(),
+        service:String(user.service||"").trim()||"any"
+      })).filter(user=>user.username);
+    }catch(error){
+      routerReadError=error.message||"RouterOS read failed.";
+      console.warn("[CUSTOMER SYNC DIAGNOSTICS] MikroTik read failed:",routerReadError);
+    }
+
+    return res.json({
+      success:true,
+      checkedAt:new Date().toISOString(),
+      counts:{
+        panelCustomers:customerCountResult.rows[0]?.count||0,
+        pppoeUsersInDatabase:pppoeCountResult.rows[0]?.count||0,
+        deletionTombstones:tombstoneCountResult.rows[0]?.count||0,
+        eligibleMikroTikPppoeUsers:routerPppoeUsers.length
+      },
+      customers:customersResult.rows,
+      pppoeUsersInDatabase:pppoeUsersResult.rows,
+      customersMissingPppoeDatabaseLink:customersMissingPppoeResult.rows.map(row=>row.username),
+      pppoeDatabaseUsersMissingPanelCustomer:pppoeUsersMissingCustomerResult.rows.map(row=>row.username),
+      deletionTombstones:tombstonesResult.rows,
+      eligibleMikroTikPppoeUsers:routerPppoeUsers,
+      routerReadError
+    });
+  }catch(error){
+    console.error("[CUSTOMER SYNC DIAGNOSTICS]",error);
+    return errorResponse(res,error);
+  }
+}
+
 async function listCustomers(req,res){
   try{
     const requestedStatus=clean(req.query?.status||"all",20).toLowerCase();
@@ -1136,4 +1194,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
