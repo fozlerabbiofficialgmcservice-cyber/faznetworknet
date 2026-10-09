@@ -34,7 +34,7 @@ async function load(force=false){
   const result=await queryWithTimeout(db.query("SELECT key,value FROM app_settings"),1200);
   const map=Object.fromEntries((result.rows||[]).map(r=>[r.key,r.value]));
   cached=normalize(map);expiresAt=Date.now()+CACHE_TTL_MS;return cached;
- }catch(error){if(cached)return cached;cached=normalize({});expiresAt=Date.now()+CACHE_TTL_MS;return cached;}finally{refreshPromise=null;}})();
+ }catch(error){if(cached){expiresAt=Date.now()+CACHE_TTL_MS;return cached;}cached=normalize({});expiresAt=Date.now()+CACHE_TTL_MS;return cached;}finally{refreshPromise=null;}})();
  return refreshPromise;
 }
 function invalidate(){expiresAt=0;}
