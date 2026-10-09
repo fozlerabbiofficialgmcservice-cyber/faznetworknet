@@ -131,10 +131,9 @@ function effectiveProfile(profile, expirationDate) {
 }
 
 function formatRouterOsExpirationDate(value) {
-  const normalized = normalizeDate(value);
-  if (!normalized) return "";
-  const [year, month, day] = normalized.split("-");
-  return day + "/" + month + "/" + year;
+  // Keep the expiry marker in ISO YYYY-MM-DD form. RouterOS stores this
+  // as ordinary comment text; the billing panel parses the date itself.
+  return normalizeDate(value);
 }
 
 function cleanAdminNote(value) {
@@ -150,14 +149,8 @@ function cleanAdminNote(value) {
 }
 
 function buildExpirationComment(fullName, phone, expirationDate, remarks) {
-  const parts = [];
-  if (fullName) parts.push("Customer: " + clean(fullName, 200));
-  if (phone) parts.push("Phone: " + clean(phone, 40));
   const formattedExpiration = formatRouterOsExpirationDate(expirationDate);
-  if (formattedExpiration) parts.push("EXP: " + formattedExpiration);
-  const note = cleanAdminNote(remarks);
-  if (note) parts.push("Note: " + note);
-  return parts.join(" | ").slice(0, 500);
+  return formattedExpiration ? "EXP: " + formattedExpiration : "";
 }
 
 function extractExpirationDate(comment) {
