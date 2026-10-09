@@ -109,19 +109,22 @@ async function summary(req,res){try{const r=await db.query("SELECT COALESCE(SUM(
 const verifyBuckets=new Map();
 function rateLimit(key){const now=Date.now();const bucket=verifyBuckets.get(key)||{start:now,count:0};if(now-bucket.start>60000){bucket.start=now;bucket.count=0;}bucket.count++;verifyBuckets.set(key,bucket);return bucket.count<=10;}
 async function verifyTrx(req,res){
+ console.log('[VERIFY-TRX HIT]', req.body, req.query);
+ const body=req.body&&typeof req.body==="object"?req.body:{};
+ const query=req.query&&typeof req.query==="object"?req.query:{};
  const key=String(req.ip||"unknown");if(!rateLimit(key))return res.status(429).json({success:false,error:"Too many verification attempts. Try again later."});
  try{
-  const phone=normalizePhone(req.body.phone||"");
-  if(!/^01\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
-  const trx=String(req.body.trxId||req.body.trxid||req.body.txnId||req.body.txnid||"").trim().toUpperCase();
+  const phone=normalizePhone(body.username||body.phone||body.customer_phone||body.user||"");
+  if(!/^01\\d{9}$/.test(phone))return res.status(400).json({success:false,error:"A valid 11-digit Bangladeshi phone number is required."});
+  const trx=String(body.trxId||body.trx_id||body.transaction_id||body.trx||body.trxid||body.txnId||body.txnid||query.trxId||"").trim();
   if(!trx)return res.status(400).json({success:false,error:"TrxID/TxnID is required."});
-  const q=await db.query("SELECT * FROM transactions WHERE LOWER(trx_id)=LOWER($1) LIMIT 1",[trx]);
+  const q=await db.query("SELECT * FROM transactions WHERE UPPER(TRIM(trx_id)) = UPPER(TRIM($1)) AND (used = false OR LOWER(TRIM(status)) = 'unmatched') ORDER BY created_at DESC, id DESC LIMIT 1",[trx]);
+  console.log('[VERIFY DB RESULT]', q.rows);
   if(!q.rows.length)return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});
-  const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(tx.status==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
-  const amount=Number(tx.amount),requestedAmount=Number(req.body.amount||0);
+  const tx=q.rows[0];if(tx.used)return res.status(409).json({success:false,error:"This transaction has already been used."});if(String(tx.status||"").trim().toLowerCase()==="duplicate")return res.status(409).json({success:false,error:"Duplicate transaction cannot be used."});
+  const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
   if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
   // Read the latest profile prices/validity from app_settings on every verification.
-  // The Hotspot Profile editor persists this metadata; no preset amount map is required.
   const metadataResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
   if(!profileMetadata||typeof profileMetadata!=="object"||Array.isArray(profileMetadata))profileMetadata={};
@@ -131,7 +134,6 @@ async function verifyTrx(req,res){
    return Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
   });
   if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
-  // If several profiles share a price, use the first active MikroTik profile consistently.
   const hotspotProfile=matchingProfiles[0];
   const metadata=profileMetadata[String(hotspotProfile.name||"")]||{};
   const {normalizeProfileValidity,parseStoredValidity}=require("../services/hotspotProfileConfig");
@@ -139,9 +141,9 @@ async function verifyTrx(req,res){
   try{validityConfig=metadata.validityValue?normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):parseStoredValidity(hotspotProfile);}catch(_){validityConfig=parseStoredValidity(hotspotProfile);}
   const validity=String(validityConfig.validity||"").trim();
   if(!validity&&!Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0))return res.status(400).json({success:false,error:"The selected Hotspot profile has no usable validity or data quota configured."});
-  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+trx+" | Paid: ৳"+amount});
+  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+trx.trim().toUpperCase()+" | Paid: ৳"+amount});
   await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[phone,tx.id]);
-  return res.json({success:true,username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:req.body.loginUrl||req.body.linkLoginOnly||null});
+  return res.json({success:true,username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){return errorResponse(res,e,503);}
 }
 
