@@ -360,9 +360,9 @@ async function getCustomerSyncDiagnostics(req,res){
       db.query("SELECT COUNT(*)::int AS count FROM customers"),
       db.query("SELECT COUNT(*)::int AS count FROM pppoe_users"),
       db.query("SELECT COUNT(*)::int AS count FROM customer_deletion_tombstones"),
-      db.query("SELECT username,full_name,created_at FROM customers ORDER BY created_at ASC,username ASC,id ASC LIMIT 200"),
+      db.query("SELECT id,username,full_name,phone,profile,package_name,monthly_bill,expiration_date,created_at FROM customers ORDER BY created_at ASC,username ASC,id ASC LIMIT 200"),
       db.query("SELECT username,service,created_at FROM pppoe_users ORDER BY created_at ASC,username ASC LIMIT 200"),
-      db.query("SELECT username,deleted_at FROM customer_deletion_tombstones ORDER BY deleted_at DESC LIMIT 200"),
+      db.query("SELECT username,customer_id,deleted_at FROM customer_deletion_tombstones ORDER BY deleted_at DESC LIMIT 200"),
       db.query("SELECT c.username FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username) WHERE u.username IS NULL ORDER BY c.created_at ASC,c.username ASC LIMIT 200"),
       db.query("SELECT u.username FROM pppoe_users u LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username) WHERE c.username IS NULL ORDER BY u.created_at ASC,u.username ASC LIMIT 200")
     ]);
