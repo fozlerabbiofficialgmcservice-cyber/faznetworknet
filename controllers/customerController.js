@@ -884,7 +884,8 @@ async function getCustomerUsageRecords(req,res){
       [customer.id,fromDate,today]
     );
     const rows=q.rows.map(row=>({date:usageDate(row.usage_date),downloadBytes:String(row.download_bytes||0),uploadBytes:String(row.upload_bytes||0),totalBytes:(BigInt(row.download_bytes||0)+BigInt(row.upload_bytes||0)).toString()}));
-    const current=rows.filter(row=>row.date>=cycleStart&&row.date<=today);
+    const cycleThrough=expiry<today?expiry:today;
+    const current=rows.filter(row=>row.date>=cycleStart&&row.date<=cycleThrough);
     const sum=(arr,key)=>arr.reduce((total,row)=>total+BigInt(row[key]||0),0n).toString();
     return res.json({success:true,customer:{id:customer.id,username:customer.username},cycle:{type:cycle,durationDays:customer.billing_duration_days||null,startDate:cycleStart,endDate:expiry,throughDate:today},summary:{downloadBytes:sum(current,"downloadBytes"),uploadBytes:sum(current,"uploadBytes"),totalBytes:(BigInt(sum(current,"downloadBytes"))+BigInt(sum(current,"uploadBytes"))).toString(),recordedDays:current.length},daily:rows});
   }catch(error){console.warn("[Customer usage records] Failed:",error.message);return res.status(500).json({success:false,message:"Unable to load usage records."});}
