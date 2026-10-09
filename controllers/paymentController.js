@@ -147,7 +147,7 @@ async function verifyTrx(req,res){
   try{validityConfig=metadata.validityValue?normalizeProfileValidity(metadata.validityValue,metadata.validityUnit):parseStoredValidity(hotspotProfile);}catch(_){validityConfig=parseStoredValidity(hotspotProfile);}
   const validity=String(validityConfig.validity||"").trim();
   if(!validity&&!Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0))return res.status(400).json({success:false,error:"The selected Hotspot profile has no usable validity or data quota configured."});
-  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+trx.trim().toUpperCase()+" | Paid: ৳"+amount});
+  await mikrotikService.rechargeHotspotUser({username:phone,password:phone,profile:hotspotProfile.name,validity,limitBytesTotal:Number(metadata.limitBytesTotal||validityConfig.limitBytesTotal||0),comment:"FAZ PORTAL | TrxID: "+cleanTrx+" | Paid: ৳"+amount});
   await db.query("UPDATE transactions SET used=true,status='processed',matched_username=$1 WHERE id=$2",[phone,tx.id]);
   return res.json({success:true,message:'সফল হয়েছে!',username:phone,password:phone,profile:hotspotProfile.name,validity,amount,loginUrl:body.loginUrl||body.linkLoginOnly||null});
  }catch(e){return errorResponse(res,e,503);}
