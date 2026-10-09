@@ -86,12 +86,23 @@ async function renew(req,res){
   const profile=clean(c?.linked_profile_name||c?.profile||packageFallback?.profile_name||packageFallback?.plan_name||u?.profile,100),password=String(c?.password||u?.password||"");
   const comment="Customer: "+String(c?.full_name||s.name||s.sub)+" | Phone: "+String(c?.phone||u?.phone||s.phone||"")+" | EXP: "+expiry+" | TrxID: "+trx;
   await mikrotikService.updateSecret(s.sub,{password,profile,comment,disabled:false});
-  await mikrotikService.kickActiveUser(s.sub).catch(()=>({kicked:false}));
+  await mikrotikService.kickActiveUser(s.sub);
   if(c)await db.query("UPDATE customers SET expiration_date=$1,status='active',billing_status='paid',paid_until=$1,monthly_bill=$2,updated_at=NOW() WHERE id=$3",[expiry,expected,c.id]);
   await db.query("UPDATE pppoe_users SET profile=$1,disabled=false,status='active',expiry_date=$2,billing_status='paid',paid_until=$2,comment=$3,updated_at=NOW() WHERE LOWER(username)=LOWER($4)",[profile,expiry,comment,s.sub]);
-  await db.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing'",[s.sub,claimed]);
+  const finalized=await db.query("UPDATE transactions SET status='PAID',used=true,matched_username=$1 WHERE id=$2 AND status='processing' AND used=true RETURNING id",[s.sub,claimed]);
+  if(!finalized.rows.length)throw new Error("PPPoE renewal completed but payment finalization failed.");
+  claimed=null;
   return res.json({success:true,message:"Payment verified and PPPoE service renewed.",username:s.sub,expiration:expiry});
- }catch(e){console.error("[Customer self-care renewal]",e);return res.status(503).json({success:false,message:claimed?"Payment was reserved but renewal needs administrator review. Please contact support with your TrxID.":"Unable to verify or renew this payment right now."});}
+ }catch(e){
+  console.error("[Customer self-care renewal]",e?.message||e);
+  if(claimed!==null){
+   try{
+    const rollback=await db.query("UPDATE transactions SET status='unmatched',used=false,matched_username=NULL WHERE id=$1 AND status='processing' AND used=true RETURNING id",[claimed]);
+    if(!rollback.rows.length)console.error("[Customer self-care renewal] Claim rollback found no processing row for transaction",claimed);
+   }catch(rollbackError){console.error("[Customer self-care renewal] Failed to rollback transaction claim",claimed,rollbackError?.message||rollbackError);}
+  }
+  return res.status(500).json({success:false,message:"Payment verification or renewal failed. The transaction claim was released when possible; please retry or contact support if service status changed."});
+ }
 }
 
 module.exports={login,logout,profile,renew,readToken,issueToken};
