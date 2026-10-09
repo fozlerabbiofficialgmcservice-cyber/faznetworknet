@@ -143,9 +143,8 @@ function cleanAdminNote(value) {
   // Keep only actual note text so customer/phone/EXP fields are not duplicated.
   const noteParts = raw.split("|").map(part => part.trim()).filter(Boolean);
   const cleaned = noteParts
-    .filter(part => !/^(?:Customer|Phone|Mobile|EXP)\s*:/i.test(part))
     .map(part => part.replace(/^Note\s*:\s*/i, "").trim())
-    .filter(Boolean);
+    .filter(part => part && !/^(?:Customer|Phone|Mobile|EXP)\s*:/i.test(part));
   return cleaned.join(" | ").slice(0, 300);
 }
 
