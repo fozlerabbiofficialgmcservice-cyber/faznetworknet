@@ -2,6 +2,8 @@ process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
 const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
 const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const customerSelfCareRoutes=require("./routes/customerSelfCareRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
+const appSettingsService=require("./services/appSettings");
+const settingsController=require("./controllers/settingsController");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 app.use(session({
@@ -22,7 +24,10 @@ app.use(session({
     sameSite:"lax"
   }
 }));
-app.use(express.json());app.use(express.urlencoded({extended:true}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
+app.use(express.json({limit:"1mb"}));app.use(express.urlencoded({extended:true,limit:"1mb"}));app.use(express.text({type:"text/*"}));app.use(express.static(path.join(__dirname,"public")));
+// Branding is read from a short-lived in-memory cache, never queried per EJS template.
+app.use(async(req,res,next)=>{try{res.locals.brandSettings=await appSettingsService.getBrandSettings();}catch(_){res.locals.brandSettings=await appSettingsService.getBrandSettings().catch(()=>({company_name:"FAZ NETWORK",logo_url:"",favicon_url:"",support_phone:"01339932887",whatsapp_number:"",office_address:"FAZ NETWORK, Bangladesh",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved."}));}next();});
+app.get("/api/settings/public",settingsController.publicSettings);
 app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",database:db.getStatus(),timestamp:new Date()}));
 app.get("/healthz",async(req,res)=>{try{await db.query("SELECT 1");return res.status(200).json({status:"ok",uptime:process.uptime(),db:"connected",timestamp:new Date().toISOString()});}catch(error){return res.status(503).json({status:"degraded",error:"db_unreachable"});}});
 app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
@@ -101,7 +106,7 @@ app.get("/",async (req,res)=>{
     }catch(hotspotErr){
       console.warn("[Home Route] Saved hotspot metadata unavailable:",hotspotErr.message);
     }
-    return res.render("index",{title:"FAZ NETWORK",officeAddress,helpline,packages,hotspotPackages,error:null,success:null});
+    return res.render("index",{title:res.locals.brandSettings?.company_name||"FAZ NETWORK",officeAddress,helpline,packages,hotspotPackages,error:null,success:null});
   }catch(err){
     console.error("[CRITICAL] Error rendering public homepage:",err);
     return res.status(500).send("Service is initializing. Please refresh in a moment.");
