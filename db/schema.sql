@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS pppoe_profiles (
   session_timeout TEXT,
   idle_timeout TEXT,
   only_one BOOLEAN DEFAULT FALSE,
-  change_tcp_mss BOOLEAN DEFAULT FALSE,
+  change_tcp_mss TEXT DEFAULT 'default',
   comment TEXT,
   price NUMERIC(12,2) NOT NULL DEFAULT 0,
   router_id TEXT,
@@ -16,6 +16,25 @@ CREATE TABLE IF NOT EXISTS pppoe_profiles (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- RouterOS change-tcp-mss is a tri-state string (yes/no/default), not a boolean.
+-- Convert legacy cache columns safely so a single profile cannot abort the full PPPoE sync.
+DO $
+DECLARE current_type TEXT;
+BEGIN
+  SELECT data_type INTO current_type
+  FROM information_schema.columns
+  WHERE table_schema = current_schema()
+    AND table_name = 'pppoe_profiles'
+    AND column_name = 'change_tcp_mss';
+
+  IF current_type = 'boolean' THEN
+    ALTER TABLE pppoe_profiles
+      ALTER COLUMN change_tcp_mss TYPE TEXT
+      USING CASE WHEN change_tcp_mss THEN 'yes' ELSE 'default' END;
+  END IF;
+END $;
+ALTER TABLE pppoe_profiles ALTER COLUMN change_tcp_mss SET DEFAULT 'default';
 
 CREATE TABLE IF NOT EXISTS pppoe_users (
   id BIGSERIAL PRIMARY KEY,
