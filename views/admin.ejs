@@ -3426,7 +3426,7 @@ async function deletePlan(id,name){
         document.getElementById('addCustomerForm').addEventListener('reset', function(){
             setTimeout(function(){
                 const dateInput=document.getElementById('connectionDate');
-                if(dateInput) dateInput.value=formatDateForInput(localDateValue());
+                if(dateInput) setCustomerDateValue(dateInput,localDateValue());
                 applyCustomerPackagePrice();
             },0);
         });
