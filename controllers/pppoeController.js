@@ -137,8 +137,7 @@ async function users(req, res) {
              c.expiration_date AS customer_expiration_date,
              c.package_name AS customer_package_name,
              c.profile AS customer_profile,
-             c.status AS customer_billing_state,
-             c.paid_until AS customer_paid_until
+             c.status AS customer_billing_state
       FROM pppoe_users u
       LEFT JOIN customers c ON LOWER(c.username)=LOWER(u.username)
       ${whereClause}
@@ -171,7 +170,6 @@ async function users(req, res) {
         profile: user.customer_profile || user.profile || "",
         expiration_date: canonicalExpiry,
         expiry_date: canonicalExpiry,
-        paid_until: user.customer_paid_until || user.paid_until || null,
         customer_billing_state: user.customer_billing_state || null,
         billing_status:billing.status,
         billing_badge_class:billing.badgeClass,
