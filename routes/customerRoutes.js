@@ -5,6 +5,7 @@ const router=express.Router();
 router.get("/packages",controller.packages);
 router.post("/sync-expiry-dates",controller.syncExpiryDatesToMikroTik);
 router.post("/sync-panel-to-mikrotik",controller.syncPanelCustomersToMikroTik);
+router.get("/diagnostics/counts",controller.getCustomerSyncDiagnostics);
 router.get("/",controller.listCustomers);
 router.post("/",controller.createCustomer);
 router.post("/provision",controller.createCustomer);
