@@ -14,13 +14,14 @@ function getNestedValue(body,keys){
 function extractWebhookPayload(body,query={},headers={}){
   const objectBody=body&&typeof body==="object"&&!Array.isArray(body)?body:{};
   const text=firstDefined([
-    getNestedValue(objectBody,["message","sms","text","body","sms_body","sms_message","sms body"]),
-    query?.message,query?.text,
+    getNestedValue(objectBody,["message","sms","text","body","sms_body","sms_message","sms body","smsText","smsTextMessage","notification"]),
+    query?.message,query?.text,query?.sms,query?.body,
+    headers["x-sms-message"],headers["x-sms-body"],headers["x-sms-text"],headers["x-message"],headers["x-sms"],headers["x-notification-message"],
     typeof body==="string"?body:""
   ]);
   const sender=firstDefined([
     getNestedValue(objectBody,["sender","from","number","sms_number"]),
-    headers["x-sms-sender"],headers["x-sender"],query?.sender
+    headers["x-sms-sender"],headers["x-sender"],headers["x-sms-from"],headers["x-payer-phone"],query?.sender,query?.from
   ]);
   const token=firstDefined([
     headers["x-webhook-token"],headers["x-macrodroid-token"],
