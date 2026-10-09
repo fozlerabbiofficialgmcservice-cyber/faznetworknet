@@ -3,7 +3,7 @@ const db=require("../db");
 const CACHE_TTL_MS=30_000;
 const DEFAULTS={
  company_name:"FAZ NETWORK",public_base_url:"",logo_url:"",favicon_url:"",
- support_phone:"01339932887",whatsapp_number:"",office_address:"FAZ NETWORK, Bangladesh",
+ support_phone:"01339932887",whatsapp_number:"8801339932887",office_address:"FAZ NETWORK, Bangladesh",
  btrc_license_number:"",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved.",
  billing_cycle_type:"rolling_30",grace_period_days:"0",expiry_action:"quarantine",
  sms_gateway_mode:"disabled",sms_api_url:"",sms_api_key:"",sms_sender_id:"",
