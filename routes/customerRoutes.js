@@ -3,6 +3,7 @@ const controller=require("../controllers/customerController");
 const router=express.Router();
 
 router.get("/packages",controller.packages);
+router.post("/sync-expiry-dates",controller.syncExpiryDatesToMikroTik);
 router.get("/",controller.listCustomers);
 router.post("/",controller.createCustomer);
 router.post("/provision",controller.createCustomer);
