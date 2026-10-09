@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
+    "dev": "node --watch server.js",
     "test": "node --test"
   },
   "dependencies": {
@@ -20,9 +20,7 @@
     "express-session": "^1.18.2",
     "connect-pg-simple": "^10.0.0"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.9"
-  },
+  "devDependencies": {},
   "engines": {
     "node": ">=20"
   }
