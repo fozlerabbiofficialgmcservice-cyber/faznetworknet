@@ -1,7 +1,7 @@
 process.env.TZ = 'Asia/Dhaka';
 require("dotenv").config();
 const path=require("path");const express=require("express");const cors=require("cors");const session=require("express-session");const pgSession=require("connect-pg-simple")(session);
-const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
+const db=require("./db");const routerRoutes=require("./routes/routerRoutes");const pppoeRoutes=require("./routes/pppoeRoutes");const paymentRoutes=require("./routes/paymentRoutes");const paymentController=require("./controllers/paymentController");const hotspotRoutes=require("./routes/hotspotRoutes");const customerRoutes=require("./routes/customerRoutes");const publicRoutes=require("./routes/publicRoutes");const {initializeDatabase}=require("./db/init");const packageRoutes=require("./routes/packageRoutes");const {startBillingCron}=require("./jobs/billingCron");const {startUsageCollector}=require("./jobs/customerUsageCollector");const ipPoolRoutes=require("./routes/ipPoolRoutes");const settingsRoutes=require("./routes/settingsRoutes");const reportRoutes=require("./routes/reportRoutes");const {requireAdmin,isAdminAuthenticated,setSessionCookie,clearSessionCookie,adminCredentialsValid}=require("./middleware/adminAuth");
 const app=express();app.set("trust proxy",1);const PORT=Number(process.env.PORT)||3000;
 app.set("views",path.join(__dirname,"views"));app.set("view engine","ejs");app.use(cors());
 app.use(session({
@@ -56,6 +56,8 @@ app.post("/logout",(req,res)=>{
 app.get("/portal",(req,res)=>res.render("portal",{title:"FAZ NETWORK Hotspot Portal"}));
 
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected}));
+app.get("/admin/reports/:report(collection|due|hotspot-revenue|expenses)",requireAdmin,(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
+app.use("/api/reports",requireAdmin,reportRoutes);
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
 app.get("/dashboard",requireAdmin,(req,res)=>res.redirect("/admin"));
 app.get("/hotspot/webhook",requireAdmin,(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
