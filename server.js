@@ -37,7 +37,8 @@ app.use(express.json({limit:"1mb"}));app.use(express.urlencoded({extended:true,l
 app.use(async(req,res,next)=>{try{res.locals.brandSettings=await appSettingsService.getBrandSettings();}catch(_){res.locals.brandSettings=await appSettingsService.getBrandSettings().catch(()=>({company_name:"FAZ NETWORK",logo_url:"",favicon_url:"",support_phone:"01339932887",whatsapp_number:"",office_address:"FAZ NETWORK, Bangladesh",footer_copyright:"© {year} FAZ NETWORK. All Rights Reserved."}));}next();});
 app.get("/api/settings/public",settingsController.publicSettings);
 app.get("/health",(req,res)=>res.json({status:"ok",app:"FAZ NETWORK Server",database:db.getStatus(),timestamp:new Date()}));
-app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});\napp.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
+app.get("/api/health/database",(req,res)=>{const status=db.getStatus();res.status(status.connected?200:503).json({success:status.connected,database:status});});
+app.get("/api/olt/telemetry",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,require("./controllers/oltTelemetryController").listTelemetry);
 app.get("/login",(req,res)=>{
   if(isAdminAuthenticated(req)) return res.redirect("/admin");
   return res.render("login",{next:String(req.query.next||"/admin"),error:null});
