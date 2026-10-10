@@ -27,9 +27,17 @@ exports.create = async (req, res) => {
     const name = clean(body.name, 120);
     if (!TYPES.has(deviceType)) return res.status(400).json({ success: false, message: "Select a supported device type." });
     if (!name) return res.status(400).json({ success: false, message: "Device name is required." });
-    const managementInput = clean(body.managementIp, 512);
+    let managementInput = clean(body.managementIp, 512);
     const mac = clean(body.macAddress, 32).replace(/-/g, ":");
-    const managementPort = body.managementPort === "" || body.managementPort == null ? null : Number(body.managementPort);
+    let managementPort = body.managementPort === "" || body.managementPort == null ? null : Number(body.managementPort);
+    // Be tolerant of IPv4:port pasted into the IP field. The database inet
+    // column must receive only the IP; the dedicated port field remains source
+    // of truth when supplied.
+    const ipv4WithPort = managementInput.match(/^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/);
+    if (ipv4WithPort) {
+      managementInput = ipv4WithPort[1];
+      if (managementPort === null) managementPort = Number(ipv4WithPort[2]);
+    }
     const managementUsername = clean(body.managementUsername, 160) || null;
     const managementPassword = String(body.managementPassword ?? "");
     if (managementPort !== null && (!Number.isInteger(managementPort) || managementPort < 1 || managementPort > 65535)) return res.status(400).json({ success: false, message: "Management port must be from 1 to 65535." });
