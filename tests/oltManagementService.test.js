@@ -18,6 +18,18 @@ test('accepts explicit HTTP and HTTPS access methods', () => {
     assert.equal(parsed.value.protocol, accessMethod);
   }
 });
+test('validates both local and VPN-forwarded browser endpoints', () => {
+  const parsed = validateConfig({name:'Main OLT',endpointMode:'vpn',localManagementIp:'192.168.1.20',localPort:'80',vpnForwardedIp:'203.0.113.22',vpnForwardedPort:'8080',accessMethod:'https'});
+  assert.equal(parsed.error, undefined);
+  assert.equal(parsed.value.endpointMode, 'vpn');
+  assert.equal(parsed.value.localManagementIp, '192.168.1.20');
+  assert.equal(parsed.value.vpnForwardedIp, '203.0.113.22');
+  assert.equal(parsed.value.port, 8080);
+});
+test('requires a valid local IP and a valid VPN endpoint when VPN mode is selected', () => {
+  assert.ok(validateConfig({name:'Main OLT',endpointMode:'vpn',localManagementIp:'bad',vpnForwardedIp:'203.0.113.22'}).error);
+  assert.ok(validateConfig({name:'Main OLT',endpointMode:'vpn',localManagementIp:'192.168.1.20',vpnForwardedIp:''}).error);
+});
 test('rejects public, malformed and missing management addresses', () => {
   for (const ip of ['8.8.8.8','127.0.0.1','169.254.169.254','bad-ip','']) {
     assert.ok(validatePrivateIPv4(ip), ip);
