@@ -5,6 +5,11 @@ const COOKIE="faz_customer_session",SESSION_SECONDS=43200;
 const rootSecret=String(process.env.CUSTOMER_SESSION_SECRET||"").trim();
 const secret=()=>rootSecret?crypto.createHmac("sha256",rootSecret).update("faznetwork:customer-self-care:session-v1").digest("hex"):"";
 const loginAttempts=new Map();
+function withTimeout(promise,label,ms=7000){
+ let timer;
+ const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+" timed out after "+ms+"ms")),ms);});
+ return Promise.race([Promise.resolve(promise),timeout]).finally(()=>clearTimeout(timer));
+}
 function allowLogin(ip){const now=Date.now(),key=String(ip||"unknown"),b=loginAttempts.get(key)||{start:now,count:0};if(now-b.start>60000){b.start=now;b.count=0;}b.count++;loginAttempts.set(key,b);return b.count<=8;}
 function sign(v){return crypto.createHmac("sha256",secret()).update(v).digest("base64url");}
 function issueToken(p){if(!secret())throw new Error("Customer session signing secret is not configured.");const h=Buffer.from(JSON.stringify({alg:"HS256",typ:"JWT"})).toString("base64url"),b=Buffer.from(JSON.stringify({...p,iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+SESSION_SECONDS})).toString("base64url"),u=h+"."+b;return u+"."+sign(u);}
@@ -48,7 +53,7 @@ async function profile(req,res){
  const s=readToken(req);if(!s)return res.status(401).json({success:false,message:"Please sign in to view your account."});
  try{
   if(s.type==="hotspot"){
-   const results=await Promise.allSettled([mikrotikService.getHotspotUser(s.sub),mikrotikService.getHotspotActiveSession(s.sub),db.query("SELECT profile,validity,price,status FROM hotspot_vouchers WHERE username=$1 LIMIT 1",[s.sub]),db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1")]);
+   const results=await Promise.allSettled([withTimeout(mikrotikService.getHotspotUser(s.sub),"Hotspot user lookup"),withTimeout(mikrotikService.getHotspotActiveSession(s.sub),"Hotspot active-session lookup"),db.query("SELECT profile,validity,price,status FROM hotspot_vouchers WHERE username=$1 LIMIT 1",[s.sub]),db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1")]);
    const u=results[0].status==="fulfilled"?results[0].value:null,a=results[1].status==="fulfilled"?results[1].value:null,v=results[2].status==="fulfilled"?results[2].value.rows[0]||null:null;
    if(!u&&!v)return res.status(404).json({success:false,message:"Hotspot account could not be found."});
    let meta={};try{meta=JSON.parse(results[3].status==="fulfilled"?results[3].value.rows[0]?.value||"{}":"{}")}catch(_){}
@@ -57,7 +62,7 @@ async function profile(req,res){
   }
   const username=s.sub,qr=await db.query("SELECT c.*,p.plan_name AS linked_plan_name,p.profile_name AS linked_profile_name,p.price AS linked_price FROM customers c LEFT JOIN packages p ON (LOWER(p.profile_name)=LOWER(c.profile) OR LOWER(p.plan_name)=LOWER(c.package_name)) WHERE LOWER(c.username)=LOWER($1) LIMIT 1",[username]),c=qr.rows[0]||null,ur=await db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),u=ur.rows[0]||null;
   if(!c&&!u)return res.status(404).json({success:false,message:"PPPoE account could not be found."});
-  const results=await Promise.allSettled([mikrotikService.getActiveSessions(),mikrotikService.getPppoeLiveTraffic(username),db.query("SELECT trx_id,channel,amount,status,created_at FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR sender_phone=$2 ORDER BY created_at DESC LIMIT 25",[username,clean(c?.phone||u?.phone,40)])]);
+  const results=await Promise.allSettled([withTimeout(mikrotikService.getActiveSessions(),"PPPoE active-session lookup"),withTimeout(mikrotikService.getPppoeLiveTraffic(username),"PPPoE live-traffic lookup"),db.query("SELECT trx_id,channel,amount,status,created_at FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR sender_phone=$2 ORDER BY created_at DESC LIMIT 25",[username,clean(c?.phone||u?.phone,40)])]);
   const sessions=results[0].status==="fulfilled"?results[0].value:[],live=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").toLowerCase()===username.toLowerCase())||null,traffic=results[1].status==="fulfilled"?results[1].value:null,expiry=String(c?.expiration_date||u?.expiry_date||"").slice(0,10)||null,remaining=daysLeft(expiry),payments=results[2].status==="fulfilled"?results[2].value.rows:[];
   const status=remaining!==null&&remaining<0?"Expired":(c?.status==="inactive"||u?.disabled?"Suspended":live?"Active":"Offline");
   const paymentAccounts=await readMfsAccounts();return res.json({success:true,customer:{type:"pppoe",name:s.name||c?.full_name||username,username,phone:c?.phone||u?.phone||s.phone||null,status,online:Boolean(live),ip:traffic?.ip||live?.address||null,uptime:traffic?.uptime||live?.uptime||null,profile:clean(c?.linked_profile_name||c?.profile||u?.profile,100),planName:clean(c?.linked_plan_name||c?.package_name||c?.profile||u?.profile,120),monthlyFee:Number(c?.monthly_bill??c?.linked_price??0),expiryDate:expiry,remainingDays:remaining,billingStatus:clean(c?.billing_status||u?.billing_status||"unpaid",30),downloadMbps:Number(traffic?.rxBitsPerSecond||0)/1000000,uploadMbps:Number(traffic?.txBitsPerSecond||0)/1000000,bytesIn:Number(traffic?.bytesIn||0),bytesOut:Number(traffic?.bytesOut||0),paymentAccounts,payments}});
