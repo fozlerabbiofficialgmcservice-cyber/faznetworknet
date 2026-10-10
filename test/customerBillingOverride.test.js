@@ -93,3 +93,33 @@ test("billing cron marks a past-due migration override expired without changing 
     mikrotik.kickActiveUser=originalKick;
   }
 });
+
+test("single-customer sync preserves an overridden past-due line when no local PPPoE row exists",async()=>{
+  const originalQuery=db.query,originalSync=mikrotik.syncPanelCustomerSecrets;
+  let syncedCustomers=[];
+  try{
+    db.query=async(sql)=>{
+      if(sql.includes("FROM customers c LEFT JOIN pppoe_users"))return {rows:[{
+        id:42,username:"01712345678",password:"secret",profile:"HOME30",full_name:"Migration Customer",
+        phone:"01712345678",onu_mac:"AA:BB:CC:DD:EE:FF",expiration_date:"2020-02-29",
+        remarks:"existing note",status:"active",billing_expiry_override:true,router_disabled:null
+      }]};
+      return {rows:[]};
+    };
+    mikrotik.syncPanelCustomerSecrets=async(customers)=>{
+      syncedCustomers=customers;
+      return {results:[{username:"01712345678",status:"updated"}],updated:1,created:0,failed:0,skipped:0};
+    };
+    const res=responseRecorder();
+    await customerController.syncSingleCustomerToMikroTik({params:{id:"42"},body:{},ip:"test"},res);
+    assert.equal(res.statusCode,200);
+    assert.equal(res.body.success,true);
+    assert.equal(syncedCustomers.length,1);
+    assert.equal(syncedCustomers[0].profile,"HOME30","manual expiry override must preserve the selected profile");
+    assert.equal(syncedCustomers[0].disabled,false,"manual expiry override must not disable an active line just because no local PPPoE row exists");
+  }finally{
+    db.query=originalQuery;
+    mikrotik.syncPanelCustomerSecrets=originalSync;
+  }
+});
+
