@@ -15,7 +15,7 @@ async function audit(req, action, details) {
   );
 }
 async function currentConfig() {
-  const result = await db.query('SELECT id,name,management_ip::text AS "managementIp",protocol,access_method AS "accessMethod",port,username,encrypted_password IS NOT NULL AS "hasPassword",CASE WHEN connection_status='connected' THEN 'not_tested' ELSE connection_status END AS "connectionStatus",last_test_at AS "lastTestAt",last_http_status AS "lastHttpStatus",last_error AS "lastError",updated_at AS "updatedAt" FROM olt_connections WHERE id=1');
+  const result = await db.query('SELECT id,name,management_ip::text AS "managementIp",local_management_ip::text AS "localManagementIp",local_port AS "localPort",vpn_forwarded_ip::text AS "vpnForwardedIp",vpn_forwarded_port AS "vpnForwardedPort",endpoint_mode AS "endpointMode",protocol,access_method AS "accessMethod",port,username,encrypted_password IS NOT NULL AS "hasPassword",CASE WHEN connection_status='connected' THEN 'not_tested' ELSE connection_status END AS "connectionStatus",last_test_at AS "lastTestAt",last_http_status AS "lastHttpStatus",last_error AS "lastError",updated_at AS "updatedAt" FROM olt_connections WHERE id=1');
   return result.rows[0] || null;
 }
 exports.getConfig = async (req,res) => {
@@ -32,14 +32,14 @@ exports.saveConfig = async (req,res) => {
     if (c.username && !passwordCipher) return res.status(400).json({success:false,message:'Enter the OLT password before saving credentials.'});
     await db.withTransaction(async client => {
       await client.query(
-        `INSERT INTO olt_connections(id,name,management_ip,protocol,access_method,port,username,encrypted_password,connection_status,last_test_at,last_http_status,last_error,updated_at)
-         VALUES(1,$1,$2::inet,$3,$4,$5,$6,$7,'not_tested',NULL,NULL,NULL,NOW())
-         ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,management_ip=EXCLUDED.management_ip,protocol=EXCLUDED.protocol,access_method=EXCLUDED.access_method,port=EXCLUDED.port,username=EXCLUDED.username,encrypted_password=EXCLUDED.encrypted_password,connection_status='not_tested',last_test_at=NULL,last_http_status=NULL,last_error=NULL,updated_at=NOW()`,
-        [c.name,c.managementIp,c.protocol,c.accessMethod,c.port,c.username || null,passwordCipher]
+        `INSERT INTO olt_connections(id,name,management_ip,protocol,access_method,port,username,encrypted_password,local_management_ip,local_port,vpn_forwarded_ip,vpn_forwarded_port,endpoint_mode,connection_status,last_test_at,last_http_status,last_error,updated_at)
+         VALUES(1,$1,$2::inet,$3,$4,$5,$6,$7,$8::inet,$9,NULLIF($10,0),NULLIF($11,0),$12,'not_tested',NULL,NULL,NULL,NOW())
+         ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,management_ip=EXCLUDED.management_ip,protocol=EXCLUDED.protocol,access_method=EXCLUDED.access_method,port=EXCLUDED.port,username=EXCLUDED.username,encrypted_password=EXCLUDED.encrypted_password,local_management_ip=EXCLUDED.local_management_ip,local_port=EXCLUDED.local_port,vpn_forwarded_ip=EXCLUDED.vpn_forwarded_ip,vpn_forwarded_port=EXCLUDED.vpn_forwarded_port,endpoint_mode=EXCLUDED.endpoint_mode,connection_status='not_tested',last_test_at=NULL,last_http_status=NULL,last_error=NULL,updated_at=NOW()`,
+        [c.name,c.managementIp,c.protocol,c.accessMethod,c.port,c.username || null,passwordCipher,c.localManagementIp,c.localPort,c.vpnForwardedIp || null,c.vpnForwardedIp ? c.vpnForwardedPort : 0,c.endpointMode]
       );
       await client.query(
         'INSERT INTO admin_audit_logs(actor_user_id,actor_username,actor_role,action,details,ip_address) VALUES($1,$2,$3,$4,$5::jsonb,$6)',
-        [req.auth?.userId || null,String(req.auth?.username || req.session?.adminUser || 'admin').slice(0,100),String(req.auth?.role || req.session?.role || 'admin'),'olt.connection_settings_saved',JSON.stringify({managementIp:c.managementIp,protocol:c.protocol,port:c.port,credentialsConfigured:Boolean(passwordCipher)}),String(req.ip || '').slice(0,64)||null]
+        [req.auth?.userId || null,String(req.auth?.username || req.session?.adminUser || 'admin').slice(0,100),String(req.auth?.role || req.session?.role || 'admin'),'olt.connection_settings_saved',JSON.stringify({endpointMode:c.endpointMode,localManagementIp:c.localManagementIp,vpnForwardedIpConfigured:Boolean(c.vpnForwardedIp),protocol:c.protocol,port:c.port,credentialsConfigured:Boolean(passwordCipher)}),String(req.ip || '').slice(0,64)||null]
       );
     });
     return res.json({success:true,message:'OLT settings saved securely. Run Test Connection to verify reachability; credentials have not been authenticated yet.',config:await currentConfig()});
@@ -70,7 +70,9 @@ exports.testConnection = async (req,res) => {
     let lastProbeError = null;
     for (const method of methods) {
       try {
-        const url = new URL(method + '://' + config.managementIp + ':' + config.port + '/');
+        const endpointHost = config.endpointMode === 'vpn' ? config.vpnForwardedIp : (config.localManagementIp || config.managementIp);
+        const endpointPort = config.endpointMode === 'vpn' ? config.vpnForwardedPort : (config.localPort || config.port);
+        const url = new URL(method + '://' + endpointHost + ':' + endpointPort + '/');
         httpStatus = await probe(url);
         detectedProtocol = method;
         break;
