@@ -423,4 +423,39 @@ async function updateUserStatus(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, updateUserStatus };
+
+async function deleteUser(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid user ID.' });
+  }
+  if (req.session.userId && Number(req.session.userId) === id) {
+    return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
+  }
+  try {
+    const targetResult = await db.query('SELECT id, username, role FROM admin_users WHERE id=$1 LIMIT 1', [id]);
+    const target = targetResult.rows?.[0];
+    if (!target) return res.status(404).json({ success: false, message: 'User not found.' });
+    if (target.role === 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Super Admin accounts are protected from deletion.' });
+    }
+    if (req.auth?.role === 'admin' && target.role !== 'staff') {
+      return res.status(403).json({ success: false, message: 'Admins may delete staff accounts only.' });
+    }
+    if (req.auth?.role !== 'super_admin' && req.auth?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You do not have permission to delete accounts.' });
+    }
+    const result = await db.query('DELETE FROM admin_users WHERE id=$1 AND role=$2 RETURNING id, username, role', [id, target.role]);
+    if (!result.rows.length) return res.status(404).json({ success: false, message: 'User was not found or has already been deleted.' });
+    await writeAudit(req, 'admin_user_deleted', id, { username: target.username, role: target.role });
+    return res.json({ success: true, message: 'Account deleted successfully.' });
+  } catch (error) {
+    if (error.code === '23503') {
+      return res.status(409).json({ success: false, message: 'This account is still referenced by support or audit records and cannot be deleted safely. Disable the account instead.' });
+    }
+    console.error('[RBAC] User deletion failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to delete account.' });
+  }
+}
+
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, updateUserStatus, deleteUser };
