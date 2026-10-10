@@ -378,18 +378,57 @@ async function listUsers(req, res) {
 }
 
 async function sendInvitationEmail(invitation, rawToken) {
-  const transporter = createMailer();
-  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
-  const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\/+$/, '');
+  const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\\/+$/, '');
   let base;
   try { base = new URL(configuredBase); } catch { throw new Error('PUBLIC_BASE_URL is invalid.'); }
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
-  const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
+  const link = base.toString().replace(/\\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
+
+  // Prefer the existing Google Apps Script mailer for invitation links. SMTP is
+  // retained as a fallback when the Apps Script mailer is not configured.
+  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
+  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
+  if (mailerUrl || mailerToken) {
+    if (!mailerUrl || !mailerToken) throw new Error('Apps Script mailer requires both OTP_MAILER_URL and OTP_MAILER_TOKEN.');
+    let endpoint;
+    try { endpoint = new URL(mailerUrl); } catch { throw new Error('OTP_MAILER_URL is invalid.'); }
+    if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
+        !/^\\/macros\\/s\\/[^/]+\\/exec\\/?$/.test(endpoint.pathname)) {
+      throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
+    }
+    if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
+    let response;
+    try {
+      response = await fetch(endpoint.toString(), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'invitation', token: mailerToken, to: invitation.email,
+          username: String(invitation.username || '').slice(0, 60),
+          role: roleLabel, link
+        }),
+        signal: AbortSignal.timeout(20000),
+        redirect: 'follow'
+      });
+    } catch (error) {
+      throw new Error('Apps Script invitation mailer request failed: ' + String(error.name || 'network error'));
+    }
+    let result;
+    try { result = JSON.parse(await response.text()); }
+    catch { throw new Error('Apps Script invitation mailer returned an invalid response.'); }
+    if (!response.ok || result.success !== true) {
+      throw new Error('Apps Script invitation mailer failed: ' + String(result.error || 'request rejected').slice(0, 120));
+    }
+    return;
+  }
+
+  const transporter = createMailer();
+  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
   await transporter.sendMail({
     from, to: invitation.email,
     subject: 'FAZ NETWORK — invitation to join as ' + roleLabel,
-    text: 'Hello ' + invitation.username + ',\n\nYou have been invited to FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your own password:\n\n' + link + '\n\nThis invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.',
+    text: 'Hello ' + invitation.username + ',\\n\\nYou have been invited to join FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your own password:\\n\\n' + link + '\\n\\nThis invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.',
     html: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#0f172a"><h2>FAZ <span style="color:#059669">NETWORK</span></h2><p>Hello ' + escapeHtml(invitation.username) + ',</p><p>You have been invited to join FAZ NETWORK as <b>' + escapeHtml(roleLabel) + '</b>.</p><p>Open the secure invitation link below. We will send a one-time verification code to this email before you can set your password.</p><p style="margin:28px 0"><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in <b>24 hours</b> and can be cancelled by the administrator. If you were not expecting this, ignore this email.</p></div>'
   });
 }
