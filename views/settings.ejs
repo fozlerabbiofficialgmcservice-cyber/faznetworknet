@@ -23,71 +23,13 @@
       </div>
       <div class="flex flex-col sm:flex-row sm:items-center gap-4 pt-2">
         <button id="test-router-btn" type="button"
-          onclick="window.runMikroTikRenderDiagnostic && window.runMikroTikRenderDiagnostic()"
+          onclick="(async function(b){var r=document.getElementById('router-test-result');var d=document.getElementById('router-diagnostic-details');if(!r||!d)return;b.disabled=true;r.textContent='Testing from Render…';r.className='text-sm text-slate-500';d.classList.remove('hidden');d.textContent='Checking database, TCP reachability and RouterOS identity. Read-only checks only.';try{var response=await fetch('/api/admin/diagnostics/mikrotik-test',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:'{}',cache:'no-store'});var data=await response.json();r.textContent=data.success?'Render → MikroTik API: CONNECTED':'Render → MikroTik API: FAILED';r.className='text-sm font-semibold '+(data.success?'text-emerald-700':'text-red-700');d.textContent=JSON.stringify(data,null,2)}catch(e){r.textContent='Diagnostic request failed';r.className='text-sm font-semibold text-red-700';d.textContent='Could not complete the diagnostic request. Check deployment and admin session.'}finally{b.disabled=false}})(this)"
           class="inline-flex justify-center items-center rounded-xl bg-cyan-700 hover:bg-cyan-800 disabled:opacity-60 text-white font-semibold px-5 py-3 transition">
           Test Render → MikroTik API
         </button>
         <div id="router-test-result" class="text-sm text-slate-500" aria-live="polite">Not tested in this session.</div>
       </div>
-      <div id="router-diagnostic-details" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2" aria-live="polite"></div>
+      <pre id="router-diagnostic-details" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap break-words overflow-auto" aria-live="polite"></pre>
     </div>
   </div>
 </section>
-
-<script>
-(function () {
-  if (window.runMikroTikRenderDiagnostic) return;
-  window.runMikroTikRenderDiagnostic = async function () {
-    const button = document.getElementById("test-router-btn");
-    const result = document.getElementById("router-test-result");
-    const details = document.getElementById("router-diagnostic-details");
-    if (!button || !result || !details) return;
-    button.disabled = true;
-    result.textContent = "Testing from the Render server…";
-    details.classList.remove("hidden");
-    details.textContent = "Checking database configuration, TCP reachability, and RouterOS API identity. Read-only checks only.";
-    try {
-      const response = await fetch("/api/admin/diagnostics/mikrotik-test", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: "{}",
-        cache: "no-store"
-      });
-      const data = await response.json();
-      result.textContent = data.success ? "Render → MikroTik API: CONNECTED" : "Render → MikroTik API: FAILED";
-      result.className = "text-sm font-semibold " + (data.success ? "text-emerald-700" : "text-red-700");
-      details.replaceChildren();
-      const rows = [
-        ["Checked at", data.checkedAt || "Unavailable"],
-        ["Effective endpoint", data.endpoint ? ((data.endpoint.host || "Not configured") + (data.endpoint.port ? ":" + data.endpoint.port : "")) : "Unavailable"],
-        ["Endpoint source", data.endpoint?.source || "Unknown"],
-        ["Database", data.database?.status || "Unknown"],
-        ["TCP reachability", (data.tcp?.status || "Unknown") + (data.tcp?.message ? " — " + data.tcp.message : "")],
-        ["RouterOS API", data.routerOS?.status || "Unknown"],
-        ["Router identity", data.routerOS?.identity || "Unavailable"],
-        ["RouterOS version", data.routerOS?.version || "Unavailable"],
-        ["Details", data.routerOS?.error || data.database?.error || (!response.ok ? "Diagnostic returned HTTP " + response.status : "No error")]
-      ];
-      rows.forEach(function (entry) {
-        const row = document.createElement("div");
-        row.className = "text-sm break-words";
-        const label = document.createElement("span");
-        label.className = "font-semibold text-slate-700";
-        label.textContent = entry[0] + ": ";
-        const value = document.createElement("span");
-        value.className = "text-slate-600";
-        value.textContent = String(entry[1]);
-        row.append(label, value);
-        details.appendChild(row);
-      });
-    } catch (error) {
-      result.textContent = "Diagnostic request failed";
-      result.className = "text-sm font-semibold text-red-700";
-      details.textContent = "Could not complete the diagnostic request. Check the Render deployment and admin session.";
-    } finally {
-      button.disabled = false;
-    }
-  };
-})();
-</script>
