@@ -1,6 +1,7 @@
 <%
 const brand=typeof brandSettings!=="undefined"&&brandSettings?brandSettings:{};
 const brandName=String(brand.company_name||"FAZ NETWORK");
+const safeOfficeAddress=String(brand.office_address||(typeof officeAddress!=="undefined"?officeAddress:"FAZ NETWORK, Bangladesh"));
 const safeWhatsapp=String(brand.whatsapp_number||"").replace(/\D/g,"");
 const copyrightText=String(brand.footer_copyright||"© {year} {company_name}. All Rights Reserved.").replace(/\{year\}/g,String(new Date().getFullYear())).replace(/\{company_name\}/g,brandName);
 const safeHelpline=String(brand.support_phone||(typeof helpline!=="undefined"?helpline:"01339932887"));
