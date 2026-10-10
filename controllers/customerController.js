@@ -1066,11 +1066,11 @@ async function updateCustomer(req,res){
     const billingDateKey=["billing_expiry_date","next_billing_date","expirationDate","expiration_date"].find(hasOwn);
     const rawBillingDate=billingDateKey?body[billingDateKey]:row.expiration_date;
     if(["billing_expiry_date","next_billing_date"].includes(billingDateKey)&&!String(rawBillingDate||"").trim())return res.status(400).json({success:false,message:"Billing expiry date is required."});
-    if(billingDateKey&&String(rawBillingDate||"").trim()&&!validDateOnly(rawBillingDate))return res.status(400).json({success:false,message:"Billing expiry date must be a valid YYYY-MM-DD calendar date."});
+    if(billingDateKey&&String(rawBillingDate||"").trim()&&!validDateOnly(rawBillingDate))return res.status(400).json({success:false,message:"Billing expiry date must be a valid DD/MM/YYYY date (or legacy YYYY-MM-DD)."});
     const expirationDate=normalizeDate(rawBillingDate)||normalizeDate(row.expiration_date)||bangladeshToday();
     const cycleRaw=body.billing_cycle??body.billingCycle??row.billing_cycle??"monthly";
     const billingCycle=String(cycleRaw||"monthly").trim().toLowerCase().replace(/[ -]+/g,"_");
-    if(!["monthly","custom_days"].includes(billingCycle))return res.status(400).json({success:false,message:"Billing cycle must be Monthly or Custom Days."});
+    if(!["monthly","15_days","30_days","custom_days"].includes(billingCycle))return res.status(400).json({success:false,message:"Billing cycle must be Monthly, 15 Days, 30 Days, or Custom Days."});
     const durationRaw=body.billing_duration_days??body.billingDurationDays??row.billing_duration_days;
     const billingDurationDays=billingCycle==="custom_days"?Number.parseInt(durationRaw,10):null;
     if(billingCycle==="custom_days"&&(!Number.isInteger(billingDurationDays)||billingDurationDays<1||billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
