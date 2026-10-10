@@ -489,3 +489,8 @@ CREATE TABLE IF NOT EXISTS network_topology_links (
 CREATE INDEX IF NOT EXISTS idx_network_topology_links_from ON network_topology_links(from_device_id);
 CREATE INDEX IF NOT EXISTS idx_network_topology_links_to ON network_topology_links(to_device_id);
 
+
+
+-- Optional customer ONU optical receive power (dBm); NULL means not measured/configured.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_dbm NUMERIC(6,2)
+  CHECK (onu_rx_power_dbm IS NULL OR (onu_rx_power_dbm >= -50 AND onu_rx_power_dbm <= 10));
