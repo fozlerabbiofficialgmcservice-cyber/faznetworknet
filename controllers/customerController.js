@@ -235,7 +235,7 @@ async function createCustomer(req, res) {
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
         billing_duration_days, billing_expiry_override, billing_status, provisioning_status, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending',$23,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending',$25,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
@@ -263,7 +263,7 @@ async function createCustomer(req, res) {
           profile: customer.effectiveProfile,
           callerId: customer.onuMac,
           comment: buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
-          disabled: dateStatus(customer.expirationDate) === "expired" || customer.disabled
+          disabled: (dateStatus(customer.expirationDate) === "expired" && !customer.billingExpiryOverride) || customer.disabled
         });
         provisioning = "provisioned";
         await db.query(
@@ -282,12 +282,12 @@ async function createCustomer(req, res) {
             customer.username,
             customer.password,
             customer.effectiveProfile,
-            dateStatus(customer.expirationDate) === "expired" || customer.disabled,
+            (dateStatus(customer.expirationDate) === "expired" && !customer.billingExpiryOverride) || customer.disabled,
             buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
             customer.phone,
             String(process.env.ROUTER_HOST || ""),
             customer.expirationDate,
-            dateStatus(customer.expirationDate),
+            dateStatus(customer.expirationDate)==="expired"?"expired":customer.disabled?"inactive":"active",
             customer.onuMac || null
           ]
         );
