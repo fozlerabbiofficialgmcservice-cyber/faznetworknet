@@ -269,10 +269,9 @@ class MikroTikService {
           continue;
         }
         try {
-          const customerName = this._str(customer.name || customer.fullName || customer.full_name || customer.customerName || customer.customer_name || customer.comment).trim().replace(/^(Customer:\s*)/i, "").split("|")[0].trim().replace(/[|\r\n]+/g, " ").slice(0, 200) || username;
           const expiryDate = this._str(customer.expiryDate || customer.expiry_date || customer.expirationDate || customer.expiration_date).trim();
           const canonicalComment = /^\d{4}-\d{2}-\d{2}$/.test(expiryDate)
-            ? customerName + " | EXP: " + expiryDate
+            ? "EXP: " + expiryDate
             : this._str(customer.comment).trim();
           const params = this._writeParams({
             password,
@@ -319,8 +318,7 @@ class MikroTikService {
         const secret = secrets.get(username.toLowerCase());
         if (!secret || !secret[".id"]) { skipped++; results.push({username,status:"skipped",reason:"PPPoE secret not found on MikroTik."}); continue; }
         try {
-          const customerName = this._str(customer.name || customer.fullName || customer.full_name || customer.customerName || customer.customer_name || username).trim().replace(/[|\r\n]+/g, " ").slice(0, 200) || username;
-          const comment = customerName + " | EXP: " + expiryDate;
+          const comment = "EXP: " + expiryDate;
           await connection.write("/ppp/secret/set", ["=.id=" + secret[".id"], "=comment=" + comment]);
           updated++;
           results.push({username,status:"updated",comment});
