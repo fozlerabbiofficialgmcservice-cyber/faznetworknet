@@ -1,0 +1,110 @@
+const db = require("../db");
+const mikrotikService = require("../services/mikrotikService");
+
+let running = false;
+
+async function runNetworkDiscovery() {
+  if (running) return { skipped: true, reason: "previous_run_active" };
+  running = true;
+  let runId = null;
+  try {
+    // Discovery is observation-only: no RouterOS provisioning/configuration calls.
+    const [sessions, bridgeHosts, router] = await Promise.all([
+      mikrotikService.getActiveSessions(),
+      mikrotikService.getBridgeHosts().catch((error) => {
+        console.warn("[NETWORK DISCOVERY] Bridge host table unavailable:", error.message);
+        return [];
+      }),
+      mikrotikService.testConnection()
+    ]);
+    const deviceResult = await db.query(
+      "SELECT id FROM network_devices WHERE device_type='mikrotik' ORDER BY id LIMIT 1"
+    );
+    const deviceId = deviceResult.rows[0]?.id || null;
+    const created = await db.query(
+      "INSERT INTO network_discovery_runs (device_id,run_type,status,details) VALUES ($1,'scheduled','running',$2::jsonb) RETURNING id",
+      [deviceId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m" })]
+    );
+    runId = created.rows[0].id;
+    let matched = 0;
+    let unmatched = 0;
+    let discovered = 0;
+
+    for (const session of sessions) {
+      const username = String(session.username || "").trim().slice(0, 100);
+      if (!username) continue;
+      const result = await db.query(
+        "SELECT id,username FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 2",
+        [username]
+      );
+      const customer = result.rows.length === 1 ? result.rows[0] : null;
+      const status = customer ? "matched" : result.rows.length > 1 ? "ambiguous" : "unmatched";
+      const observedValue = {
+        username,
+        ip: String(session.address || "").slice(0, 64) || null,
+        routerMac: String(session.callerId || "").slice(0, 100) || null,
+        uptime: String(session.uptime || "").slice(0, 100) || null,
+        service: String(session.service || "pppoe").slice(0, 40)
+      };
+      // Reduce duplicate snapshots during rapid restarts while retaining history.
+      const recent = await db.query(
+        "SELECT id FROM network_observations WHERE discovery_run_id=$1 AND observation_type='pppoe_session' AND LOWER(identity_value)=LOWER($2) LIMIT 1",
+        [runId, username]
+      );
+      if (recent.rowCount) continue;
+      await db.query(
+        `INSERT INTO network_observations
+          (discovery_run_id,source_device_id,customer_id,observation_type,identity_type,identity_value,observed_value,match_status,match_confidence,evidence)
+         VALUES ($1,$2,$3,'pppoe_session','pppoe_username',$4,$5::jsonb,$6,$7,$8::jsonb)`,
+        [runId, deviceId, customer?.id || null, username, JSON.stringify(observedValue), status,
+          customer ? 1 : null, JSON.stringify({ rule: customer ? "exact_case_insensitive_pppoe_username" : "no_unique_customer_match", source: "mikrotik_ppp_active" })]
+      );
+      discovered++;
+      if (customer) matched++; else unmatched++;
+    }
+
+    for (const host of bridgeHosts) {
+      const mac = String(host.macAddress || "").trim().slice(0, 32);
+      if (!mac) continue;
+      await db.query(
+        `INSERT INTO network_observations
+          (discovery_run_id,source_device_id,observation_type,identity_type,identity_value,observed_value,match_status,evidence)
+         VALUES ($1,$2,'bridge_host','mac_address',$3,$4::jsonb,'unmatched',$5::jsonb)`,
+        [runId, deviceId, mac,
+          JSON.stringify({ interface: host.interface || null, bridge: host.bridge || null, vlanId: host.vlanId || null, dynamic: Boolean(host.dynamic) }),
+          JSON.stringify({ rule: "no_customer_identity_inferred", source: "mikrotik_bridge_host" })]
+      );
+      discovered++;
+      unmatched++;
+    }
+    await db.query(
+      "UPDATE network_discovery_runs SET status='succeeded',finished_at=NOW(),discovered_count=$2,matched_count=$3,unmatched_count=$4 WHERE id=$1",
+      [runId, discovered, matched, unmatched]
+    );
+    if (deviceId) await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
+    console.log("[NETWORK DISCOVERY] run=" + runId + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
+    return { runId, discovered, matched, unmatched };
+  } catch (error) {
+    if (runId) {
+      await db.query(
+        "UPDATE network_discovery_runs SET status='failed',finished_at=NOW(),error_message=$2 WHERE id=$1",
+        [runId, String(error.message || "Discovery failed").slice(0, 1000)]
+      ).catch((writeError) => console.warn("[NETWORK DISCOVERY] Could not mark run failed:", writeError.message));
+    }
+    console.warn("[NETWORK DISCOVERY] Scheduled read-only scan failed:", error.message);
+    return { failed: true, message: error.message };
+  } finally {
+    running = false;
+  }
+}
+
+function startNetworkDiscovery() {
+  // First run occurs after schema initialization. A failed router connection is
+  // recorded/logged and does not prevent the web process from starting.
+  runNetworkDiscovery().catch((error) => console.warn("[NETWORK DISCOVERY] Initial run failed:", error.message));
+  return setInterval(() => {
+    runNetworkDiscovery().catch((error) => console.warn("[NETWORK DISCOVERY] Scheduled run failed:", error.message));
+  }, 10 * 60 * 1000);
+}
+
+module.exports = { runNetworkDiscovery, startNetworkDiscovery };
