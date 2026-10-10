@@ -77,9 +77,21 @@
         // Only that owner session may manage DB-backed Super Admin rows.
         const canManage=!isSelf&&(role==='super_admin'||(role==='admin'&&user.role==='staff'));
         const canDelete=canManage;
+        const canResend=canManage&&user.is_first_login===true;
         const actionLabel=isSelf?'<span class="badge text-bg-light border">Current account</span>':!canManage?'—':'';
-        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canManage?'<button type="button" class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+userId+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button type="button" class="btn btn-sm btn-danger" data-delete-user-id="'+userId+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+actionLabel+'</div></td></tr>';
+        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canResend?'<button type="button" class="btn btn-sm btn-outline-primary" data-resend-invitation="'+userId+'" data-resend-email="'+esc(user.email)+'">Send invitation</button>':'')+(canManage?'<button type="button" class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+userId+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button type="button" class="btn btn-sm btn-danger" data-delete-user-id="'+userId+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+actionLabel+'</div></td></tr>';
       }).join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No accounts found.</td></tr>';
+      tbody.querySelectorAll('button[data-resend-invitation]').forEach(button=>button.addEventListener('click',async()=>{
+        if(!window.confirm('Send a secure invitation link to '+button.dataset.resendEmail+'?'))return;
+        button.disabled=true;
+        try{
+          const response=await fetch('/api/admin/users/'+button.dataset.resendInvitation+'/resend-invitation',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});
+          const data=await response.json();
+          if(!response.ok||!data.success)throw new Error(data.message||'Unable to send invitation.');
+          window.alert(data.message||'Invitation sent.');
+          await window.loadStaffInvitations();
+        }catch(error){window.alert(error.message);button.disabled=false;}
+      }));
       tbody.querySelectorAll('button[data-delete-user-id]').forEach(button=>button.addEventListener('click',async()=>{
         const username=button.dataset.deleteUsername||'this account';
         if(!window.confirm('Permanently delete '+username+'? This cannot be undone.'))return;
