@@ -308,7 +308,6 @@ async function setFirstPassword(req, res) {
       return res.status(409).render('set-first-password', { error: 'This account has already been updated. Please sign in with your new password.' });
     }
     const nextTarget = safeNext(req.session.pendingPasswordNext);
-    await writeAudit(req, 'admin_first_password_changed', userId, { username: user.username });
     return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget);
   } catch (error) {
     console.error('[RBAC] First-login password change failed:', error.message);
