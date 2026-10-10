@@ -378,11 +378,11 @@ async function listUsers(req, res) {
 }
 
 async function sendInvitationEmail(invitation, rawToken) {
-  const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\\/+$/, '');
+  const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\/+$/, '');
   let base;
   try { base = new URL(configuredBase); } catch { throw new Error('PUBLIC_BASE_URL is invalid.'); }
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
-  const link = base.toString().replace(/\\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
+  const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
   const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
 
   // Prefer the existing Google Apps Script mailer for invitation links. SMTP is
@@ -394,7 +394,7 @@ async function sendInvitationEmail(invitation, rawToken) {
     let endpoint;
     try { endpoint = new URL(mailerUrl); } catch { throw new Error('OTP_MAILER_URL is invalid.'); }
     if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
-        !/^\\/macros\\/s\\/[^/]+\\/exec\\/?$/.test(endpoint.pathname)) {
+        !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
       throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
     }
     if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
