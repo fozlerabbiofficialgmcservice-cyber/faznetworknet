@@ -35,3 +35,6 @@ async function inspectDevice(device) {
 }
 
 module.exports = { registerAdapter, resolveAdapter, inspectDevice };
+
+// Register only the explicitly inactive scaffold; it performs no network I/O.
+require("./vsolOlt");
