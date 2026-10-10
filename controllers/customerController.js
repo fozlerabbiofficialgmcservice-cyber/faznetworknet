@@ -371,6 +371,39 @@ async function syncPanelCustomersToMikroTik(req,res){
     return res.status(503).json({success:false,message:error.message||"Unable to sync panel customer data to MikroTik."});
   }
 }
+async function syncSingleCustomerToMikroTik(req,res){
+  try{
+    const key=clean(req.params.id,100);
+    const found=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
+      FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
+      WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1))
+        AND NOT EXISTS (SELECT 1 FROM customer_deletion_tombstones t WHERE LOWER(t.username)=LOWER(c.username))
+      LIMIT 1`,[key]);
+    const row=found.rows[0];
+    if(!row)return res.status(404).json({success:false,message:"Customer not found or is marked deleted."});
+    const username=clean(row.username,100),password=clean(row.password,255),expiry=normalizeDate(row.expiration_date);
+    if(!username||!password)return res.status(400).json({success:false,message:"Panel PPPoE username and password are required before syncing."});
+    const expired=Boolean(expiry&&dateStatus(expiry)==="expired"),preservePastDue=Boolean(row.billing_expiry_override);
+    const customerState=String(row.status||"").toLowerCase();
+    const profile=preservePastDue?clean(row.profile,120):effectiveProfile(clean(row.profile,120),expiry);
+    const disabled=row.router_disabled===null||row.router_disabled===undefined
+      ? Boolean(expired||["inactive","suspended"].includes(customerState))
+      : preservePastDue?Boolean(row.router_disabled):Boolean(expired||row.router_disabled||["inactive","suspended"].includes(customerState));
+    const comment=buildExpirationComment(row.full_name,row.phone,expiry,row.remarks);
+    const callerId=clean(row.onu_mac,100);
+    const sync=await mikrotikService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);
+    const result=(sync.results||[]).find(item=>String(item.username||"").toLowerCase()===username.toLowerCase());
+    if(!result||!["updated","created"].includes(result.status))return res.status(502).json({success:false,message:result?.reason||"MikroTik did not confirm the PPPoE secret update.",result});
+    const routerId=String(process.env.ROUTER_HOST||"");
+    await db.query(`INSERT INTO pppoe_users (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,caller_id,synced_at,updated_at)
+      VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,NOW(),NOW())
+      ON CONFLICT(username) DO UPDATE SET password=EXCLUDED.password,profile=EXCLUDED.profile,service='pppoe',disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,phone=COALESCE(NULLIF(EXCLUDED.phone,''),pppoe_users.phone),router_id=EXCLUDED.router_id,expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),synced_at=NOW(),updated_at=NOW()`,
+      [username,password,profile,disabled,comment,formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),routerId,expiry||null,expired?"expired":disabled?"suspended":dateStatus(expiry),callerId||null]);
+    await logAuditAction({customerId:row.id,adminId:getAdminId(req),action:"CUSTOMER360_SYNC_MIKROTIK",details:{message:"Single customer PPPoE credentials, profile, expiry comment and Caller ID synchronized",username,callerId:callerId||null,expiryDate:expiry||null,result:result.status},ipAddress:getIpAddress(req)});
+    return res.json({success:true,message:"Customer synced successfully: PPPoE username, password, profile, expiry comment and Caller ID/MAC were pushed to MikroTik; local PPPoE record was updated.",username,callerId:callerId||"",expiryDate:expiry||"",status:result.status});
+  }catch(error){console.error("[CUSTOMER 360 SINGLE SYNC]",error);return res.status(503).json({success:false,message:error.message||"Unable to sync this customer to MikroTik."});}
+}
+
 async function syncExpiryDatesToMikroTik(req,res){
   try{
     const result=await db.query("SELECT id,username,full_name,phone,expiration_date FROM customers WHERE username IS NOT NULL AND BTRIM(username)<>'' ORDER BY COALESCE(created_at,'1970-01-01'::timestamp) ASC, username ASC, id ASC");
@@ -1238,4 +1271,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
