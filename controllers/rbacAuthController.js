@@ -34,6 +34,58 @@ function createMailer() {
 }
 
 async function sendOtpEmail(user, code) {
+  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
+  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
+
+  // Prefer the HTTPS Apps Script mailer when configured. SMTP remains available
+  // as a backwards-compatible fallback for paid/other hosting environments.
+  if (mailerUrl || mailerToken) {
+    if (!mailerUrl || !mailerToken) {
+      throw new Error('Apps Script OTP mailer requires both OTP_MAILER_URL and OTP_MAILER_TOKEN.');
+    }
+
+    let endpoint;
+    try {
+      endpoint = new URL(mailerUrl);
+    } catch {
+      throw new Error('OTP_MAILER_URL is invalid.');
+    }
+    if (endpoint.protocol !== 'https:' ||
+        endpoint.hostname !== 'script.google.com' ||
+        !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
+      throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
+    }
+    if (mailerToken.length < 32) {
+      throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
+    }
+
+    let response;
+    try {
+      response = await fetch(endpoint.toString(), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: mailerToken, to: user.email, code }),
+        signal: AbortSignal.timeout(20000),
+        redirect: 'follow'
+      });
+    } catch (error) {
+      throw new Error('Apps Script OTP mailer request failed: ' + String(error.name || 'network error'));
+    }
+
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      throw new Error('Apps Script OTP mailer returned an invalid response.');
+    }
+    if (!response.ok || result.success !== true) {
+      const safeError = String(result.error || 'request rejected').slice(0, 120);
+      throw new Error('Apps Script OTP mailer failed: ' + safeError);
+    }
+    return;
+  }
+
   const transporter = createMailer();
   const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
   await transporter.sendMail({
