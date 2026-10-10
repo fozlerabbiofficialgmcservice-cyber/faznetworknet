@@ -1,7 +1,7 @@
 'use strict';
 
 const db = require('../db');
-const { validatePublicIp, validatePortForward } = require('../services/networkAccessValidation');
+const { validatePublicIp, validateEndpointHost, validatePortForward } = require('../services/networkAccessValidation');
 
 function fail(res, error, status = 500) {
   console.error('[Network Access]', error?.message || error);
@@ -15,7 +15,6 @@ async function audit(req, action, details) {
       [req.auth?.userId || null, String(req.auth?.username || req.session?.adminUser || 'admin').slice(0,100), String(req.auth?.role || req.session?.role || 'super_admin'), action, JSON.stringify(details || {}), String(req.ip || '').slice(0,64) || null]
     );
   } catch (error) {
-    // Audit failure must be visible and must not silently claim a configuration change succeeded.
     throw new Error('Configuration was not saved because the audit log could not be written.');
   }
 }
@@ -112,12 +111,14 @@ exports.createVpnProfile = async (req, res) => {
     if (!name) return fail(res, new Error('VPN profile name is required.'), 400);
     if (!['wireguard'].includes(provider)) return fail(res, new Error('The first test phase supports WireGuard profile planning only.'), 400);
     if (!['management_access'].includes(role)) return fail(res, new Error('Only management-access split-tunnel profiles are allowed in this phase.'), 400);
-    const endpointHost = String(body.endpointHost ?? '').trim().slice(0, 253);
+    const parsedHost = validateEndpointHost(body.endpointHost);
+    if (parsedHost.error) return fail(res, new Error(parsedHost.error), 400);
+    const endpointHost = parsedHost.value;
     const endpointPort = body.endpointPort === '' || body.endpointPort == null ? null : Number(body.endpointPort);
     if (endpointPort != null && (!Number.isInteger(endpointPort) || endpointPort < 1 || endpointPort > 65535)) return fail(res, new Error('VPN endpoint port must be from 1 to 65535.'), 400);
     const result = await db.query(
       'INSERT INTO vpn_profiles(name,provider,role,status,endpoint_host,endpoint_port) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,name,provider,role,status,endpoint_host AS "endpointHost",endpoint_port AS "endpointPort",updated_at AS "updatedAt"',
-      [name,provider,role,'pending_endpoint',endpointHost || null,endpointPort]
+      [name,provider,role,'pending_endpoint',endpointHost,endpointPort]
     );
     await audit(req, 'network_access.vpn_profile_created', { id: result.rows[0].id, provider, role });
     return res.status(201).json({ success: true, profile: result.rows[0], message: 'Profile saved. A reachable WireGuard endpoint and peer keys are required before a live tunnel can be tested.' });
