@@ -470,3 +470,11 @@ CREATE TABLE IF NOT EXISTS olt_connections (
 ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS access_method VARCHAR(16) NOT NULL DEFAULT 'detect';
 ALTER TABLE olt_connections DROP CONSTRAINT IF EXISTS olt_connections_access_method_check;
 ALTER TABLE olt_connections ADD CONSTRAINT olt_connections_access_method_check CHECK (access_method IN ('detect','http','https'));
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS local_management_ip INET;
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS local_port INTEGER NOT NULL DEFAULT 80 CHECK (local_port BETWEEN 1 AND 65535);
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS vpn_forwarded_ip INET;
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS vpn_forwarded_port INTEGER NOT NULL DEFAULT 80 CHECK (vpn_forwarded_port BETWEEN 1 AND 65535);
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS endpoint_mode VARCHAR(8) NOT NULL DEFAULT 'local';
+ALTER TABLE olt_connections DROP CONSTRAINT IF EXISTS olt_connections_endpoint_mode_check;
+ALTER TABLE olt_connections ADD CONSTRAINT olt_connections_endpoint_mode_check CHECK (endpoint_mode IN ('local','vpn'));
+UPDATE olt_connections SET local_management_ip=management_ip WHERE local_management_ip IS NULL;
