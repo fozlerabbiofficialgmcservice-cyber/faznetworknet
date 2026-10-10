@@ -244,8 +244,24 @@ class MikroTikService {
         const username = this._str(customer && customer.username).trim();
         const usernameKey = username.toLowerCase();
         if (!username) { skipped++; results.push({username,status:"skipped",reason:"Missing username."}); continue; }
-        const secret = secrets.get(usernameKey);
+        let secret = secrets.get(usernameKey);
         const conflictingSecret = allSecrets.get(usernameKey);
+        const callerIdForMatch = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim().toLowerCase();
+        // A customer may have had their PPPoE username changed or the RouterOS
+        // secret may be missing under the panel username. Match by the saved
+        // ONU/MAC Caller ID as a secondary identity, but only among PPPoE-capable
+        // secrets; unrelated RouterOS users remain untouched.
+        if (!secret && !conflictingSecret && callerIdForMatch) {
+          const macMatches = [...secrets.values()].filter(item =>
+            this._str(item["caller-id"]).trim().toLowerCase() === callerIdForMatch
+          );
+          if (macMatches.length === 1) secret = macMatches[0];
+          else if (macMatches.length > 1) {
+            failed++;
+            results.push({username,status:"failed",reason:"Caller ID matches multiple MikroTik PPPoE secrets; no RouterOS change was made."});
+            continue;
+          }
+        }
         const password = this._str(customer.password || this._str(secret?.password)).trim();
         const profile = this._str(customer.profile || this._str(secret?.profile)).trim();
         if (!secret && conflictingSecret) {
@@ -275,6 +291,7 @@ class MikroTikService {
             : this._str(customer.comment).trim();
           const callerId = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim();
           const params = this._writeParams({
+            ...(secret && this._str(secret.name).trim() !== username ? {name: username} : {}),
             password,
             profile,
             "caller-id": callerId || undefined,
