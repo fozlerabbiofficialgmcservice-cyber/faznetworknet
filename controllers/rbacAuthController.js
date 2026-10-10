@@ -97,6 +97,14 @@ async function login(req, res) {
   const nextTarget = safeNext(req.body?.next);
   if (!username || !password) return res.status(400).render('login', { next: nextTarget, error: 'Enter your username and password.' });
 
+  // Preserve the configured shared credential as a permanent super-admin login,
+  // even if an individual account later uses the same username.
+  const { ADMIN_USER } = getAdminCredentials();
+  const legacy = require('../middleware/adminAuth');
+  if (username.toLowerCase() === ADMIN_USER.toLowerCase() && await legacy.adminCredentialsValid(username, password)) {
+    return establishSession(req, res, { id: null, username, role: 'super_admin', legacy: true }, nextTarget);
+  }
+
   try {
     const result = await db.query(
       'SELECT id, username, email, password_hash, role, is_first_login, status FROM admin_users WHERE lower(username)=lower($1) LIMIT 1',
@@ -138,11 +146,6 @@ async function login(req, res) {
     }
   }
 
-  const { ADMIN_USER } = getAdminCredentials();
-  const legacy = require('../middleware/adminAuth');
-  if (username.toLowerCase() === ADMIN_USER.toLowerCase() && await legacy.adminCredentialsValid(username, password)) {
-    return establishSession(req, res, { id: null, username, role: 'super_admin', legacy: true }, nextTarget);
-  }
   return res.status(401).render('login', { next: nextTarget, error: 'Invalid username or password.' });
 }
 
