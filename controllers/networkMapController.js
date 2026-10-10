@@ -1,4 +1,5 @@
 const db = require("../db");
+const { getRxPowerStatus } = require("../lib/network/rxPowerStatus");
 
 function clean(value, max = 255) {
   return String(value ?? "").trim().slice(0, max);
@@ -36,19 +37,7 @@ exports.getCustomerMap = async (req, res) => {
     const routerObservation = observations.rows.find(
       (item) => item.observationType === "pppoe_session"
     ) || null;
-    const rxObservedAt = customer.onu_rx_power_observed_at
-      ? new Date(customer.onu_rx_power_observed_at)
-      : null;
-    const rxAgeMs = rxObservedAt && Number.isFinite(rxObservedAt.getTime())
-      ? Date.now() - rxObservedAt.getTime()
-      : null;
-    const rxStatus = rxAgeMs === null
-      ? "awaiting_olt_reading"
-      : rxAgeMs < 0
-        ? "invalid_timestamp"
-        : rxAgeMs > 30 * 60 * 1000
-          ? "stale"
-          : "measured";
+    const rxStatus = getRxPowerStatus(customer.onu_rx_power_observed_at);
     return res.json({
       success: true,
       customer: { id: customer.id, username: customer.username },
