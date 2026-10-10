@@ -21,7 +21,7 @@ function ensureSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_olt_telemetry_mac ON olt_telemetry(onu_mac);
     CREATE INDEX IF NOT EXISTS idx_olt_telemetry_seen ON olt_telemetry(received_at DESC);
-  `).catch(error => { schemaReady = null; throw error; });
+  `).then(()=>db.query('ALTER TABLE olt_telemetry ADD COLUMN IF NOT EXISTS pppoe_username VARCHAR(160)')).catch(error => { schemaReady = null; throw error; });
   return schemaReady;
 }
 function secureEqual(a,b) {
@@ -56,7 +56,7 @@ function normalizeReading(row, oltId) {
   const observedAt=row.observedAt ? new Date(row.observedAt) : new Date();
   if(Number.isNaN(observedAt.getTime()) || observedAt.getTime()>Date.now()+300000) throw new Error('Invalid observedAt timestamp.');
   return {
-    oltId, onuId, onuMac:normalizeMac(row.onuMac),
+    oltId, onuId, onuMac:normalizeMac(row.onuMac), pppoeUsername:String(row.pppoeUsername||'').trim().slice(0,160)||null,
     ponPort:String(row.ponPort||'').trim().slice(0,100)||null,
     status, rx:power(row.rxPowerDbm,-50,10,'RX power'),
     tx:power(row.txPowerDbm,-50,20,'TX power'),
@@ -89,7 +89,7 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
             status=EXCLUDED.status,rx_power_dbm=EXCLUDED.rx_power_dbm,tx_power_dbm=EXCLUDED.tx_power_dbm,
             observed_at=EXCLUDED.observed_at,source_agent=EXCLUDED.source_agent,raw=EXCLUDED.raw,received_at=NOW()
           WHERE EXCLUDED.observed_at >= olt_telemetry.observed_at
-        `,[r.oltId,r.onuId,r.onuMac,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw]);
+        `,[r.oltId,r.onuId,r.onuMac,r.pppoeUsername,r.ponPort,r.status,r.rx,r.tx,r.observedAt,r.sourceAgent,r.raw]);
         count++;
       }
       await client.query('COMMIT');
