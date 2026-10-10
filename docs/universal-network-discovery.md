@@ -14,3 +14,15 @@ The adapter registry includes a deliberately inactive V-SOL placeholder. It does
 - PPPoE username matching only attaches an observation when exactly one customer matches.
 - Bridge-host MACs are not automatically labelled as router or ONU MACs.
 - Unknown or ambiguous identities remain unattached pending independent evidence.
+
+
+## V-SOL V1601E04-DP/BT: read-only command verification
+
+Public EPON references describe the following as read-only inspection commands, but syntax can vary by firmware build. Do not execute them automatically from the application until the exact output has been confirmed on this OLT.
+
+- `show version` — identify the installed firmware (inspection only; do not upgrade).
+- `show onu opm-diag all` — candidate command to list ONU optical diagnostics.
+- `show onu opm-diag pon 1` — candidate command for a single PON port; replace the port only after confirming the installed CLI syntax.
+- `show onu 1 ctc opm_diag` — candidate single-ONU optical diagnostics, only after confirming the correct PON interface context and ONU ID.
+
+The command names above are candidates from public EPON references, not yet validated against the live device. Do not use `configure`, `write`, `reboot`, firmware operations, or any configuration-changing command for this task. The next collector milestone requires a redacted sample of the actual read-only CLI output, including ONU ID/MAC and RX Power (dBm), plus confirmed read-only SSH/CLI access. Never store or commit credentials or raw authentication data.
