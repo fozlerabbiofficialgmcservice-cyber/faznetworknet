@@ -302,8 +302,10 @@ class MikroTikService {
   async syncPppoeExpiryComments(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
     return this._withConnection("bulk PPPoE expiry comment sync", async (connection) => {
-      const rows = await connection.write("/ppp/secret/print", ["?service=pppoe"]);
-      const secrets = new Map((Array.isArray(rows) ? rows : []).map(item => [this._str(item.name).trim().toLowerCase(), item]));
+      const rows = await connection.write("/ppp/secret/print");
+      const secrets = new Map((Array.isArray(rows) ? rows : [])
+        .filter(item => ["pppoe", "any"].includes(this._str(item.service).trim().toLowerCase() || "any"))
+        .map(item => [this._str(item.name).trim().toLowerCase(), item]));
       const results = []; let updated = 0, skipped = 0, failed = 0;
       for (const customer of customers) {
         const username = this._str(customer && customer.username).trim();
@@ -311,8 +313,15 @@ class MikroTikService {
         if (!username || !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) { skipped++; results.push({username,status:"skipped",reason:"Missing username or invalid ISO expiry date."}); continue; }
         const secret = secrets.get(username.toLowerCase());
         if (!secret || !secret[".id"]) { skipped++; results.push({username,status:"skipped",reason:"PPPoE secret not found on MikroTik."}); continue; }
-        try { const comment = "EXP: " + expiryDate; await connection.write("/ppp/secret/set", ["=.id=" + secret[".id"], "=comment=" + comment]); updated++; results.push({username,status:"updated",comment}); }
-        catch(error) { failed++; results.push({username,status:"failed",reason:error && error.message ? error.message : "RouterOS update failed."}); }
+        try {
+          const comment = this._str(customer.comment).trim() || ("EXP: " + expiryDate);
+          await connection.write("/ppp/secret/set", ["=.id=" + secret[".id"], "=comment=" + comment]);
+          updated++;
+          results.push({username,status:"updated",comment});
+        } catch(error) {
+          failed++;
+          results.push({username,status:"failed",reason:error && error.message ? error.message : "RouterOS update failed."});
+        }
       }
       return {total:customers.length,updated,skipped,failed,results};
     }, undefined, 90000);
