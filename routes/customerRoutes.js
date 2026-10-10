@@ -28,6 +28,7 @@ router.get("/:id/audit-logs",controller.getAuditLogs);
 router.get("/:id/live-session",controller.getCustomerLiveSession);
 router.get("/:id/usage-records",controller.getCustomerUsageRecords);
 router.get("/:id/profile",controller.getCustomerProfileById);
+router.post("/:id/sync-mikrotik",controller.syncSingleCustomerToMikroTik);
 router.put("/:id",controller.updateCustomer);
 router.delete("/:id",requireExactDeleteUsername,controller.removeCustomer);
 router.post("/:id/kick",controller.kickCustomerById);
