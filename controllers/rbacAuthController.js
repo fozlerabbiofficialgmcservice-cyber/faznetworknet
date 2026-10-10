@@ -410,14 +410,14 @@ async function updateUserStatus(req, res) {
   try {
     const target = await db.query('SELECT id, role FROM admin_users WHERE id=$1 LIMIT 1', [id]);
     if (!target.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
-    if (target.rows[0].role === 'super_admin') {
-      return res.status(403).json({ success: false, message: 'Super Admin accounts are protected from status changes.' });
+    if (req.auth?.role !== 'super_admin' && req.auth?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You do not have permission to change account status.' });
     }
     if (req.auth?.role === 'admin' && target.rows[0].role !== 'staff') {
       return res.status(403).json({ success: false, message: 'Admins may manage staff accounts only.' });
     }
     if (req.session.userId && Number(req.session.userId) === id && status === 'disabled') return res.status(400).json({ success: false, message: 'You cannot disable your own account.' });
-    const result = await db.query('UPDATE admin_users SET status=$1, updated_at=NOW(), otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$2 AND role <> \'super_admin\' RETURNING id,username,email,role,status', [status, id]);
+    const result = await db.query('UPDATE admin_users SET status=$1, updated_at=NOW(), otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$2 RETURNING id,username,email,role,status', [status, id]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
     await writeAudit(req, 'admin_user_status_changed', id, { status });
     return res.json({ success: true, user: result.rows[0] });
@@ -440,16 +440,18 @@ async function deleteUser(req, res) {
     const targetResult = await db.query('SELECT id, username, role FROM admin_users WHERE id=$1 LIMIT 1', [id]);
     const target = targetResult.rows?.[0];
     if (!target) return res.status(404).json({ success: false, message: 'User not found.' });
-    if (target.role === 'super_admin') {
-      return res.status(403).json({ success: false, message: 'Super Admin accounts are protected from deletion.' });
-    }
+    // The legacy owner session is the only super-admin identity that is
+    // not stored in admin_users. Owner can remove stale DB-backed super_admin
+    // rows; ordinary Admin accounts remain restricted to Staff.
     if (req.auth?.role === 'admin' && target.role !== 'staff') {
       return res.status(403).json({ success: false, message: 'Admins may delete staff accounts only.' });
     }
     if (req.auth?.role !== 'super_admin' && req.auth?.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'You do not have permission to delete accounts.' });
     }
-    const result = await db.query('DELETE FROM admin_users WHERE id=$1 AND role=$2 RETURNING id, username, role', [id, target.role]);
+    const result = req.auth?.role === 'super_admin'
+      ? await db.query('DELETE FROM admin_users WHERE id=$1 RETURNING id, username, role', [id])
+      : await db.query("DELETE FROM admin_users WHERE id=$1 AND role='staff' RETURNING id, username, role", [id]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'User was not found or has already been deleted.' });
     await writeAudit(req, 'admin_user_deleted', id, { username: target.username, role: target.role });
     return res.json({ success: true, message: 'Account deleted successfully.' });
