@@ -68,7 +68,7 @@ def collect():
         for env_key,normalized in (("ONU_STATUS_ONLINE_VALUE","online"),("ONU_STATUS_OFFLINE_VALUE","offline"),("ONU_STATUS_LOS_VALUE","los")):
             configured=env(env_key)
             if configured: status_map[configured.lower()]=normalized
-        rows.append({"onuId":key,"onuMac":mac.replace("-",":").lower(),"ponPort":pon,
+        rows.append({"onuId":key,"onuMac":mac.replace("-",":").lower(),"pppoeUsername":str(customer_map.get(key,"")).strip() or None,"ponPort":pon,
             "status":status_map.get(status,"unknown"),
             "rxPowerDbm":power(rx,env("RX_POWER_SCALE","1")),
             "txPowerDbm":power(tx,env("TX_POWER_SCALE","1")) if tx is not None else None,
