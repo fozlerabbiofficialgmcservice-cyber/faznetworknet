@@ -378,3 +378,24 @@ CREATE TABLE IF NOT EXISTS admin_invitations (
 CREATE INDEX IF NOT EXISTS idx_admin_invitations_status_created ON admin_invitations(status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_username_ci ON admin_invitations(lower(username)) WHERE status='pending';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_email_ci ON admin_invitations(lower(email)) WHERE status='pending';
+
+
+-- Extensible inventory for network infrastructure. Credentials are intentionally not stored here.
+CREATE TABLE IF NOT EXISTS network_devices (
+  id BIGSERIAL PRIMARY KEY,
+  device_type VARCHAR(24) NOT NULL CHECK (device_type IN ('mikrotik','olt','onu','ont','access_point','cpe','other')),
+  name VARCHAR(120) NOT NULL,
+  vendor VARCHAR(120),
+  model VARCHAR(120),
+  management_ip INET,
+  mac_address MACADDR,
+  serial_number VARCHAR(160),
+  location VARCHAR(240),
+  parent_device_id BIGINT REFERENCES network_devices(id) ON DELETE SET NULL,
+  notes TEXT,
+  last_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_network_devices_type_name ON network_devices(device_type, lower(name));
+CREATE INDEX IF NOT EXISTS idx_network_devices_management_ip ON network_devices(management_ip);
