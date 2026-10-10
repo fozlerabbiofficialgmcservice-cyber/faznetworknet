@@ -24,7 +24,9 @@ test("MikroTik connection and operation timeouts are three seconds", () => {
 test("admin diagnostics bound both database and router waits", () => {
   const diagnostics = read("controllers/adminDiagnosticsController.js");
   assert.match(diagnostics, /withTimeout\(db\.query\("SELECT 1"\), 1500/);
-  assert.match(diagnostics, /withTimeout\(mikrotikService\.testConnection\(\), 3000/);
+  // Diagnostics now performs a bounded TCP probe before the RouterOS API test.
+  assert.match(diagnostics, /function testTcp\(host, port, timeoutMs = 2500\)/);
+  assert.match(diagnostics, /withTimeout\(\s*mikrotikService\.testConnection\(\),\s*7500/);
   assert.match(diagnostics, /clearTimeout\(timer\)/);
 });
 
