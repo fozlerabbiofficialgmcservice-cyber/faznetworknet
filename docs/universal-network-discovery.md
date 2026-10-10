@@ -26,3 +26,10 @@ Public EPON references describe the following as read-only inspection commands, 
 - `show onu 1 ctc opm_diag` — candidate single-ONU optical diagnostics, only after confirming the correct PON interface context and ONU ID.
 
 The command names above are candidates from public EPON references, not yet validated against the live device. Do not use `configure`, `write`, `reboot`, firmware operations, or any configuration-changing command for this task. The next collector milestone requires a redacted sample of the actual read-only CLI output, including ONU ID/MAC and RX Power (dBm), plus confirmed read-only SSH/CLI access. Never store or commit credentials or raw authentication data.
+
+
+## Confirmed OLT web UI evidence (operator screenshot, 2026-10-11)
+
+The operator confirmed that the existing V-SOL OLT web UI already displays the **ONU OPM Diag** table. The screenshot shows columns for ONU ID, MAC Address, Description, Distance, Temperature, Supply Voltage, TX Bias Current, TX Power, and **RX Power (dBm)**, with a PON selector (shown as PON1) and Refresh action. Example rows use EPON ONU IDs such as EPON0/1:2 and EPON0/1:3.
+
+This confirms optical measurements are available in the installed UI; it does **not** establish an API endpoint, SSH/CLI command syntax, SNMP OID, or automated access credentials. Do not scrape or automate the browser UI using guessed endpoints. The next implementation step is to verify a supported read-only programmatic interface for this exact OLT/firmware, then match ONU MAC to the customer's stored `onu_mac` using normalized exact MAC comparison and reject duplicate/ambiguous matches. Keep RouterOS PPPoE caller-id MAC separate. Record the observed RX dBm, timestamp, and OLT source only from a successful live read. Do not upgrade firmware or change OLT configuration.
