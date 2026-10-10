@@ -186,20 +186,19 @@ async function verifyTrx(req,res){
      LIMIT 1;`,[rawTrx]);
   console.log('[VERIFY-TRX ROWS FOUND]:', q.rows.length);
   if(!q.rows.length){
-   const existing=await db.query("SELECT status,used FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
-   if(existing.rows.length&&(existing.rows[0].used||["processing","processed","PAID","duplicate"].includes(String(existing.rows[0].status||""))))return res.status(409).json({success:false,error:"This transaction has already been used or is being processed."});
-   return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});
+   const existing=await db.query("SELECT status,used,matched_username FROM transactions WHERE UPPER(TRIM(trx_id))=$1 LIMIT 1",[cleanTrx]);
+   if(existing.rows.length&&(existing.rows[0].used||["processing","processed","PAID","duplicate"].includes(String(existing.rows[0].status||""))))return res.status(409).json({success:false,error:"This transaction has already been used or is being processed and cannot be reused for Hotspot."});
+   return res.status(404).json({success:false,error:"Transaction not found or not yet eligible. Please wait for SMS verification."});
   }
   const tx=q.rows[0];
   const requestedMethod=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
   if(requestedMethod&&["bkash","nagad","rocket","upay"].includes(requestedMethod)&&String(tx.channel||"").trim().toLowerCase()!==requestedMethod)return res.status(400).json({success:false,error:"The TrxID was recorded under a different payment method. Select the method used to send the money."});
   const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
-  if(tx.matched_username){
-   const linked=await db.query("SELECT 1 FROM pppoe_users WHERE LOWER(username)=LOWER($1) UNION ALL SELECT 1 FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[String(tx.matched_username)]);
-   if(linked.rows.length)return res.status(409).json({success:false,error:"This transaction is linked to a PPPoE customer and cannot be used for Hotspot."});
-  }
-  const pppoePrice=await db.query("SELECT 1 FROM packages WHERE ROUND(price*100)=ROUND($1::numeric*100) LIMIT 1",[amount]);
-  if(pppoePrice.rows.length)return res.status(409).json({success:false,error:"This transaction amount matches a PPPoE billing plan and cannot be claimed by Hotspot. Contact an administrator if this payment was intended for Hotspot."});
+  // An unused unmatched transaction can be associated with a PPPoE username when
+  // its amount did not match that customer's bill. It is still eligible for
+  // Hotspot if the exact selected profile price matches below. Paid, processing,
+  // and already-used transactions are excluded by the initial query.
+
   if(requestedAmount&&Math.round(requestedAmount*100)!==Math.round(amount*100))return res.status(400).json({success:false,error:"Payment amount does not match the selected package."});
   const metadataResult=await db.query("SELECT value FROM app_settings WHERE key='hotspot_profile_metadata' LIMIT 1");
   let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
