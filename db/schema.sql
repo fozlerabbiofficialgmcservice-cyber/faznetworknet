@@ -356,3 +356,24 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned_status ON support_tickets(assigned_to_user_id,status,created_at DESC);
+
+
+-- Email invitations are separate from accounts until OTP verification and password setup succeed.
+CREATE TABLE IF NOT EXISTS admin_invitations (
+  id BIGSERIAL PRIMARY KEY,
+  username VARCHAR(60) NOT NULL,
+  email VARCHAR(254) NOT NULL,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin','admin','staff')),
+  token_hash CHAR(64) UNIQUE,
+  otp_code_hash CHAR(64),
+  otp_expires_at TIMESTAMPTZ,
+  otp_attempts INTEGER NOT NULL DEFAULT 0 CHECK (otp_attempts BETWEEN 0 AND 5),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','cancelled','expired','failed')),
+  created_by VARCHAR(100) NOT NULL DEFAULT 'owner',
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_invitations_status_created ON admin_invitations(status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_username_ci ON admin_invitations(lower(username)) WHERE status='pending';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_invitations_pending_email_ci ON admin_invitations(lower(email)) WHERE status='pending';
