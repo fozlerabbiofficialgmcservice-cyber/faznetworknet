@@ -408,12 +408,16 @@ async function updateUserStatus(req, res) {
   const status = String(req.body?.status || '').toLowerCase();
   if (!Number.isSafeInteger(id) || id < 1 || !['active', 'disabled'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid user or status.' });
   try {
-    if (req.auth?.role === 'admin') {
-      const owned = await db.query("SELECT id FROM admin_users WHERE id=$1 AND role='staff'", [id]);
-      if (!owned.rows.length) return res.status(403).json({ success: false, message: 'Admins may manage staff accounts only.' });
+    const target = await db.query('SELECT id, role FROM admin_users WHERE id=$1 LIMIT 1', [id]);
+    if (!target.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
+    if (target.rows[0].role === 'super_admin') {
+      return res.status(403).json({ success: false, message: 'Super Admin accounts are protected from status changes.' });
+    }
+    if (req.auth?.role === 'admin' && target.rows[0].role !== 'staff') {
+      return res.status(403).json({ success: false, message: 'Admins may manage staff accounts only.' });
     }
     if (req.session.userId && Number(req.session.userId) === id && status === 'disabled') return res.status(400).json({ success: false, message: 'You cannot disable your own account.' });
-    const result = await db.query('UPDATE admin_users SET status=$1, updated_at=NOW(), otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$2 RETURNING id,username,email,role,status', [status, id]);
+    const result = await db.query('UPDATE admin_users SET status=$1, updated_at=NOW(), otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$2 AND role <> \'super_admin\' RETURNING id,username,email,role,status', [status, id]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
     await writeAudit(req, 'admin_user_status_changed', id, { status });
     return res.json({ success: true, user: result.rows[0] });
