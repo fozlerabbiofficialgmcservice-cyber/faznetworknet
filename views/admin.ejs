@@ -875,6 +875,7 @@
                                         <div class="col-md-6"><label for="nidNumber" class="form-label">NID / Smart Card Number</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person-vcard"></i></span><input type="text" class="form-control" id="nidNumber" placeholder="Optional"></div></div>
                                         <div class="col-md-6"><label for="alternativePhone" class="form-label">Alternative / Emergency Phone</label><input type="tel" class="form-control" id="alternativePhone" placeholder="Optional"></div>
                                         <div class="col-md-6"><label for="installationAddress" class="form-label">Installation Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-geo-alt"></i></span><input type="text" class="form-control" id="installationAddress" placeholder="House, road, area or zone"></div></div>
+                                        <div class="col-md-6"><label for="areaZone" class="form-label">Area / Zone</label><input type="text" class="form-control" id="areaZone" placeholder="Optional area or service zone"></div>
                                         <div class="col-md-4"><label for="oltPonPort" class="form-label">OLT / PON Port</label><input type="text" class="form-control" id="oltPonPort" placeholder="Optional — OLT-1 / PON-3"></div>
                                         <div class="col-md-4"><label for="fiberBox" class="form-label">Distribution Box / Splitter</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-diagram-3"></i></span><input type="text" class="form-control" id="fiberBox" placeholder="Optional network reference"></div></div>
                                         <div class="col-md-4"><label for="onuMac" class="form-label">ONU / Router MAC (Caller ID)</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-hdd-network"></i></span><input type="text" class="form-control" id="onuMac" placeholder="AA:BB:CC:DD:EE:FF"></div></div>
@@ -3035,7 +3036,7 @@ async function deletePlan(id,name){
             set('connectionDate',formatDateForInput(connectionIso));set('activationDate',formatDateForInput(activationIso));
             set('expirationDate',formatDateForInput(expirationIso));
             set('password',customer.password||'');set('nidNumber',customer.nid||'');
-            set('installationAddress',customer.installationAddress||customer.installation_address||'');
+            set('installationAddress',customer.installationAddress||customer.installation_address||'');set('areaZone',customer.areaZone||customer.area_zone||'');
             set('fiberBox',customer.distributionBox||customer.distribution_box||customer.fiberBox||customer.fiber_box||customer.splitterBox||'');
             set('alternativePhone',customer.alternativePhone||customer.alternative_phone||'');set('oltPonPort',customer.oltPonPort||customer.olt_pon_port||'');
             set('onuMac',customer.onuMac||customer.onu_mac||'');set('onuSerial',customer.onuSerial||customer.onu_serial||'');set('fiberDropCore',customer.fiberDropCore||customer.fiber_drop_core||'');
@@ -3589,6 +3590,7 @@ async function deletePlan(id,name){
                     package_id: option?.dataset?.packageId || option?.value || '',
                     nid: String(valueOf('nidNumber')).trim(),
                     installationAddress: String(valueOf('installationAddress')).trim(),
+                    areaZone: String(valueOf('areaZone')).trim(),
                     fiberBox: String(valueOf('fiberBox')).trim(),
                     alternativePhone: String(valueOf('alternativePhone')).trim(),
                     oltPonPort: String(valueOf('oltPonPort')).trim(),
