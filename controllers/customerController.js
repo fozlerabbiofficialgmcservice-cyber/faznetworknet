@@ -408,9 +408,13 @@ async function syncSingleCustomerToMikroTik(req,res){
     const expired=Boolean(expiry&&dateStatus(expiry)==="expired"),preservePastDue=Boolean(row.billing_expiry_override);
     const customerState=String(row.status||"").toLowerCase();
     const profile=preservePastDue?clean(row.profile,120):effectiveProfile(clean(row.profile,120),expiry);
-    const disabled=row.router_disabled===null||row.router_disabled===undefined
-      ? Boolean(expired||["inactive","suspended"].includes(customerState))
-      : preservePastDue?Boolean(row.router_disabled):Boolean(expired||row.router_disabled||["inactive","suspended"].includes(customerState));
+    const disabled=preservePastDue
+      ? (row.router_disabled===null||row.router_disabled===undefined
+          ? ["inactive","suspended"].includes(customerState)
+          : Boolean(row.router_disabled))
+      : row.router_disabled===null||row.router_disabled===undefined
+        ? Boolean(expired||["inactive","suspended"].includes(customerState))
+        : Boolean(expired||row.router_disabled||["inactive","suspended"].includes(customerState));
     const comment=buildExpirationComment(row.full_name,row.phone,expiry,row.remarks);
     const callerId=clean(row.onu_mac,100);
     const sync=await mikrotikService.syncPanelCustomerSecrets([{id:row.id,username,password,profile,comment,disabled,callerId,phone:formatBdPhoneNumber(row.phone)==="—"?"":formatBdPhoneNumber(row.phone),expirationDate:expiry,finalStatus:expired?"expired":disabled?"suspended":dateStatus(expiry)}]);
