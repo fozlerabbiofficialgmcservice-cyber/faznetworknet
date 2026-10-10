@@ -184,9 +184,21 @@ async function createCustomer(req, res) {
     fiberBox: clean(body.fiberBox, 150),
     areaZone: clean(body.areaZone || body.area_zone, 150),
     onuMac: clean(body.onuMac, 100),
+    alternativePhone: clean(body.alternativePhone || body.alternative_phone, 40),
+    oltPonPort: clean(body.oltPonPort || body.olt_pon_port, 120),
+    distributionBox: clean(body.distributionBox || body.distribution_box || body.fiberBox, 150),
+    onuSerial: clean(body.onuSerial || body.onu_serial, 150),
+    fiberDropCore: clean(body.fiberDropCore || body.fiber_drop_core, 80),
+    billingCycle: String(body.billingCycle || body.billing_cycle || "monthly").trim().toLowerCase(),
+    billingDurationDays: body.billingDurationDays || body.billing_duration_days ? Number.parseInt(body.billingDurationDays || body.billing_duration_days,10) : null,
+    billingStatus: String(body.billingStatus || body.billing_status || "unpaid").trim().toLowerCase()==="paid" ? "paid" : "unpaid",
+    billingExpiryOverride: [true,"true",1,"1","yes","on"].includes(body.billingExpiryOverride ?? body.billing_expiry_override),
+    disabled: [true,"true",1,"1","yes","on"].includes(body.disabled),
     remarks: clean(body.remarks || body.note, 1000)
   };
-  customer.effectiveProfile = effectiveProfile(customer.profile, customer.expirationDate);
+  if(!["monthly","15_days","30_days","custom_days"].includes(customer.billingCycle))customer.billingCycle="monthly";
+  if(customer.billingCycle==="custom_days"&&(!Number.isInteger(customer.billingDurationDays)||customer.billingDurationDays<1||customer.billingDurationDays>3650))return res.status(400).json({success:false,message:"Custom billing duration must be between 1 and 3650 days."});
+  customer.effectiveProfile = customer.billingExpiryOverride ? customer.profile : effectiveProfile(customer.profile, customer.expirationDate);
 
   if (!customer.fullName || !customer.phone || customer.phone === '—' || !customer.connectionDate || !customer.activationDate || !customer.expirationDate ||
       !customer.username || !customer.password || !customer.packageName || !customer.profile) {
@@ -221,14 +233,18 @@ async function createCustomer(req, res) {
       `INSERT INTO customers
        (full_name, phone, connection_date, username, password, package_name, profile,
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
-        provisioning_status, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',$16,NOW(),NOW())
+        alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
+        billing_duration_days, billing_expiry_override, billing_status, provisioning_status, status, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'pending',$23,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
         customer.password, customer.packageName, customer.profile, customer.monthlyBill,
         customer.nid || null, customer.installationAddress || null, customer.areaZone || null, customer.fiberBox || null,
-        customer.onuMac || null, customer.remarks || null, customer.expirationDate, dateStatus(customer.expirationDate)
+        customer.onuMac || null, customer.remarks || null, customer.expirationDate,
+        customer.alternativePhone || null, customer.oltPonPort || null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
+        customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
+        dateStatus(customer.expirationDate)==="expired"||customer.disabled
       ]
     );
 
@@ -245,8 +261,9 @@ async function createCustomer(req, res) {
           username: customer.username,
           password: customer.password,
           profile: customer.effectiveProfile,
+          callerId: customer.onuMac,
           comment: buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
-          disabled: dateStatus(customer.expirationDate) === "expired"
+          disabled: dateStatus(customer.expirationDate) === "expired" || customer.disabled
         });
         provisioning = "provisioned";
         await db.query(
@@ -255,22 +272,23 @@ async function createCustomer(req, res) {
         );
         await db.query(
           `INSERT INTO pppoe_users
-           (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,synced_at,updated_at)
-           VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,NOW(),NOW())
+           (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,caller_id,synced_at,updated_at)
+           VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
            ON CONFLICT (username) DO UPDATE SET
              password=EXCLUDED.password, profile=EXCLUDED.profile, disabled=EXCLUDED.disabled,
              comment=EXCLUDED.comment, phone=EXCLUDED.phone, router_id=EXCLUDED.router_id,
-             expiry_date=EXCLUDED.expiry_date, status=EXCLUDED.status, synced_at=NOW(), updated_at=NOW()`,
+             expiry_date=EXCLUDED.expiry_date, status=EXCLUDED.status, caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id), synced_at=NOW(), updated_at=NOW()`,
           [
             customer.username,
             customer.password,
             customer.effectiveProfile,
-            dateStatus(customer.expirationDate) === "expired",
+            dateStatus(customer.expirationDate) === "expired" || customer.disabled,
             buildExpirationComment(customer.fullName, customer.phone, customer.expirationDate, customer.remarks),
             customer.phone,
             String(process.env.ROUTER_HOST || ""),
             customer.expirationDate,
-            dateStatus(customer.expirationDate)
+            dateStatus(customer.expirationDate),
+            customer.onuMac || null
           ]
         );
       }
