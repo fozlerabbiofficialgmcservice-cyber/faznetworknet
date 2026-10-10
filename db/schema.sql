@@ -464,3 +464,9 @@ CREATE TABLE IF NOT EXISTS olt_connections (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+-- OLT web protocol discovery mode; existing settings default to safe auto-detection.
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS access_method VARCHAR(16) NOT NULL DEFAULT 'detect';
+ALTER TABLE olt_connections DROP CONSTRAINT IF EXISTS olt_connections_access_method_check;
+ALTER TABLE olt_connections ADD CONSTRAINT olt_connections_access_method_check CHECK (access_method IN ('detect','http','https'));
