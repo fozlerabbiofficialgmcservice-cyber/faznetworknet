@@ -475,12 +475,18 @@ async function listCustomers(req,res){
     }
 
     const mapped=result.rows.map(row=>{
-      const billing=evaluateCustomerBillingStatus(row);
+      const billing=evaluateCustomerBillingStatus({...row,expiration_date:row.expiration_date||row.pppoe_expiry_date||null});
       const session=sessionMap.get(String(row.username||"").trim().toLowerCase());
       const expiration=row.expiration_date||row.pppoe_expiry_date||null;
+      const comment=String(row.pppoe_comment||row.remarks||"").trim();
+      const commentName=comment.match(/Customer:\\s*([^|]+)/i)?.[1]?.trim() || comment.split("|")[0]?.trim() || "";
+      const commentPhone=comment.match(/Phone:\\s*([^|]+)/i)?.[1]?.trim() || "";
+      const displayName=String(row.full_name||row.fullName||"").trim() || (commentName && !/^EXP:|^Phone:/i.test(commentName) ? commentName : "");
       return {
         ...row,
-        phone:formatBdPhoneNumber(row.phone),
+        full_name:displayName,
+        fullName:displayName,
+        phone:formatBdPhoneNumber(row.phone||commentPhone),
         alternative_phone:formatBdPhoneNumber(row.alternative_phone),
         expiration_date:expiration,
         expiry_date:expiration,
