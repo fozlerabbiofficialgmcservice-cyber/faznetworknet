@@ -43,7 +43,7 @@ async function sendLoginNotification(user, loginType, req) {
 
   const endpoint = new URL(mailerUrl);
   if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
-      !/^\\/macros\\/s\\/[^/]+\\/exec\\/?$/.test(endpoint.pathname)) {
+      !/^\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint.pathname)) {
     throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
   }
   if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
