@@ -99,8 +99,10 @@ function addBangladeshCalendarMonth(dateString) {
 }
 function nextBillingExpiryDate(currentExpiry,cycleValue,durationDaysValue) {
   const parsed=normalizeDate(currentExpiry),today=bangladeshToday(),base=parsed&&parsed>=today?parsed:today;
-  if(String(cycleValue||"monthly").trim().toLowerCase()==="custom_days"){
-    const days=Number.parseInt(durationDaysValue,10);
+  const cycle=String(cycleValue||"monthly").trim().toLowerCase();
+  const fixedDays=cycle==="15_days"?15:cycle==="30_days"?30:null;
+  if(cycle==="custom_days"||fixedDays!==null){
+    const days=fixedDays===null?Number.parseInt(durationDaysValue,10):fixedDays;
     if(!Number.isInteger(days)||days<1||days>3650)throw new Error("Custom billing duration must be between 1 and 3650 days.");
     const [year,month,day]=base.split("-").map(Number),next=new Date(Date.UTC(year,month-1,day+days));
     return [next.getUTCFullYear(),String(next.getUTCMonth()+1).padStart(2,"0"),String(next.getUTCDate()).padStart(2,"0")].join("-");
@@ -236,8 +238,8 @@ async function createCustomer(req, res) {
        (full_name, phone, connection_date, username, password, package_name, profile,
         monthly_bill, nid, installation_address, area_zone, fiber_box, onu_mac, remarks, expiration_date,
         alternative_phone, olt_pon_port, distribution_box, onu_serial, fiber_drop_core, billing_cycle,
-        billing_duration_days, billing_expiry_override, billing_status, provisioning_status, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'pending',$25,NOW(),NOW())
+        billing_duration_days, billing_expiry_override, billing_status, paid_until, provisioning_status, status, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24='paid' THEN $15 ELSE NULL END,'pending',$25,NOW(),NOW())
        RETURNING id, username`,
       [
         customer.fullName, customer.phone, customer.connectionDate, customer.username,
@@ -367,14 +369,14 @@ async function syncPanelCustomersToMikroTik(req,res){
       if(!customer)continue;
       try{
         await db.query(`INSERT INTO pppoe_users
-          (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,synced_at,updated_at)
-          VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,NOW(),NOW())
+          (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,caller_id,synced_at,updated_at)
+          VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,$10,NOW(),NOW())
           ON CONFLICT(username) DO UPDATE SET
             password=CASE WHEN EXCLUDED.password IS NULL OR EXCLUDED.password='' THEN pppoe_users.password ELSE EXCLUDED.password END,
             profile=EXCLUDED.profile,service='pppoe',disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,
             phone=COALESCE(NULLIF(EXCLUDED.phone,''),pppoe_users.phone),router_id=EXCLUDED.router_id,
-            expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,synced_at=NOW(),updated_at=NOW()`,
-          [customer.username,customer.password||null,customer.profile,customer.disabled,customer.comment,customer.phone||null,routerId,customer.expirationDate||null,customer.finalStatus]);
+            expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,caller_id=COALESCE(NULLIF(EXCLUDED.caller_id,''),pppoe_users.caller_id),synced_at=NOW(),updated_at=NOW()`,
+          [customer.username,customer.password||null,customer.profile,customer.disabled,customer.comment,customer.phone||null,routerId,customer.expirationDate||null,customer.finalStatus,customer.callerId||null]);
       }catch(error){
         databaseFailures.push({username:customer.username,status:"failed",reason:"RouterOS was updated, but the local PPPoE database row could not be saved: "+(error.message||"database update failed")});
       }
