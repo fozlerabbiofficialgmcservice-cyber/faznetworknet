@@ -37,9 +37,10 @@ exports.getCustomerMap = async (req, res) => {
     const routerObservation = observations.rows.find(
       (item) => item.observationType === "pppoe_session"
     ) || null;
-    const rxStatus = customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined
-      ? "awaiting_olt_reading"
-      : getRxPowerStatus(customer.onu_rx_power_observed_at);
+    const rxStatus = getRxPowerStatus(
+      customer.onu_rx_power_observed_at,
+      customer.onu_rx_power_dbm
+    );
     return res.json({
       success: true,
       customer: { id: customer.id, username: customer.username },
