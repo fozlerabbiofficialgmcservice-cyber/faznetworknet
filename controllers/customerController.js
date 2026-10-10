@@ -213,6 +213,8 @@ async function createCustomer(req, res) {
     if (!packageDefinition) return res.status(400).json({ success: false, message: "Selected package/profile is not configured in the billing package table." });
     customer.monthlyBill = packageDefinition.price;
     customer.packageName=packageDefinition.name;customer.profile=packageDefinition.profileName||customer.profile;customer.poolName=packageDefinition.poolName||"";
+    // Resolve the effective RouterOS profile only after the package profile is canonicalized.
+    customer.effectiveProfile = customer.billingExpiryOverride ? customer.profile : effectiveProfile(customer.profile, customer.expirationDate);
 
     const existing = await db.query(
       `SELECT id, username, phone FROM customers
@@ -268,7 +270,7 @@ async function createCustomer(req, res) {
         provisioning = "provisioned";
         await db.query(
           `UPDATE customers SET provisioning_status='provisioned', router_id=$1, status=$2, updated_at=NOW() WHERE id=$3`,
-          [String(process.env.ROUTER_HOST || ""), dateStatus(customer.expirationDate), customerId]
+          [String(process.env.ROUTER_HOST || ""), (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active", customerId]
         );
         await db.query(
           `INSERT INTO pppoe_users
@@ -382,7 +384,7 @@ async function syncPanelCustomersToMikroTik(req,res){
     const skipped=sync.skipped||0;
     const created=sync.created||0;
     const updated=sync.updated||0;
-    const message=`Panel-to-MikroTik sync finished: ${updated} existing PPPoE secrets updated, ${created} missing PPPoE secrets created, ${skipped} skipped, ${failed} failed. Customer name, phone and expiry are written to the RouterOS comment. No tombstoned customer was recreated.`;
+    const message=`Panel-to-MikroTik sync finished: ${updated} existing PPPoE secrets updated, ${created} missing PPPoE secrets created, ${skipped} skipped, ${failed} failed. RouterOS comments contain only EXP: YYYY-MM-DD. No tombstoned customer was recreated.`;
     return res.json({success:failed===0,total:customers.length,updated,created,skipped,failed,results,message});
   }catch(error){
     console.error("[PANEL TO MIKROTIK SYNC]",error);
@@ -437,7 +439,7 @@ async function syncExpiryDatesToMikroTik(req,res){
       await db.query("UPDATE pppoe_users SET comment=$1,expiry_date=$2::date,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[row.comment,row.expiryDate,row.username]);
     }
     const skipped=(customers.length-eligible.length)+(sync.skipped||0);
-    return res.json({success:(sync.failed||0)===0,total:customers.length,eligible:eligible.length,updated:sync.updated||0,skipped,failed:sync.failed||0,results:sync.results||[],message:"EXP dates and customer name/phone comments pushed to MikroTik. PPPoE profiles, passwords, and disabled states were not changed."});
+    return res.json({success:(sync.failed||0)===0,total:customers.length,eligible:eligible.length,updated:sync.updated||0,skipped,failed:sync.failed||0,results:sync.results||[],message:"Expiry-only comments (EXP: YYYY-MM-DD) pushed to MikroTik. PPPoE profiles, passwords, and disabled states were not changed."});
   }catch(error){console.error("[CUSTOMER EXP SYNC]",error);return res.status(503).json({success:false,message:error.message||"Unable to sync customer expiry dates to MikroTik."});}
 }
 async function getCustomerSyncDiagnostics(req,res){
