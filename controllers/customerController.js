@@ -479,14 +479,18 @@ async function listCustomers(req,res){
       const session=sessionMap.get(String(row.username||"").trim().toLowerCase());
       const expiration=row.expiration_date||row.pppoe_expiry_date||null;
       const comment=String(row.pppoe_comment||row.remarks||"").trim();
-      const commentName=comment.match(/Customer:\\s*([^|]+)/i)?.[1]?.trim() || comment.split("|")[0]?.trim() || "";
-      const commentPhone=comment.match(/Phone:\\s*([^|]+)/i)?.[1]?.trim() || "";
-      const displayName=String(row.full_name||row.fullName||"").trim() || (commentName && !/^EXP:|^Phone:/i.test(commentName) ? commentName : "");
+      const commentName=comment.match(/Customer:\s*([^|]+)/i)?.[1]?.trim() || comment.split("|")[0]?.trim() || "";
+      const commentPhone=comment.match(/Phone:\s*([^|]+)/i)?.[1]?.trim() || "";
+      // Treat placeholders as missing for every customer, rather than displaying "-" as a real name.
+      const isMissingValue=value=>!String(value??"").trim() || ["-","—","n/a","na","none","null","undefined","unknown"].includes(String(value).trim().toLowerCase());
+      const canonicalName=!isMissingValue(row.full_name)?String(row.full_name).trim():(!isMissingValue(row.fullName)?String(row.fullName).trim():"");
+      const parsedCommentName=commentName&&!/^EXP:|^Phone:/i.test(commentName)&&!isMissingValue(commentName)?commentName:"";
+      const displayName=canonicalName||parsedCommentName;
       return {
         ...row,
         full_name:displayName,
         fullName:displayName,
-        phone:formatBdPhoneNumber(row.phone||commentPhone),
+        phone:formatBdPhoneNumber(!isMissingValue(row.phone)?row.phone:commentPhone),
         alternative_phone:formatBdPhoneNumber(row.alternative_phone),
         expiration_date:expiration,
         expiry_date:expiration,
