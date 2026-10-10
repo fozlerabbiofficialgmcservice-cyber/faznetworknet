@@ -6,7 +6,7 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 <style>
-body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.hero{background:linear-gradient(135deg,#0a3d2e,#0d4d3a);color:#fff}.card{box-shadow:0 .125rem .25rem rgba(0,0,0,.075)}.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}.metric{font-size:1.45rem;font-weight:700}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.live-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#94a3b8}.live-dot.online{background:#34d399;animation:pulse 1.7s infinite}@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}.sticky{position:sticky;top:0;z-index:1020;background:rgba(248,250,252,.95);backdrop-filter:blur(8px)}
+body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.hero{background:linear-gradient(135deg,#0a3d2e,#0d4d3a);color:#fff}.card{box-shadow:0 .125rem .25rem rgba(0,0,0,.075)}.label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}.metric{font-size:1.45rem;font-weight:700}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.live-dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:#94a3b8}.live-dot.online{background:#34d399;animation:pulse 1.7s infinite}@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}.sticky{position:sticky;top:0;z-index:1020;background:rgba(248,250,252,.95);backdrop-filter:blur(8px)}.topology-chain{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1.8rem}.topology-node{position:relative;min-height:118px;border:1px solid #dbe5e1;border-radius:14px;padding:14px;background:linear-gradient(160deg,#fff,#f6fbf8);overflow-wrap:anywhere}.topology-node:not(:last-child):after{content:"➜";position:absolute;right:-1.45rem;top:42%;font-size:1.2rem;font-weight:800;color:#10b981}.topology-step{font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0d6b50}.topology-value{font-weight:700;margin-top:8px;color:#0f172a}.topology-detail{font-size:.78rem;color:#64748b;margin-top:5px}.topology-health{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:.72rem;font-weight:700;background:#e2e8f0;color:#334155}.topology-health.good{background:#d1fae5;color:#065f46}.topology-health.warning{background:#fef3c7;color:#92400e}.topology-health.bad{background:#fee2e2;color:#991b1b}@media(max-width:1199px){.topology-chain{grid-template-columns:repeat(3,minmax(0,1fr))}.topology-node:not(:last-child):after{display:none}}@media(max-width:767px){.topology-chain{grid-template-columns:1fr}.topology-node{min-height:auto}}
 </style><script src="/js/date-format.js"></script>
 </head>
 <body>
@@ -15,6 +15,17 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 <section class="hero rounded-3 p-3 p-lg-4 mb-3"><div class="d-flex flex-column flex-xl-row justify-content-between gap-3 align-items-xl-center">
 <div><div class="d-flex gap-2 align-items-center flex-wrap"><h2 id="name" class="mb-0">Loading…</h2><span id="status" class="badge bg-secondary">Loading billing</span><span id="routerStatus" class="badge bg-secondary"><span class="live-dot me-1"></span>Checking router</span></div><div class="small mt-2 d-flex gap-3 flex-wrap"><span><i class="bi bi-telephone me-1"></i><span id="phone">—</span></span><span class="mono"><i class="bi bi-person-badge me-1"></i><span id="username">—</span></span><span id="liveIp" class="mono">IP — · MAC —</span></div></div>
 <div class="d-flex gap-2 flex-wrap"><button id="syncMikrotik" class="btn btn-light text-success fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>Sync to MikroTik</button><button id="usageRecord" class="btn btn-outline-info"><i class="bi bi-bar-chart-line me-1"></i>Usage Record</button><button id="kick" class="btn btn-outline-warning"><i class="bi bi-lightning-charge me-1"></i>Kick / Restart Session</button><button id="renew" class="btn btn-success"><i class="bi bi-credit-card me-1"></i>Add Payment / Renew</button><button id="edit" class="btn btn-outline-primary"><i class="bi bi-pencil-square me-1"></i>Edit Info</button><button id="suspend" class="btn btn-outline-danger"><i class="bi bi-slash-circle me-1"></i>Suspend Line</button></div>
+</div></section>
+<section class="card border-0 rounded-3 mb-3"><div class="card-body">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2 text-success"></i>Network Topology Bridge</h5><div class="small text-muted">Customer-to-OLT connection path · live values appear only when verified</div></div><span id="topologyOverall" class="topology-health">Awaiting telemetry</span></div>
+<div class="topology-chain" aria-label="Network connection topology">
+<div class="topology-node"><div class="topology-step">01 · MikroTik IP Pool</div><div id="topoPool" class="topology-value">—</div><div class="topology-detail">Assigned subscriber pool</div></div>
+<div class="topology-node"><div class="topology-step">02 · Customer endpoint</div><div id="topoIp" class="topology-value mono">IP —</div><div id="topoRouterMac" class="topology-detail mono">Router MAC —</div></div>
+<div class="topology-node"><div class="topology-step">03 · OLT PON Port</div><div id="topoPon" class="topology-value">EPON —</div><div class="topology-detail">OLT uplink / PON mapping</div></div>
+<div class="topology-node"><div class="topology-step">04 · ONU identity</div><div id="topoOnu" class="topology-value">ONU —</div><div id="topoOnuMac" class="topology-detail mono">ONU MAC —</div></div>
+<div class="topology-node"><div class="topology-step">05 · Optical health</div><div id="topoRx" class="topology-value">RX — dBm</div><div id="topoHealth" class="topology-detail"><span class="topology-health">No verified reading</span></div></div>
+</div>
+<div id="topologyFootnote" class="small text-muted mt-3">Router MAC and ONU MAC are separate identifiers. Missing values are not inferred.</div>
 </div></section>
 <section class="row g-3 mb-3">
 <div class="col-xl-4"><div class="card border-0 rounded-3 h-100"><div class="card-body"><div class="label">Package & Bandwidth</div><div id="pkg" class="metric mt-1">—</div><div id="rate" class="text-muted mt-2">Bandwidth —</div><div class="small mt-2">IP Pool: <strong id="pool">—</strong></div><button id="changePkg" class="btn btn-sm btn-outline-primary mt-3">Change Package</button></div></div></div>
@@ -60,11 +71,35 @@ async function loadNetworkMap(){
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
+  const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
+  $('topoPool').textContent=pkg.poolName||'Not assigned';
+  $('topoIp').textContent='IP '+(live.ip||'—');
+  $('topoRouterMac').textContent='Router MAC '+(live.mac||customer.routerMac||'—');
+  $('topoPon').textContent=customer.oltPonPort||'EPON —';
+  $('topoOnu').textContent='ONU —';
+  $('topoOnuMac').textContent='ONU MAC —';
+  $('topoRx').textContent='RX — dBm';
+  $('topoHealth').innerHTML='<span class="topology-health">Awaiting verified reading</span>';
+  $('topologyOverall').textContent='Partial mapping';
+  $('topologyOverall').className='topology-health';
+  $('topologyFootnote').textContent='Customer IP, router MAC, saved PON and ONU identity are shown separately; live OLT values are added only from the authenticated collector.';
+
   // Real OLT readings are served separately from the local push collector; never substitute router MAC for ONU MAC.
   try {
    const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
+    $('topoPon').textContent=t.ponPort||customer.oltPonPort||'EPON —';
+    $('topoOnu').textContent=t.onuId||'ONU —';
+    $('topoOnuMac').textContent='ONU MAC '+(t.onuMac||customer.onuMac||'Not verified');
+    $('topoRx').textContent='RX '+(t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'— dBm');
+    const health=t.stale?'Stale':t.signalLevel==='weak'?'Weak signal':t.signalLevel==='warning'?'Signal warning':t.signalLevel==='good'?'Healthy':String(t.status||'Unknown');
+    const healthClass=t.stale?'warning':t.signalLevel==='weak'?'bad':t.signalLevel==='warning'?'warning':t.signalLevel==='good'?'good':'';
+    $('topoHealth').innerHTML='<span class="topology-health '+healthClass+'">'+esc(health)+'</span>';
+    $('topologyOverall').textContent=t.stale?'Telemetry stale':(t.status==='online'&&!t.stale?'Live telemetry':'Telemetry received');
+    $('topologyOverall').className='topology-health '+healthClass;
+    $('topologyFootnote').textContent='OLT '+(t.oltId||'—')+' · last observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—')+'. ONU MAC is displayed only when supplied by OLT telemetry or the saved ONU field.';
+
     if(t.onuMac)$('onu').textContent=t.onuMac;
     $('onuRxPowerValue').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'—';
     $('onuRxPowerValue').className='metric mono '+(t.signalLevel==='weak'?'text-danger':t.signalLevel==='warning'?'text-warning':t.signalLevel==='good'?'text-success':'');

@@ -60,3 +60,23 @@ The agent sends `{"oltId":"...","readings":[{"onuId":"EPON0/1:1","ponPort":"EPON
 1. Verify read-only login and the exact prompt on the actual OLT.
 2. Compare all four port outputs with the parser; confirm TX/RX column order and N/A formatting.
 3. Confirm Render replies with `success: true` and Customer 360 matches the correct PPPoE username/ONU. This implementation does not guess a PPPoE username when the OLT output does not provide one.
+
+## Automated GHCR publishing
+
+The GitHub Actions workflow `.github/workflows/build-vsol-container.yml` builds multi-architecture images for `linux/arm/v7` and `linux/arm64` and publishes them to:
+
+`ghcr.io/fozlerabbiofficialgmcservice-cyber/faz-vsol-collector:latest`
+
+It runs after relevant changes reach `main`, on `vsol-collector-v*` tags, or when manually started from the Actions tab. After the first successful run, set the GHCR package visibility to **Public** if the MikroTik should pull without registry credentials; otherwise create a read:packages token and configure registry credentials on RouterOS. The workflow has not been run against a live MikroTik as part of this code change.
+
+## Final RouterOS setup checklist
+
+1. Check `/system/resource/print`, `/system/device-mode/print`, `/container/print`, `/interface/bridge/print`, and `/ip/address/print`. Confirm Container package/device-mode requirements and physical access first.
+2. Reserve an unused management-LAN IP for VETH and use the actual bridge name, gateway, DNS and OLT management IP. Do not copy `192.0.2.x` examples.
+3. Configure the collector variables shown above. Keep OLT and Render tokens out of shell history/screenshots; use a read-only OLT account and restrict management LAN access.
+4. After the workflow succeeds and the GHCR package is public (or registry auth is configured), use this image:
+   `ghcr.io/fozlerabbiofficialgmcservice-cyber/faz-vsol-collector:latest`
+5. Start the container and inspect `/container/print` and `/log/print where topics~"container"`. Check container logs for a successful authenticated Render response.
+6. In Customer 360, confirm the timestamp updates and values match the OLT CLI. Until then, treat the topology as partial/unverified.
+
+The example RouterOS commands earlier in this document are templates, not safe-to-paste production commands: replace placeholder addresses, bridge, image registry access and secrets first. RouterOS versions and hardware may differ in supported container syntax.
