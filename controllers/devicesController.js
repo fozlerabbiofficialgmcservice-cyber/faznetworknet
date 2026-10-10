@@ -112,3 +112,95 @@ exports.discoverMikrotik = async (req, res) => {
     res.status(503).json({ success: false, message: error?.message || "MikroTik discovery failed." });
   }
 };
+
+
+exports.discoverNetworkMap = async (req, res) => {
+  let runId = null;
+  try {
+    // Read-only collection: this endpoint never provisions or changes RouterOS.
+    const [sessions, bridgeHosts, router] = await Promise.all([
+      mikrotikService.getActiveSessions(),
+      mikrotikService.getBridgeHosts().catch((error) => {
+        console.warn("[Network mapping] Bridge-host discovery unavailable:", error.message);
+        return [];
+      }),
+      mikrotikService.testConnection()
+    ]);
+    const deviceResult = await db.query(
+      "SELECT id FROM network_devices WHERE device_type='mikrotik' ORDER BY id LIMIT 1"
+    );
+    const deviceId = deviceResult.rows[0]?.id || null;
+    const runResult = await db.query(
+      "INSERT INTO network_discovery_runs (device_id,run_type,status,details) VALUES ($1,'manual','running',$2::jsonb) RETURNING id",
+      [deviceId, JSON.stringify({ router, collector: "mikrotik-read-only" })]
+    );
+    runId = runResult.rows[0].id;
+    let matched = 0;
+    let unmatched = 0;
+    for (const session of sessions) {
+      const username = clean(session.username, 100);
+      if (!username) continue;
+      const customerResult = await db.query(
+        "SELECT id,username FROM customers WHERE lower(username)=lower($1) LIMIT 2",
+        [username]
+      );
+      const customer = customerResult.rows.length === 1 ? customerResult.rows[0] : null;
+      const status = customer ? "matched" : customerResult.rows.length > 1 ? "ambiguous" : "unmatched";
+      const value = {
+        username,
+        ip: clean(session.address, 64) || null,
+        routerMac: clean(session.callerId, 100) || null,
+        uptime: clean(session.uptime, 100) || null,
+        service: clean(session.service, 40) || "pppoe"
+      };
+      await db.query(
+        `INSERT INTO network_observations
+          (discovery_run_id,source_device_id,customer_id,observation_type,identity_type,identity_value,observed_value,match_status,match_confidence,evidence)
+         VALUES ($1,$2,$3,'pppoe_session','pppoe_username',$4,$5::jsonb,$6,$7,$8::jsonb)`,
+        [runId, deviceId, customer?.id || null, username, JSON.stringify(value), status,
+          customer ? 1 : null, JSON.stringify({ rule: customer ? "exact_case_insensitive_pppoe_username" : "no_unique_customer_match", source: "mikrotik_ppp_active" })]
+      );
+      if (customer) matched++; else unmatched++;
+    }
+    // Bridge host MACs are observations only. Never infer that a learned MAC
+    // is an ONU or a particular customer without independent evidence.
+    for (const host of bridgeHosts) {
+      await db.query(
+        `INSERT INTO network_observations
+          (discovery_run_id,source_device_id,observation_type,identity_type,identity_value,observed_value,match_status,evidence)
+         VALUES ($1,$2,'bridge_host','mac_address',$3,$4::jsonb,'unmatched',$5::jsonb)`,
+        [runId, deviceId, clean(host.macAddress, 32),
+          JSON.stringify({ interface: host.interface || null, bridge: host.bridge || null, vlanId: host.vlanId || null, dynamic: Boolean(host.dynamic) }),
+          JSON.stringify({ rule: "no_customer_identity_inferred", source: "mikrotik_bridge_host" })]
+      );
+      unmatched++;
+    }
+    await db.query(
+      "UPDATE network_discovery_runs SET status='succeeded',finished_at=NOW(),discovered_count=$2,matched_count=$3,unmatched_count=$4 WHERE id=$1",
+      [runId, sessions.length + bridgeHosts.length, matched, unmatched]
+    );
+    if (deviceId) await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
+    return res.json({
+      success: true,
+      readOnly: true,
+      runId,
+      checkedAt: new Date().toISOString(),
+      counts: { activePppoeSessions: sessions.length, bridgeHostMacs: bridgeHosts.length, matchedCustomers: matched, unmatchedObservations: unmatched },
+      notes: [
+        "Router MAC is sourced from MikroTik PPPoE caller-id; it is not treated as ONU MAC.",
+        "Bridge host MACs are retained as unmatched observations until independent evidence identifies them.",
+        "OLT/PON/ONU collection is not yet active; vendor-specific adapter and protocol access are required."
+      ]
+    });
+  } catch (error) {
+    if (runId) {
+      try {
+        await db.query("UPDATE network_discovery_runs SET status='failed',finished_at=NOW(),error_message=$2 WHERE id=$1", [runId, clean(error.message, 1000)]);
+      } catch (writeError) {
+        console.error("[Network mapping] Could not mark discovery run failed:", writeError.message);
+      }
+    }
+    console.error("[Network mapping discovery]", error?.message || error);
+    return res.status(503).json({ success: false, message: "Network discovery failed. No MikroTik configuration was changed." });
+  }
+};
