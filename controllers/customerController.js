@@ -475,12 +475,22 @@ async function listCustomers(req,res){
     }
 
     const mapped=result.rows.map(row=>{
-      const billing=evaluateCustomerBillingStatus(row);
+      const billing=evaluateCustomerBillingStatus({...row,expiration_date:row.expiration_date||row.pppoe_expiry_date||null});
       const session=sessionMap.get(String(row.username||"").trim().toLowerCase());
       const expiration=row.expiration_date||row.pppoe_expiry_date||null;
+      const comment=String(row.pppoe_comment||row.remarks||"").trim();
+      const commentName=comment.match(/Customer:\s*([^|]+)/i)?.[1]?.trim() || comment.split("|")[0]?.trim() || "";
+      const commentPhone=comment.match(/Phone:\s*([^|]+)/i)?.[1]?.trim() || "";
+      // Treat placeholders as missing for every customer, rather than displaying "-" as a real name.
+      const isMissingValue=value=>!String(value??"").trim() || ["-","—","n/a","na","none","null","undefined","unknown"].includes(String(value).trim().toLowerCase());
+      const canonicalName=!isMissingValue(row.full_name)?String(row.full_name).trim():(!isMissingValue(row.fullName)?String(row.fullName).trim():"");
+      const parsedCommentName=commentName&&!/^EXP:|^Phone:/i.test(commentName)&&!isMissingValue(commentName)?commentName:"";
+      const displayName=canonicalName||parsedCommentName;
       return {
         ...row,
-        phone:formatBdPhoneNumber(row.phone),
+        full_name:displayName,
+        fullName:displayName,
+        phone:formatBdPhoneNumber(!isMissingValue(row.phone)?row.phone:commentPhone),
         alternative_phone:formatBdPhoneNumber(row.alternative_phone),
         expiration_date:expiration,
         expiry_date:expiration,
@@ -528,14 +538,18 @@ async function profile(req,res){
   try{
     const username=clean(req.query.username,100);
     if(!username)return res.status(400).json({success:false,message:"Username is required."});
-    let dbUser=null,mtSecret=null,session=null;
-    try{const q=await db.query("SELECT * FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]);dbUser=q.rows[0]||null;}catch(error){console.warn("[DB Lookup warning]:",error.message);}
-    try{mtSecret=await mikrotikService.getPppoeSecret(username);}catch(error){if(!dbUser)throw error;console.warn("[MikroTik secret warning]:",error.message);}
-    try{const sessions=await mikrotikService.getActiveSessions();session=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").toLowerCase()===username.toLowerCase())||null;}catch(error){console.warn("[MikroTik session warning]:",error.message);}
-    if(!dbUser&&!mtSecret)return res.status(404).json({success:false,message:`Customer "${username}" not found in database or MikroTik`});
-    const comment=String(mtSecret?.comment||"");
+    let dbUser=null,pppoeRow=null,mtSecret=null,session=null;
+    try{const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);dbUser=q.rows[0]||null;}catch(error){console.warn("[DB Lookup warning]:",error.message);}
+    try{const q=await db.query("SELECT * FROM pppoe_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);pppoeRow=q.rows[0]||null;}catch(error){console.warn("[PPPoE DB Lookup warning]:",error.message);}
+    try{mtSecret=await mikrotikService.getPppoeSecret(username);}catch(error){if(!dbUser&&!pppoeRow)throw error;console.warn("[MikroTik secret warning]:",error.message);}
+    try{const sessions=await mikrotikService.getActiveSessions();session=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").trim().toLowerCase()===username.trim().toLowerCase())||null;}catch(error){console.warn("[MikroTik session warning]:",error.message);}
+    if(!dbUser&&!pppoeRow&&!mtSecret)return res.status(404).json({success:false,message:`Customer "${username}" not found in database or MikroTik`});
+    const comment=String(mtSecret?.comment||pppoeRow?.comment||"");
     const nameMatch=comment.match(/Customer:\s*([^|]+)/i),phoneMatch=comment.match(/Phone:\s*([^|]+)/i),expMatch=comment.match(/EXP:\s*([^|]+)/i);
-    const expiration=normalizeDate(dbUser?.expiration_date)||(expMatch?normalizeDate(expMatch[1].trim()):"");
+    // Prefer the panel's canonical expiry, then the synchronized PPPoE record,
+    // and only then RouterOS comment metadata. This avoids blank/default dates
+    // when the panel expiry is absent but a current synchronized date exists.
+    const expiration=normalizeDate(dbUser?.expiration_date)||normalizeDate(pppoeRow?.expiry_date)||(expMatch?normalizeDate(expMatch[1].trim()):"");
     const profileName=clean(mtSecret?.profile||dbUser?.profile||"",100),today=bangladeshToday();
     const paidUntil=normalizeDate(dbUser?.paid_until);
     const expired=Boolean(expiration&&dateStatus(expiration)==="expired");
@@ -550,9 +564,9 @@ async function profile(req,res){
       full_name:clean(dbUser?.full_name||(nameMatch?nameMatch[1].trim():"")||username,200),
       fullName:clean(dbUser?.full_name||(nameMatch?nameMatch[1].trim():"")||username,200),
       phone:clean(dbUser?.phone||(phoneMatch?phoneMatch[1].trim():""),40),alternative_phone:clean(dbUser?.alternative_phone,40),
-      profile:profileName||"—",package_name:clean(dbUser?.package_name||profileName||"—",120),password:clean(mtSecret?.password||dbUser?.password||"",255),
+      profile:profileName||clean(pppoeRow?.profile,100)||"—",package_name:clean(dbUser?.package_name||profileName||pppoeRow?.profile||"—",120),password:clean(mtSecret?.password||pppoeRow?.password||dbUser?.password||"",255),
       expiration_date:expiration||null,expirationDate:expiration||null,billing_cycle:clean(dbUser?.billing_cycle||"monthly",30),billing_duration_days:dbUser?.billing_duration_days==null?null:Number(dbUser.billing_duration_days),billing_expiry_override:Boolean(dbUser?.billing_expiry_override),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft,paid_until:paidUntil||null,
-      disabled:Boolean(mtSecret?.disabled),remote_address:clean(mtSecret?.remoteAddress||dbUser?.remote_address,100),caller_id:clean(mtSecret?.callerId||dbUser?.caller_id,100),
+      disabled:Boolean(mtSecret?.disabled??pppoeRow?.disabled),remote_address:clean(mtSecret?.remoteAddress||pppoeRow?.remote_address||dbUser?.remote_address,100),caller_id:clean(mtSecret?.callerId||pppoeRow?.caller_id||dbUser?.caller_id,100),
       service:clean(mtSecret?.service||"pppoe",30),installation_address:dbUser?.installation_address||"",olt_pon_port:dbUser?.olt_pon_port||"",
       distribution_box:dbUser?.distribution_box||dbUser?.fiber_box||"",onu_mac:dbUser?.onu_mac||"",onu_serial:dbUser?.onu_serial||"",
       fiber_drop_core:dbUser?.fiber_drop_core||"",remarks:dbUser?.remarks||"",connection_date:dbUser?.connection_date||null

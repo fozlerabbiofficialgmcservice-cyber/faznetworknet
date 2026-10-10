@@ -3137,7 +3137,7 @@ async function deletePlan(id,name){
                 <div class="card card-custom">
                     <div class="card-custom-header">
                         <i class="bi bi-hourglass-split text-success fs-5"></i>
-                        <span data-key="loading_customers">Loading live customer status...</span>
+                        <span data-key="loading_customers">Loading current customer records...</span>
                     </div>
                     <div class="card-body text-center py-5">
                         <div class="spinner-border text-success" role="status"></div>
@@ -3145,28 +3145,27 @@ async function deletePlan(id,name){
                 </div>`;
 
             try {
-                let users = [];
+                // Use the billing panel's canonical customers table for every customer
+                // submenu. The PPPoE-only endpoint can include orphaned, old RouterOS
+                // records and omit current panel customers without a matching secret.
+                const data = await jsonFetch('/api/customers?status=all', { cache: 'no-store', timeout: 20000 });
+                if (!data || data.success === false || !Array.isArray(data.users || data.customers)) {
+                    throw new Error(data?.message || data?.error || 'Unable to load current customer records.');
+                }
+                let users = Array.isArray(data.users) ? data.users.slice() : data.customers.slice();
+
                 if (filterType === 'online' || filterType === 'offline') {
-                    // Classify from the current live MikroTik active-session list,
-                    // not a possibly stale online flag saved in PostgreSQL.
-                    const [allData, liveData] = await Promise.all([
-                        jsonFetch('/api/pppoe/users?filter=all', { cache: 'no-store', timeout: 20000 }),
-                        jsonFetch('/api/pppoe/active', { cache: 'no-store', timeout: 20000 })
-                    ]);
-                    if (!allData || allData.success === false || !Array.isArray(allData.users)) {
-                        throw new Error(allData?.message || allData?.error || 'Unable to load PPPoE customer records.');
-                    }
+                    // Require a successful live-session response; never guess network state.
+                    const liveData = await jsonFetch('/api/pppoe/active', { cache: 'no-store', timeout: 20000 });
                     if (!liveData || liveData.success === false || !Array.isArray(liveData.sessions)) {
                         throw new Error(liveData?.message || liveData?.error || 'Live MikroTik sessions are unavailable. Online/offline status was not guessed.');
                     }
-
                     const sessionByUsername = new Map();
                     liveData.sessions.forEach(function(session) {
                         const name = String(session?.username || session?.name || '').trim().toLowerCase();
                         if (name && !sessionByUsername.has(name)) sessionByUsername.set(name, session);
                     });
-
-                    users = allData.users.map(function(user) {
+                    users = users.map(function(user) {
                         const username = String(user?.username || '').trim().toLowerCase();
                         const session = username ? (sessionByUsername.get(username) || null) : null;
                         return {
@@ -3179,23 +3178,51 @@ async function deletePlan(id,name){
                             session_caller_id: session?.callerId || session?.caller_id || null
                         };
                     }).filter(function(user) {
-                        return filterType === 'online' ? user.online === true : user.online === false;
+                        return filterType === 'online' ? user.online : !user.online;
                     });
-                } else {
-                    const endpoint = (filterType === 'all' || filterType === 'paid' || filterType === 'due' || filterType === 'unpaid')
-                        ? '/api/customers?status=' + encodeURIComponent(filterType === 'all' ? 'all' : filterType)
-                        : '/api/pppoe/users?filter=' + encodeURIComponent(filterType);
-                    const data = await jsonFetch(endpoint, { cache: 'no-store' });
-                    if (data && data.success === false && !Array.isArray(data.users) && !Array.isArray(data.customers)) {
-                        throw new Error(data.message || data.error || 'Unable to load customer records.');
-                    }
-                    users = Array.isArray(data?.users)
-                        ? data.users
-                        : (Array.isArray(data?.customers) ? data.customers : []);
+                } else if (filterType === 'active') {
+                    users = users.filter(function(user) {
+                        const status = customerStatus(user);
+                        const accountState = String(user?.status || user?.customer_billing_state || '').toLowerCase();
+                        return status.key !== 'expired_status' && !user.disabled && !user.pppoe_disabled &&
+                            !['suspended','disabled','left','terminated','inactive'].includes(accountState);
+                    });
+                } else if (filterType === 'expire') {
+                    users = users.filter(function(user) { return customerStatus(user).key === 'expired_status'; });
+                } else if (filterType === 'expire_today_yesterday' || filterType === 'expire_7_days') {
+                    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                    const todayMs = Date.parse(today + 'T00:00:00+06:00');
+                    users = users.filter(function(user) {
+                        const raw = String(user?.expiration_date || user?.expiry_date || '').trim();
+                        let iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+                        if (!iso && /^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+                            const parts = raw.split('/'); iso = parts[2] + '-' + parts[1] + '-' + parts[0];
+                        }
+                        if (!iso) return false;
+                        const days = Math.round((Date.parse(iso + 'T00:00:00+06:00') - todayMs) / 86400000);
+                        return filterType === 'expire_today_yesterday' ? days >= -1 && days <= 0 : days >= 0 && days <= 7;
+                    });
+                } else if (filterType === 'new') {
+                    const cutoff = Date.now() - 7 * 86400000;
+                    users = users.filter(function(user) {
+                        const created = Date.parse(user?.created_at || user?.customer_created_at || '');
+                        return Number.isFinite(created) && created >= cutoff;
+                    });
+                } else if (filterType === 'due') {
+                    users = users.filter(function(user) {
+                        const status = String(user?.billing_status || user?.computed_status || user?.status || '').toLowerCase();
+                        return customerStatus(user).key === 'expired_status' ||
+                            ['due','unpaid','expired','suspended','disabled','left','terminated'].includes(status) ||
+                            Boolean(user.disabled || user.pppoe_disabled);
+                    });
+                } else if (['paid','unpaid'].includes(filterType)) {
+                    users = users.filter(function(user) {
+                        const status = String(user?.billing_status || user?.computed_status || '').toLowerCase();
+                        return filterType === 'paid' ? status === 'paid' : ['unpaid','expired'].includes(status);
+                    });
                 }
 
-                // Rapid menu changes must never allow an older request to replace
-                // the selected Online/Offline list with stale results.
+                // Rapid menu changes must never let a previous response overwrite the selected submenu.
                 if (requestId !== window.__customerSectionRequestId) return;
                 renderCustomerTable(users);
             } catch (error) {
