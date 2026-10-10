@@ -2,14 +2,24 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validatePublicIp, validatePort, validatePortForward } = require('../services/networkAccessValidation');
+const { validatePublicIp, validateEndpointHost, validatePort, validatePortForward } = require('../services/networkAccessValidation');
 
-test('accepts a public IPv4 and rejects private, CGNAT and malformed addresses', () => {
+test('accepts public IPv4 and rejects private, CGNAT, documentation, benchmarking and malformed ranges', () => {
   assert.equal(validatePublicIp('8.8.8.8').value, '8.8.8.8');
-  for (const ip of ['192.168.1.1', '10.0.0.1', '172.16.0.1', '100.64.1.1', 'not-an-ip', '2001:db8::1']) {
+  for (const ip of ['192.168.1.1', '10.0.0.1', '172.16.0.1', '100.64.1.1', '192.0.2.1', '198.18.0.1', '203.0.113.1', 'not-an-ip', '2001:db8::1']) {
     assert.ok(validatePublicIp(ip).error, ip);
   }
   assert.equal(validatePublicIp('').value, null);
+});
+
+test('accepts only a hostname or public IPv4 as a VPN endpoint host', () => {
+  assert.equal(validateEndpointHost('vpn.example.com').value, 'vpn.example.com');
+  assert.equal(validateEndpointHost('VPN.Example.COM').value, 'vpn.example.com');
+  assert.equal(validateEndpointHost('8.8.8.8').value, '8.8.8.8');
+  for (const host of ['192.168.1.1', '100.64.1.1', 'http://vpn.example.com', 'vpn.example.com:51820', 'localhost', 'bad host', '-bad.example.com']) {
+    assert.ok(validateEndpointHost(host).error, host);
+  }
+  assert.equal(validateEndpointHost('').value, null);
 });
 
 test('validates ports strictly', () => {
