@@ -493,6 +493,10 @@
                 <a href="javascript:void(0)" onclick="window.loadStaffManagement(); return false;"><i class="bi bi-person-lock"></i><span>Staff Management</span></a>
             </li>
 
+            <li class="menu-item" data-rbac-roles="super_admin">
+                <a href="javascript:void(0)" onclick="window.loadAuditLogs(); return false;"><i class="bi bi-journal-text"></i><span>Audit Logs</span></a>
+            </li>
+
             <li class="menu-item">
                 <a href="javascript:void(0)" onclick="switchView('general-settings'); return false;"><i class="bi bi-sliders2-vertical"></i><span>General Settings</span></a>
             </li>
@@ -545,7 +549,7 @@
                             <i class="bi bi-chevron-down ms-auto arrow-icon"></i>
                         </button>
                         <ul class="submenu">
-                            <li><a href="javascript:void(0)"><span data-key="support_tickets">Support Tickets</span></a></li>
+                            <li><a href="javascript:void(0)" onclick="window.loadSupportTickets(); return false;"><span data-key="support_tickets">Support Tickets</span></a></li>
                             <li><a href="javascript:void(0)"><span data-key="software_support_tickets">Software Support Tickets</span></a></li>
                             <li><a href="javascript:void(0)"><span data-key="website_support_tickets">Website Support Tickets</span></a></li>
                         </ul>
@@ -638,6 +642,24 @@
                 </div>
             </section>
 
+            <!-- VIEW: SUPPORT TICKETS -->
+            <section id="view-support-tickets" class="admin-view" style="display:none">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Support Tickets</h2><p class="text-muted mb-0">Staff accounts see only tickets assigned to them.</p></div><button class="btn btn-outline-success btn-sm" onclick="window.loadSupportTickets()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+              <div class="card card-custom mb-4" id="rbacTicketCreateCard"><div class="card-custom-header"><i class="bi bi-plus-circle text-success"></i><span>Create Support Ticket</span></div><div class="card-body"><form id="rbacTicketForm" class="row g-3">
+                <div class="col-md-6"><label class="form-label" for="ticketTitle">Title</label><input id="ticketTitle" name="title" class="form-control" maxlength="180" required></div>
+                <div class="col-md-3"><label class="form-label" for="ticketPriority">Priority</label><select id="ticketPriority" name="priority" class="form-select"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></div>
+                <div class="col-md-3"><label class="form-label" for="ticketCustomer">Customer username (optional)</label><input id="ticketCustomer" name="customer_username" class="form-control" maxlength="100"></div>
+                <div class="col-12"><label class="form-label" for="ticketDescription">Description</label><textarea id="ticketDescription" name="description" class="form-control" rows="3" maxlength="10000" required></textarea></div>
+                <div class="col-md-6"><label class="form-label" for="ticketAssignee">Assign to staff (optional)</label><select id="ticketAssignee" name="assigned_to_user_id" class="form-select"><option value="">Unassigned</option></select></div>
+                <div class="col-12"><div id="rbacTicketResult" class="small" role="status"></div><button class="btn btn-success" type="submit" id="rbacTicketSubmit">Create ticket</button></div>
+              </form></div></div>
+              <div class="card card-custom"><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Ticket</th><th>Customer</th><th>Priority</th><th>Status</th><th>Assigned to</th><th>Created</th><th>Action</th></tr></thead><tbody id="rbacTicketsBody"><tr><td colspan="7" class="text-center text-muted py-4">Loading tickets…</td></tr></tbody></table></div></div>
+            </section>
+            <!-- VIEW: SECURITY AUDIT LOGS -->
+            <section id="view-audit-logs" class="admin-view" style="display:none">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Security Audit Logs</h2><p class="text-muted mb-0">Recent account and support-ticket administration events.</p></div><button class="btn btn-outline-success btn-sm" onclick="window.loadAuditLogs()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+              <div class="card card-custom"><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Target</th><th>Details</th><th>IP</th></tr></thead><tbody id="rbacAuditBody"><tr><td colspan="7" class="text-center text-muted py-4">Loading audit logs…</td></tr></tbody></table></div></div>
+            </section>
             <!-- VIEW: ROLE-RESTRICTED STAFF MANAGEMENT -->
             <section id="view-staff-management" class="admin-view" style="display:none">
               <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Staff Management</h2><p class="text-muted mb-0">Create and manage individual accounts with first-login email verification.</p></div><span class="badge text-bg-success">RBAC enabled</span></div>
