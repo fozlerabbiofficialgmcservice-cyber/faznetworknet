@@ -3303,12 +3303,12 @@ async function deletePlan(id,name){
         window.restoreMissingRouterCustomer = restoreMissingRouterCustomer;
 
         async function syncPanelCustomersToMikroTik(button){
-            if(!confirm('Sync all customer records from the Billing Panel to existing MikroTik PPPoE secrets? This updates passwords, profiles, comments and disabled state. It does not create or delete users.'))return;
+            if(!confirm('Sync all current Billing Panel customers to MikroTik? Existing PPPoE secrets will be updated and missing secrets will be created from current customer records. Customer name, phone and expiry will be written in each RouterOS comment. Deleted/tombstoned customers will not be recreated. Continue?'))return;
             const original=button.innerHTML;
             button.disabled=true;button.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Syncing all customers...';
             try{
                 const data=await jsonFetch('/api/customers/sync-panel-to-mikrotik',{method:'POST',timeout:120000});
-                alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0));
+                alert((data.message||'Customer sync finished.')+'\\nUpdated: '+(data.updated??0)+' | Created: '+(data.created??0)+' | Skipped: '+(data.skipped??0)+' | Failed: '+(data.failed??0));
                 await fetchCustomers();await refreshDashboard();
             }catch(error){alert('Sync to MikroTik failed: '+(error.message||'Unknown error'));}
             finally{button.disabled=false;button.innerHTML=original;}
