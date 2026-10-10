@@ -53,13 +53,13 @@ app.get("/portal",async(req,res)=>{try{const keys=["mfs_bkash_number","mfs_nagad
 
 app.get("/customer/dashboard",(req,res)=>{res.set("Cache-Control","no-store, no-cache, must-revalidate, private");res.set("Pragma","no-cache");res.set("Expires","0");return res.render("customer-dashboard",{title:"FAZ NETWORK Customer Self-Care"});});
 app.get("/admin",requireAdmin,(req,res)=>res.render("admin",{title:"FAZ NETWORK Enterprise Admin",dbConnected:db.getStatus().connected,currentRole:req.session.role||(req.session.legacySuperAdmin||!req.session.userId?"super_admin":"staff"),currentAdminUser:req.session.adminUser||"admin",currentAdminId:req.session.userId||0}));
-app.get("/admin/reports/collection",requireAdmin,(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
-app.get("/admin/reports/due",requireAdmin,(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
-app.get("/admin/reports/hotspot-revenue",requireAdmin,(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
-app.get("/admin/reports/expenses",requireAdmin,(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
+app.get("/admin/reports/collection",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
+app.get("/admin/reports/due",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
+app.get("/admin/reports/hotspot-revenue",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
+app.get("/admin/reports/expenses",requireRole(["super_admin","admin"]),(req,res)=>res.render("reports",{title:"FAZ NETWORK Reports"}));
 app.get("/admin/customers/:id",requireAdmin,(req,res)=>res.render("customer-profile",{title:"Customer 360",customerId:String(req.params.id||"")}));
 app.get("/dashboard",requireAdmin,(req,res)=>res.redirect("/admin"));
-app.get("/hotspot/webhook",requireAdmin,(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
+app.get("/hotspot/webhook",requireRole(["super_admin","admin"]),(req,res)=>res.redirect(302,"/admin#hotspot-webhook"));
 
 app.get("/",async (req,res)=>{
   try{
@@ -103,11 +103,11 @@ app.get("/",async (req,res)=>{
   }
 });
 
-app.get("/router",requireAdmin,(req,res)=>res.render("settings",{title:"Router Settings",page:"router",routerHost:String(process.env.ROUTER_HOST||""),routerPort:Number.parseInt(process.env.ROUTER_PORT||"8728",10)}));
+app.get("/router",requireRole(["super_admin"]),(req,res)=>res.render("settings",{title:"Router Settings",page:"router",routerHost:String(process.env.ROUTER_HOST||""),routerPort:Number.parseInt(process.env.ROUTER_PORT||"8728",10)}));
 // Resolve the configured webhook path before other POST routes so an admin-selected
 // custom endpoint remains usable even when its path overlaps an existing API path.
 app.post("*",paymentController.dynamicWebhook);app.use("/api/admin/users",requireAdmin,adminUserRoutes);app.use("/api/router",requireRole(["super_admin"]),routerRoutes);app.use("/api/pppoe",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,pppoeRoutes);app.use("/api/customer",customerSelfCareRoutes);app.use("/api/payments-admin",requireRole(["super_admin","admin"]),paymentRoutes);app.use("/api",paymentRoutes);app.use("/api/customers",requireRole(["super_admin","admin","staff"]),requireStaffReadOnly,customerRoutes);app.use("/api/public",publicRoutes);app.use("/api/packages-admin",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/packages",requireRole(["super_admin","admin"]),packageRoutes);app.use("/api/ip-pools",requireRole(["super_admin","admin"]),ipPoolRoutes);app.use("/api/settings",requireRole(["super_admin"]),settingsRoutes);app.use("/api/reports",requireRole(["super_admin","admin"]),reportRoutes);app.post("/api/admin/diagnostics/mikrotik-test",requireRole(["super_admin"]),require("./controllers/adminDiagnosticsController").mikrotikTest);app.post("/forward",paymentController.webhook);app.use("/api/hotspot",requireRole(["super_admin","admin"]),hotspotRoutes);
-app.get("/pppoe",requireAdmin,(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireAdmin,(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireAdmin,(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
+app.get("/pppoe",requireRole(["super_admin","admin"]),(req,res)=>res.render("pppoe",{title:"PPPoE Management",page:"pppoe"}));app.get("/transactions",requireRole(["super_admin","admin"]),(req,res)=>res.render("transactions",{title:"Transactions",page:"transactions"}));app.get("/hotspot",requireRole(["super_admin","admin"]),(req,res)=>res.render("hotspot",{title:"Hotspot Vouchers",page:"hotspot"}));
 app.use((req,res)=>res.status(404).send("Not Found"));
 app.listen(PORT,()=>console.log("FAZ NETWORK Server running on port "+PORT));
 initializeDatabase().then(()=>{startBillingCron();startUsageCollector();}).catch(e=>{
