@@ -45,8 +45,21 @@
         const created=user.created_at?new Date(user.created_at).toLocaleDateString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
         const active=String(user.status)==='active';
         const canManage=(role==='super_admin'||user.role==='staff')&&Number(user.id)!==currentUserId;
-        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td>'+(canManage?'<button class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+Number(user.id)+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'—')+'</td></tr>';
+        const canDelete=canManage&&(role==='super_admin'||user.role==='staff')&&user.role!=='super_admin';
+        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canManage?'<button class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+Number(user.id)+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button class="btn btn-sm btn-danger" data-delete-user-id="'+Number(user.id)+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+(!canManage&&!canDelete?'—':'')+'</div></td></tr>';
       }).join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No accounts found.</td></tr>';
+      tbody.querySelectorAll('button[data-delete-user-id]').forEach(button=>button.addEventListener('click',async()=>{
+        const username=button.dataset.deleteUsername||'this account';
+        if(!window.confirm('Permanently delete '+username+'? This cannot be undone.'))return;
+        button.disabled=true;
+        try{
+          const response=await fetch('/api/admin/users/'+button.dataset.deleteUserId,{method:'DELETE',credentials:'same-origin',headers:{Accept:'application/json'}});
+          const data=await response.json();
+          if(!response.ok||!data.success)throw new Error(data.message||'Unable to delete account.');
+          window.alert(data.message||'Account deleted.');
+          await window.loadStaffManagement();
+        }catch(error){window.alert(error.message);button.disabled=false;}
+      }));
       tbody.querySelectorAll('button[data-user-id]').forEach(button=>button.addEventListener('click',async()=>{
         if(!window.confirm('Change this account status?'))return;
         button.disabled=true;
