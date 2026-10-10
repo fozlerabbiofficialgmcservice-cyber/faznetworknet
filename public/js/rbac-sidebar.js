@@ -31,6 +31,33 @@
       if(role==='admin'){roleSelect.innerHTML='<option value="staff">Staff</option>';roleSelect.value='staff';}
     }
   }
+  window.loadStaffInvitations=async function(){
+    const tbody=document.getElementById('rbacInvitationsBody');
+    if(!tbody)return;
+    tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">Loading invitations…</td></tr>';
+    try{
+      const response=await fetch('/api/admin/users/invitations',{credentials:'same-origin',headers:{Accept:'application/json'}});
+      const data=await response.json();
+      if(!response.ok||!data.success)throw new Error(data.message||'Unable to load invitations.');
+      tbody.innerHTML=(data.invitations||[]).map(inv=>{
+        const created=inv.created_at?new Date(inv.created_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
+        const expires=inv.expires_at?new Date(inv.expires_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
+        const canCancel=inv.status==='pending';
+        return '<tr><td class="fw-semibold">'+esc(inv.username)+'</td><td>'+esc(inv.email)+'</td><td>'+esc(inv.role)+'</td><td>'+esc(created)+'</td><td>'+esc(expires)+'</td><td>'+(canCancel?'<button class="btn btn-sm btn-outline-danger" type="button" data-cancel-invitation="'+Number(inv.id)+'" data-invitation-email="'+esc(inv.email)+'"><i class="bi bi-x-circle me-1"></i>Cancel</button>':'<span class="badge text-bg-danger">Email failed</span>')+'</td></tr>';
+      }).join('')||'<tr><td colspan="6" class="text-center text-muted py-4">No pending invitations.</td></tr>';
+      tbody.querySelectorAll('[data-cancel-invitation]').forEach(button=>button.addEventListener('click',async()=>{
+        if(!window.confirm('Cancel the invitation for '+button.dataset.invitationEmail+'? The link will stop working.'))return;
+        button.disabled=true;
+        try{
+          const response=await fetch('/api/admin/users/invitations/'+button.dataset.cancelInvitation,{method:'DELETE',credentials:'same-origin',headers:{Accept:'application/json'}});
+          const data=await response.json();
+          if(!response.ok||!data.success)throw new Error(data.message||'Unable to cancel invitation.');
+          window.alert(data.message||'Invitation cancelled.');
+          await window.loadStaffInvitations();
+        }catch(error){window.alert(error.message);button.disabled=false;}
+      }));
+    }catch(error){tbody.innerHTML='<tr><td colspan="6" class="text-danger text-center py-4">'+esc(error.message)+'</td></tr>';}
+  };
   window.loadStaffManagement=async function(){
     if(!['super_admin','admin'].includes(role)){window.alert('You do not have permission to view staff management.');return;}
     if(typeof window.switchView==='function') window.switchView('staff-management');
@@ -50,9 +77,21 @@
         // Only that owner session may manage DB-backed Super Admin rows.
         const canManage=!isSelf&&(role==='super_admin'||(role==='admin'&&user.role==='staff'));
         const canDelete=canManage;
+        const canResend=canManage&&user.is_first_login===true;
         const actionLabel=isSelf?'<span class="badge text-bg-light border">Current account</span>':!canManage?'—':'';
-        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canManage?'<button type="button" class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+userId+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button type="button" class="btn btn-sm btn-danger" data-delete-user-id="'+userId+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+actionLabel+'</div></td></tr>';
+        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canResend?'<button type="button" class="btn btn-sm btn-outline-primary" data-resend-invitation="'+userId+'" data-resend-email="'+esc(user.email)+'">Send invitation</button>':'')+(canManage?'<button type="button" class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+userId+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button type="button" class="btn btn-sm btn-danger" data-delete-user-id="'+userId+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+actionLabel+'</div></td></tr>';
       }).join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No accounts found.</td></tr>';
+      tbody.querySelectorAll('button[data-resend-invitation]').forEach(button=>button.addEventListener('click',async()=>{
+        if(!window.confirm('Send a secure invitation link to '+button.dataset.resendEmail+'?'))return;
+        button.disabled=true;
+        try{
+          const response=await fetch('/api/admin/users/'+button.dataset.resendInvitation+'/resend-invitation',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}});
+          const data=await response.json();
+          if(!response.ok||!data.success)throw new Error(data.message||'Unable to send invitation.');
+          window.alert(data.message||'Invitation sent.');
+          await window.loadStaffInvitations();
+        }catch(error){window.alert(error.message);button.disabled=false;}
+      }));
       tbody.querySelectorAll('button[data-delete-user-id]').forEach(button=>button.addEventListener('click',async()=>{
         const username=button.dataset.deleteUsername||'this account';
         if(!window.confirm('Permanently delete '+username+'? This cannot be undone.'))return;
@@ -65,6 +104,7 @@
           await window.loadStaffManagement();
         }catch(error){window.alert(error.message);button.disabled=false;}
       }));
+      window.loadStaffInvitations();
       tbody.querySelectorAll('button[data-user-id]').forEach(button=>button.addEventListener('click',async()=>{
         if(!window.confirm('Change this account status?'))return;
         button.disabled=true;
@@ -101,13 +141,14 @@
     event.preventDefault();
     const result=document.getElementById('rbacCreateUserResult');
     const button=document.getElementById('rbacCreateUserBtn');
-    result.className='small text-muted';result.textContent='Creating account…';button.disabled=true;
+    result.className='small text-muted';result.textContent='Sending invitation email…';button.disabled=true;
     try{
       const payload=Object.fromEntries(new FormData(form).entries());
       const response=await fetch('/api/admin/users',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
       const data=await response.json();
       if(!response.ok||!data.success)throw new Error(data.message||'Unable to create account.');
-      result.className='small text-success';result.textContent=data.message||'Account created.';form.reset();
+      result.className='small text-success';result.textContent=data.message||'Invitation sent.';form.reset();
+      await window.loadStaffInvitations();
       await window.loadStaffManagement();
     }catch(error){result.className='small text-danger';result.textContent=error.message;}
     finally{button.disabled=false;}

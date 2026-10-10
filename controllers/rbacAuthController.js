@@ -377,29 +377,199 @@ async function listUsers(req, res) {
   }
 }
 
+async function sendInvitationEmail(invitation, rawToken) {
+  const transporter = createMailer();
+  const from = String(process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
+  const configuredBase = String(process.env.PUBLIC_BASE_URL || 'https://faznetwork-web.onrender.com').trim().replace(/\/+$/, '');
+  let base;
+  try { base = new URL(configuredBase); } catch { throw new Error('PUBLIC_BASE_URL is invalid.'); }
+  if (base.protocol !== 'https:' && base.hostname !== 'localhost') throw new Error('PUBLIC_BASE_URL must use HTTPS.');
+  const link = base.toString().replace(/\/+$/, '') + '/invite/' + encodeURIComponent(rawToken);
+  const roleLabel = invitation.role === 'super_admin' ? 'Super Admin' : invitation.role === 'admin' ? 'Admin' : 'Staff';
+  await transporter.sendMail({
+    from, to: invitation.email,
+    subject: 'FAZ NETWORK — invitation to join as ' + roleLabel,
+    text: 'Hello ' + invitation.username + ',\n\nYou have been invited to FAZ NETWORK as ' + roleLabel + '. Open this secure link to verify your email with an OTP and set your own password:\n\n' + link + '\n\nThis invitation expires in 24 hours and can be cancelled by the administrator. If you were not expecting this, ignore this email.',
+    html: '<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:28px;color:#0f172a"><h2>FAZ <span style="color:#059669">NETWORK</span></h2><p>Hello ' + escapeHtml(invitation.username) + ',</p><p>You have been invited to join FAZ NETWORK as <b>' + escapeHtml(roleLabel) + '</b>.</p><p>Open the secure invitation link below. We will send a one-time verification code to this email before you can set your password.</p><p style="margin:28px 0"><a href="' + escapeHtml(link) + '" style="background:#047857;color:white;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:700">Accept invitation</a></p><p>If the button does not work, copy this link into your browser:</p><p style="word-break:break-all">' + escapeHtml(link) + '</p><p>This invitation expires in <b>24 hours</b> and can be cancelled by the administrator. If you were not expecting this, ignore this email.</p></div>'
+  });
+}
+
 async function createUser(req, res) {
   const username = String(req.body?.username || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
   const role = normalizeRole(req.body?.role);
   if (!/^[a-zA-Z0-9._-]{3,60}$/.test(username)) return res.status(400).json({ success: false, message: 'Username must be 3-60 characters (letters, numbers, dot, underscore or hyphen).' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
-  if (password.length < 12 || password.length > 128) return res.status(400).json({ success: false, message: 'Use a password between 12 and 128 characters.' });
-  if (!role) return res.status(400).json({ success: false, message: 'Select a valid role.' });
-  if (req.auth?.role === 'admin' && role !== 'staff') return res.status(403).json({ success: false, message: 'Admins may create staff accounts only.' });
-  if (req.auth?.role !== 'super_admin' && role === 'super_admin') return res.status(403).json({ success: false, message: 'Only a super admin may create a super admin account.' });
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+  if (!['staff','admin','super_admin'].includes(role)) return res.status(400).json({ success: false, message: 'Select a valid role.' });
+  if (req.auth?.role === 'admin' && role !== 'staff') return res.status(403).json({ success: false, message: 'Admins may invite staff accounts only.' });
+  if (req.auth?.role !== 'super_admin' && role === 'super_admin') return res.status(403).json({ success: false, message: 'Only the owner may invite a Super Admin.' });
   try {
-    const passwordHash = await bcrypt.hash(password, 12);
-    const result = await db.query(
-      "INSERT INTO admin_users (username,email,password_hash,role,is_first_login,status,created_by) VALUES ($1,$2,$3,$4,TRUE,'active',$5) RETURNING id,username,email,role,is_first_login,status,created_at",
-      [username, email, passwordHash, role, req.session.adminUser || 'admin']
+    const existing = await db.query(
+      "SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) UNION ALL SELECT 1 FROM admin_invitations WHERE status='pending' AND (lower(username)=lower($1) OR lower(email)=lower($2)) LIMIT 1",
+      [username, email]
     );
-    await writeAudit(req, 'admin_user_created', result.rows[0].id, { username, email, role });
-    return res.status(201).json({ success: true, user: result.rows[0], message: 'Account created. The user must verify the emailed OTP on first login.' });
+    if (existing.rows.length) return res.status(409).json({ success: false, message: 'Username or email is already registered or has a pending invitation.' });
+    const rawToken = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const created = await db.query(
+      "INSERT INTO admin_invitations (username,email,role,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,'pending',$5,$6) RETURNING id,username,email,role,status,created_at,expires_at",
+      [username,email,role,tokenHash,String(req.session.adminUser || 'owner'),expiresAt]
+    );
+    try {
+      await sendInvitationEmail(created.rows[0], rawToken);
+    } catch (mailError) {
+      await db.query("UPDATE admin_invitations SET status='failed', token_hash=NULL, updated_at=NOW() WHERE id=$1 AND status='pending'", [created.rows[0].id]).catch(()=>{});
+      console.error('[RBAC invitation] Email delivery failed:', mailError.message);
+      return res.status(503).json({ success: false, message: 'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render, then create the invitation again.' });
+    }
+    await writeAudit(req, 'admin_invitation_created', null, { username, email, role, invitationId: created.rows[0].id });
+    return res.status(201).json({ success: true, invitation: created.rows[0], message: 'Invitation link sent to ' + email + '. The account will be created only after email OTP verification and password setup.' });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
-    console.error('[RBAC] User creation failed:', error.message);
-    return res.status(500).json({ success: false, message: 'Unable to create account.' });
+    console.error('[RBAC] Invitation creation failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to create invitation.' });
+  }
+}
+
+async function resendInvitation(req,res) {
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({success:false,message:'Invalid account ID.'});
+  try {
+    const result=await db.query("SELECT id,username,email,role,status,is_first_login FROM admin_users WHERE id=$1 LIMIT 1",[id]);
+    const user=result.rows[0];
+    if(!user)return res.status(404).json({success:false,message:'Account not found.'});
+    if(user.is_first_login!==true)return res.status(409).json({success:false,message:'This account has already completed verification.'});
+    if(req.auth?.role==='admin'&&user.role!=='staff')return res.status(403).json({success:false,message:'Admins may invite Staff accounts only.'});
+    if(req.auth?.role!=='admin'&&req.auth?.role!=='super_admin')return res.status(403).json({success:false,message:'Not authorized.'});
+    await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE target_user_id=$1 AND status='pending'",[id]);
+    const rawToken=crypto.randomBytes(32).toString('base64url');
+    const tokenHash=crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt=new Date(Date.now()+24*60*60*1000);
+    const invite=await db.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
+    try { await sendInvitationEmail(invite.rows[0],rawToken); }
+    catch(mailError) {
+      await db.query("UPDATE admin_invitations SET status='failed',token_hash=NULL,updated_at=NOW() WHERE id=$1",[invite.rows[0].id]).catch(()=>{});
+      console.error('[RBAC invitation] Resend failed:',mailError.message);
+      return res.status(503).json({success:false,message:'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render.'});
+    }
+    await writeAudit(req,'admin_invitation_resent',id,{invitationId:invite.rows[0].id,email:user.email,role:user.role});
+    return res.json({success:true,message:'Invitation link sent to '+user.email+'.'});
+  } catch(error) {
+    console.error('[RBAC invitation] Resend failed:',error.message);
+    return res.status(500).json({success:false,message:'Unable to resend invitation.'});
+  }
+}
+
+async function listInvitations(req, res) {
+  try {
+    const result = req.auth?.role === 'super_admin'
+      ? await db.query("SELECT id,username,email,role,status,created_by,created_at,expires_at FROM admin_invitations WHERE status IN ('pending','failed') ORDER BY created_at DESC")
+      : await db.query("SELECT id,username,email,role,status,created_by,created_at,expires_at FROM admin_invitations WHERE status IN ('pending','failed') AND role='staff' AND lower(created_by)=lower($1) ORDER BY created_at DESC", [String(req.session.adminUser || '')]);
+    return res.json({ success: true, invitations: result.rows });
+  } catch (error) {
+    console.error('[RBAC] Listing invitations failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to load invitations.' });
+  }
+}
+
+async function cancelInvitation(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ success: false, message: 'Invalid invitation ID.' });
+  try {
+    const result = req.auth?.role === 'super_admin'
+      ? await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id,username,email,role", [id])
+      : await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' AND role='staff' AND lower(created_by)=lower($2) RETURNING id,username,email,role", [id,String(req.session.adminUser || '')]);
+    if (!result.rows.length) return res.status(404).json({ success: false, message: 'Pending invitation not found; it may already be accepted or cancelled.' });
+    await writeAudit(req, 'admin_invitation_cancelled', null, { invitationId:id, username:result.rows[0].username, email:result.rows[0].email });
+    return res.json({ success: true, message: 'Invitation cancelled. Its link can no longer be used.' });
+  } catch (error) {
+    console.error('[RBAC] Invitation cancellation failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to cancel invitation.' });
+  }
+}
+
+async function showInvitation(req, res) {
+  const token = String(req.params.token || '');
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).render('accept-invitation', { invitation:null, token:'', error:'This invitation link is invalid.' });
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const result = await db.query("SELECT id,username,email,role,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
+    const invitation = result.rows[0];
+    if (!invitation || new Date(invitation.expires_at).getTime() <= Date.now()) return res.status(410).render('accept-invitation', { invitation:null, token:'', error:'This invitation has expired or was cancelled.' });
+    return res.set('Cache-Control','no-store').render('accept-invitation',{invitation,token,error:null});
+  } catch (error) {
+    console.error('[RBAC invitation] Link lookup failed:',error.message);
+    return res.status(503).render('accept-invitation',{invitation:null,token:'',error:'Invitation service is temporarily unavailable.'});
+  }
+}
+
+async function sendInvitationOtp(req, res) {
+  const token=String(req.params.token||'');
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).json({success:false,message:'Invalid invitation link.'});
+  try {
+    const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+    const result=await db.query("SELECT id,username,email,role,expires_at FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
+    const invite=result.rows[0];
+    if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).json({success:false,message:'Invitation expired or cancelled.'});
+    const code=String(crypto.randomInt(0,1000000)).padStart(6,'0');
+    const otpHash=crypto.createHmac('sha256',String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'')).update('invite:'+invite.id+':'+code).digest('hex');
+    const otpExpires=new Date(Date.now()+OTP_TTL_MS);
+    await db.query('UPDATE admin_invitations SET otp_code_hash=$1,otp_expires_at=$2,otp_attempts=0,updated_at=NOW() WHERE id=$3 AND status=\'pending\'',[otpHash,otpExpires,invite.id]);
+    try { await sendOtpEmail(invite,code); }
+    catch(mailError) {
+      await db.query('UPDATE admin_invitations SET otp_code_hash=NULL,otp_expires_at=NULL WHERE id=$1',[invite.id]).catch(()=>{});
+      console.error('[RBAC invitation] OTP delivery failed:',mailError.message);
+      return res.status(503).json({success:false,message:'Could not send OTP to the invited email. Please retry later.'});
+    }
+    return res.json({success:true,message:'OTP sent to the invited email. It expires in 5 minutes.'});
+  } catch(error) {
+    console.error('[RBAC invitation] OTP request failed:',error.message);
+    return res.status(503).json({success:false,message:'Unable to send verification code.'});
+  }
+}
+
+async function acceptInvitation(req, res) {
+  const token=String(req.params.token||'');
+  const code=String(req.body?.otp||'').trim();
+  const password=String(req.body?.password||'');
+  const confirmPassword=String(req.body?.confirmPassword||'');
+  if(!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return res.status(400).render('accept-invitation',{invitation:null,token:'',error:'Invalid invitation link.'});
+  if(!/^\d{6}$/.test(code)) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Enter the 6-digit OTP sent to your email.'});
+  if(password.length<12||password.length>128) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Password must be 12–128 characters.'});
+  if(password!==confirmPassword) return res.status(400).render('accept-invitation',{invitation:{},token,error:'Passwords do not match.'});
+  try {
+    const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+    const found=await db.query("SELECT * FROM admin_invitations WHERE token_hash=$1 AND status='pending' LIMIT 1",[tokenHash]);
+    const invite=found.rows[0];
+    if(!invite||new Date(invite.expires_at).getTime()<=Date.now()) return res.status(410).render('accept-invitation',{invitation:null,token:'',error:'Invitation expired or cancelled.'});
+    if(!invite.otp_code_hash||!invite.otp_expires_at||new Date(invite.otp_expires_at).getTime()<=Date.now()||Number(invite.otp_attempts)>=MAX_OTP_ATTEMPTS) return res.status(400).render('accept-invitation',{invitation:invite,token,error:'OTP expired or locked. Request a new code.'});
+    const secret=String(process.env.OTP_HASH_SECRET||process.env.ADMIN_SESSION_SECRET||process.env.SESSION_SECRET||'');
+    const otpHash=crypto.createHmac('sha256',secret).update('invite:'+invite.id+':'+code).digest('hex');
+    if(!safeEqualHex(invite.otp_code_hash,otpHash)) {
+      await db.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
+      return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Invalid OTP. Please check the code and retry.'});
+    }
+    const passwordHash=await bcrypt.hash(password,12);
+    let created;
+    if(invite.target_user_id) {
+      created=await db.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
+      if(!created.rows.length)return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
+    } else {
+      const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
+      if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Contact the administrator.'});
+      created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
+    }
+    const consumed=await db.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
+    if(!consumed.rows.length) {
+      return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This invitation has already been used or cancelled.'});
+    }
+    await writeAudit(req,'admin_invitation_accepted',created.rows[0].id,{invitationId:invite.id,username:invite.username,role:invite.role});
+    return res.render('accept-invitation-success',{username:invite.username});
+  } catch(error) {
+    if(error.code==='23505') return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'Username or email has already been registered.'});
+    console.error('[RBAC invitation] Acceptance failed:',error.message);
+    return res.status(503).render('accept-invitation',{invitation:null,token:'',error:'Unable to complete invitation. Please retry or contact the administrator.'});
   }
 }
 
@@ -464,4 +634,4 @@ async function deleteUser(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, updateUserStatus, deleteUser };
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };

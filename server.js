@@ -45,6 +45,9 @@ app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
 app.get("/login/set-password",rbacAuthController.showSetPassword);
 app.post("/login/set-password",rbacAuthController.setFirstPassword);
+app.get("/invite/:token",rbacAuthController.showInvitation);
+app.post("/invite/:token/send-otp",rbacAuthController.sendInvitationOtp);
+app.post("/invite/:token/accept",rbacAuthController.acceptInvitation);
 app.post("/logout",(req,res)=>{
   if(!req.session)return res.redirect("/");
   req.session.destroy(err=>{
