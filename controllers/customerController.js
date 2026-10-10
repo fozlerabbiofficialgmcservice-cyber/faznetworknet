@@ -1124,8 +1124,17 @@ async function updateCustomer(req,res){
     const effectiveDisabled=preservePastDueConnection?disabled:(expired||disabled);
     const routerProfile=preservePastDueConnection?profileName:effectiveProfile(profileName,expirationDate);
     if(await mikrotikService.testConnection()){
-      if(usernameChanged)await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled});
-      else await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled});
+      if(usernameChanged){
+        const oldSecret=await mikrotikService.getPppoeSecret(previousUsername);
+        const newSecret=await mikrotikService.getPppoeSecret(username);
+        if(oldSecret) await mikrotikService.updateSecretIdentity(previousUsername,{username,password,profile:routerProfile,comment,disabled:effectiveDisabled});
+        else if(newSecret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
+      }else{
+        const secret=await mikrotikService.getPppoeSecret(username);
+        if(secret) await mikrotikService.updateSecret(username,{password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
+        else await mikrotikService.createSecret({username,password,profile:routerProfile,comment,disabled:effectiveDisabled,callerId:onuMac});
+      }
       if(packageChanged){try{await mikrotikService.kickActiveUser(username);}catch(error){console.warn("[CUSTOMER UPDATE] Package change kick warning:",error.message);}}
     }
     const nextStatus=expired?"expired":effectiveDisabled?"inactive":"active";
