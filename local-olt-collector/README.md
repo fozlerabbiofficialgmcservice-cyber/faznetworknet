@@ -11,7 +11,7 @@ The V-SOL OLT's exact MIB/OIDs and status/power encoding depend on model and fir
    `python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt`
 3. Copy `.env.example` to `.env`, set the local OLT IP, read-only SNMP community, Render endpoint and shared bearer token.
 4. Fill all required `OID_ONU_*` values from the official MIB. Confirm the table index alignment and raw power units with one known ONU before production.
-5. Run `python collector.py`; inspect logs and Render's JSON acknowledgement.
+5. If Customer 360 should automatically match a telemetry row before its ONU MAC has already been saved to the customer, populate `ONU_CUSTOMER_MAP_JSON` with the exact SNMP table suffix/ONU ID mapped to the panel PPPoE username. Do not guess ONU indexes; verify them from the OLT.\n6. Run `python collector.py`; inspect logs and Render's JSON acknowledgement.
 
 ## systemd
 Copy the directory to `/opt/faz-olt-collector`, create a dedicated unprivileged user, protect .env (mode 600), then install the included service:
