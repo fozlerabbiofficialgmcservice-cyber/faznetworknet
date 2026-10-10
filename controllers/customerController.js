@@ -149,8 +149,17 @@ function cleanAdminNote(value) {
 }
 
 function buildExpirationComment(fullName, phone, expirationDate, remarks) {
+  const customerName = clean(fullName, 200).replace(/\|/g, " ").trim();
+  const normalizedPhone = formatBdPhoneNumber(phone);
   const formattedExpiration = formatRouterOsExpirationDate(expirationDate);
-  return formattedExpiration ? "EXP: " + formattedExpiration : "";
+  const parts = [];
+  if (customerName) parts.push("Customer: " + customerName);
+  if (normalizedPhone && normalizedPhone !== "—") parts.push("Phone: " + normalizedPhone);
+  if (formattedExpiration) {
+    const [year, month, day] = formattedExpiration.split("-");
+    parts.push("EXP: " + day + "/" + month + "/" + year);
+  }
+  return parts.join(" | ");
 }
 
 function extractExpirationDate(comment) {
@@ -304,9 +313,14 @@ async function createCustomer(req, res) {
 
 async function syncPanelCustomersToMikroTik(req,res){
   try{
+    // This is an explicit admin push from the current Billing Panel records.
+    // Tombstoned usernames are excluded defensively, even if a damaged database
+    // somehow contains both a current customer row and a deletion tombstone.
     const result=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
-      FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
+      FROM customers c
+      LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE c.username IS NOT NULL AND BTRIM(c.username)<>''
+        AND NOT EXISTS (SELECT 1 FROM customer_deletion_tombstones t WHERE LOWER(t.username)=LOWER(c.username))
       ORDER BY COALESCE(c.created_at,'1970-01-01'::timestamp) ASC,c.username ASC,c.id ASC`);
     const customers=result.rows.map(customer=>{
       const username=clean(customer.username,100);
@@ -314,20 +328,50 @@ async function syncPanelCustomersToMikroTik(req,res){
       const comment=buildExpirationComment(customer.full_name,customer.phone,expiry,customer.remarks);
       const expired=Boolean(expiry&&dateStatus(expiry)==="expired");
       const preservePastDue=Boolean(customer.billing_expiry_override);
+      const customerState=String(customer.status||"").toLowerCase();
       const profile=preservePastDue?clean(customer.profile,120):effectiveProfile(clean(customer.profile,120),expiry);
       const disabled=customer.router_disabled===null||customer.router_disabled===undefined
-        ? Boolean(expired||["inactive","suspended"].includes(String(customer.status||"").toLowerCase()))
+        ? Boolean(expired||["inactive","suspended"].includes(customerState))
         : preservePastDue
           ? Boolean(customer.router_disabled)
-          : Boolean(expired||customer.router_disabled||["inactive","suspended"].includes(String(customer.status||"").toLowerCase()));
-      return {username,password:customer.password||"",profile,comment,disabled};
+          : Boolean(expired||customer.router_disabled||["inactive","suspended"].includes(customerState));
+      const finalStatus=expired?"expired":(disabled?"suspended":dateStatus(expiry));
+      return {
+        id:customer.id,username,password:customer.password||"",profile,comment,disabled,
+        phone:formatBdPhoneNumber(customer.phone)==="—"?"":formatBdPhoneNumber(customer.phone),
+        expirationDate:expiry,finalStatus
+      };
     });
     const sync=await mikrotikService.syncPanelCustomerSecrets(customers);
-    const successful=(sync.results||[]).filter(item=>item.status==="updated").map(item=>item.username.toLowerCase());
-    if(successful.length){
-      await db.query("UPDATE pppoe_users u SET comment='EXP: ' || c.expiration_date::text, expiry_date=c.expiration_date, synced_at=NOW(), updated_at=NOW() FROM customers c WHERE LOWER(u.username)=LOWER(c.username) AND LOWER(u.username)=ANY($1::text[])",[successful]);
+    const syncResults=Array.isArray(sync.results)?sync.results:[];
+    const successfulResults=syncResults.filter(item=>["updated","created"].includes(item.status));
+    const sourceByUsername=new Map(customers.map(customer=>[customer.username.toLowerCase(),customer]));
+    const databaseFailures=[];
+    const routerId=String(process.env.ROUTER_HOST||"");
+    for(const item of successfulResults){
+      const customer=sourceByUsername.get(String(item.username||"").toLowerCase());
+      if(!customer)continue;
+      try{
+        await db.query(`INSERT INTO pppoe_users
+          (username,password,profile,service,disabled,comment,phone,router_id,expiry_date,status,synced_at,updated_at)
+          VALUES ($1,$2,$3,'pppoe',$4,$5,$6,$7,$8::date,$9,NOW(),NOW())
+          ON CONFLICT(username) DO UPDATE SET
+            password=CASE WHEN EXCLUDED.password IS NULL OR EXCLUDED.password='' THEN pppoe_users.password ELSE EXCLUDED.password END,
+            profile=EXCLUDED.profile,service='pppoe',disabled=EXCLUDED.disabled,comment=EXCLUDED.comment,
+            phone=COALESCE(NULLIF(EXCLUDED.phone,''),pppoe_users.phone),router_id=EXCLUDED.router_id,
+            expiry_date=EXCLUDED.expiry_date,status=EXCLUDED.status,synced_at=NOW(),updated_at=NOW()`,
+          [customer.username,customer.password||null,customer.profile,customer.disabled,customer.comment,customer.phone||null,routerId,customer.expirationDate||null,customer.finalStatus]);
+      }catch(error){
+        databaseFailures.push({username:customer.username,status:"failed",reason:"RouterOS was updated, but the local PPPoE database row could not be saved: "+(error.message||"database update failed")});
+      }
     }
-    return res.json({success:(sync.failed||0)===0,total:sync.total,updated:sync.updated||0,skipped:sync.skipped||0,failed:sync.failed||0,results:sync.results||[],message:`Panel-to-MikroTik sync finished: ${sync.updated||0} updated, ${sync.skipped||0} skipped, ${sync.failed||0} failed. Existing PPPoE secrets only; no users created or deleted.`});
+    const results=[...syncResults,...databaseFailures];
+    const failed=(sync.failed||0)+databaseFailures.length;
+    const skipped=sync.skipped||0;
+    const created=sync.created||0;
+    const updated=sync.updated||0;
+    const message=`Panel-to-MikroTik sync finished: ${updated} existing PPPoE secrets updated, ${created} missing PPPoE secrets created, ${skipped} skipped, ${failed} failed. Customer name, phone and expiry are written to the RouterOS comment. No tombstoned customer was recreated.`;
+    return res.json({success:failed===0,total:customers.length,updated,created,skipped,failed,results,message});
   }catch(error){
     console.error("[PANEL TO MIKROTIK SYNC]",error);
     return res.status(503).json({success:false,message:error.message||"Unable to sync panel customer data to MikroTik."});
@@ -335,14 +379,20 @@ async function syncPanelCustomersToMikroTik(req,res){
 }
 async function syncExpiryDatesToMikroTik(req,res){
   try{
-    const result=await db.query("SELECT id,username,expiration_date FROM customers WHERE username IS NOT NULL AND BTRIM(username)<>'' ORDER BY COALESCE(created_at,'1970-01-01'::timestamp) ASC, username ASC, id ASC");
-    const customers=result.rows.map(row=>({username:clean(row.username,100),expiryDate:normalizeDate(row.expiration_date)}));
+    const result=await db.query("SELECT id,username,full_name,phone,expiration_date FROM customers WHERE username IS NOT NULL AND BTRIM(username)<>'' ORDER BY COALESCE(created_at,'1970-01-01'::timestamp) ASC, username ASC, id ASC");
+    const customers=result.rows.map(row=>({
+      username:clean(row.username,100),
+      expiryDate:normalizeDate(row.expiration_date),
+      comment:buildExpirationComment(row.full_name,row.phone,row.expiration_date)
+    }));
     const eligible=customers.filter(row=>row.username&&row.expiryDate);
     const sync=await mikrotikService.syncPppoeExpiryComments(eligible);
     const successful=(sync.results||[]).filter(item=>item.status==='updated').map(item=>item.username.toLowerCase());
-    if(successful.length) await db.query("UPDATE pppoe_users u SET comment='EXP: ' || c.expiration_date::text, expiry_date=c.expiration_date, synced_at=NOW(), updated_at=NOW() FROM customers c WHERE LOWER(u.username)=LOWER(c.username) AND LOWER(u.username)=ANY($1::text[])",[successful]);
+    for(const row of eligible.filter(item=>successful.includes(item.username.toLowerCase()))){
+      await db.query("UPDATE pppoe_users SET comment=$1,expiry_date=$2::date,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($3)",[row.comment,row.expiryDate,row.username]);
+    }
     const skipped=(customers.length-eligible.length)+(sync.skipped||0);
-    return res.json({success:(sync.failed||0)===0,total:customers.length,eligible:eligible.length,updated:sync.updated||0,skipped,failed:sync.failed||0,results:sync.results||[],message:"EXP dates pushed to MikroTik. PPPoE profiles, passwords, and disabled states were not changed."});
+    return res.json({success:(sync.failed||0)===0,total:customers.length,eligible:eligible.length,updated:sync.updated||0,skipped,failed:sync.failed||0,results:sync.results||[],message:"EXP dates and customer name/phone comments pushed to MikroTik. PPPoE profiles, passwords, and disabled states were not changed."});
   }catch(error){console.error("[CUSTOMER EXP SYNC]",error);return res.status(503).json({success:false,message:error.message||"Unable to sync customer expiry dates to MikroTik."});}
 }
 async function getCustomerSyncDiagnostics(req,res){
