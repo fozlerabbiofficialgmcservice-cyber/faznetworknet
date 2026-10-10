@@ -129,7 +129,8 @@ async function syncFromRouter(options = {}) {
           if (existingCustomer.rows.length) {
             summary.existingCustomers++;
           } else {
-            const importedName = (String(comment).match(/Customer:\s*([^|]+)/i)?.[1] || username).trim().slice(0, 200);
+            const commentText = String(comment || "").trim();
+            const importedName = (commentText.match(/Customer:\s*([^|]+)/i)?.[1] || commentText.split("|")[0] || username).trim().slice(0, 200) || username;
             const importedExpiry = extractExpiryDate(comment) || null;
             const importedProfile = String(user.profile || "Imported").trim().slice(0, 100) || "Imported";
             const phoneFromComment = extractPhone(comment).slice(0, 40);

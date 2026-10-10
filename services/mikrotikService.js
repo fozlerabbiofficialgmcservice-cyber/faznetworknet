@@ -314,7 +314,8 @@ class MikroTikService {
         const secret = secrets.get(username.toLowerCase());
         if (!secret || !secret[".id"]) { skipped++; results.push({username,status:"skipped",reason:"PPPoE secret not found on MikroTik."}); continue; }
         try {
-          const comment = this._str(customer.comment).trim() || ("EXP: " + expiryDate);
+          const customerName = this._str(customer.name || customer.fullName || customer.full_name || customer.customerName || customer.customer_name || username).trim().replace(/[|\r\n]+/g, " ").slice(0, 200) || username;
+          const comment = customerName + " | EXP: " + expiryDate;
           await connection.write("/ppp/secret/set", ["=.id=" + secret[".id"], "=comment=" + comment]);
           updated++;
           results.push({username,status:"updated",comment});
