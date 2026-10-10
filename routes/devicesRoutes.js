@@ -5,4 +5,5 @@ router.get("/", controller.list);
 router.post("/", controller.create);
 router.delete("/:id", controller.remove);
 router.get("/mikrotik/discover", controller.discoverMikrotik);
+router.post("/network-map/discover", controller.discoverNetworkMap);
 module.exports = router;
