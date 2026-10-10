@@ -4,8 +4,18 @@ const DEFAULT_DATABASE_URL = "postgresql://faznetwork_db_user:yzIAqmOwHF7iTgmgIL
 let pool;
 let dbConnected = false;
 let warnedDatabaseFailure = false;
+let warnedFallbackDatabase = false;
 
-function getDatabaseUrl() { return String(process.env.DATABASE_URL || DEFAULT_DATABASE_URL).trim(); }
+function getDatabaseUrl() {
+  const configured = String(process.env.DATABASE_URL || "").trim();
+  if (configured) return configured;
+  // Never print the fallback URL or credentials.
+  if (!warnedFallbackDatabase) {
+    warnedFallbackDatabase = true;
+    console.error("[Database] CRITICAL: DATABASE_URL is not set; using the legacy fallback database. Verify Render environment configuration.");
+  }
+  return DEFAULT_DATABASE_URL;
+}
 function isConfigured() { return Boolean(getDatabaseUrl()); }
 
 function getPool() {
