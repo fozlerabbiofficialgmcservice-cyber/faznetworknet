@@ -8,4 +8,5 @@ router.use(requireRole(['super_admin', 'admin']));
 router.get('/', controller.listUsers);
 router.post('/', controller.createUser);
 router.patch('/:id/status', controller.updateUserStatus);
+router.delete('/:id', controller.deleteUser);
 module.exports = router;
