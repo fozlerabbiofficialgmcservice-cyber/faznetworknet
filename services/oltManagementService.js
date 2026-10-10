@@ -37,16 +37,16 @@ function validatePrivateIPv4(value) {
 function validateConfig(body = {}) {
   const name = String(body.name || '').trim().slice(0,120);
   const host = String(body.managementIp || '').trim();
-  const port = Number(body.port || (String(body.protocol || 'https').toLowerCase() === 'https' ? 443 : 80));
-  const protocol = String(body.protocol || 'http').toLowerCase();
+  const accessMethod = String(body.accessMethod || 'detect').toLowerCase();
+  const port = Number(body.port || 80);
   if (!name) return { error: 'Device name is required.' };
   const hostError = validatePrivateIPv4(host);
   if (hostError) return { error: hostError };
-  if (!['http','https'].includes(protocol)) return { error: 'Select HTTP or HTTPS based on the OLT web interface.' };
+  if (!['detect','http','https'].includes(accessMethod)) return { error: 'Select Auto Detect, HTTP, or HTTPS.' };
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: 'Port must be an integer from 1 to 65535.' };
   const username = String(body.username || '').trim().slice(0,160);
   const password = String(body.password || '');
   if (password.length > 1024) return { error: 'Password is too long.' };
-  return { value: { name, managementIp: host, protocol, port, username, password } };
+  return { value: { name, managementIp: host, accessMethod, protocol: accessMethod === 'https' ? 'https' : 'http', port, username, password } };
 }
 module.exports = { encrypt, decrypt, validateConfig, validatePrivateIPv4 };
