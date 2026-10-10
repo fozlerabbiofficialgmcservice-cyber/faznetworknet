@@ -191,6 +191,8 @@ async function verifyTrx(req,res){
    return res.status(404).json({success:false,error:"Transaction not found. Please wait for SMS verification."});
   }
   const tx=q.rows[0];
+  const requestedMethod=String(body.paymentMethod||body.gateway||"").trim().toLowerCase();
+  if(requestedMethod&&["bkash","nagad","rocket","upay"].includes(requestedMethod)&&String(tx.channel||"").trim().toLowerCase()!==requestedMethod)return res.status(400).json({success:false,error:"The TrxID was recorded under a different payment method. Select the method used to send the money."});
   const amount=Number(tx.amount),requestedAmount=Number(body.amount||0);
   if(tx.matched_username){
    const linked=await db.query("SELECT 1 FROM pppoe_users WHERE LOWER(username)=LOWER($1) UNION ALL SELECT 1 FROM customers WHERE LOWER(username)=LOWER($1) LIMIT 1",[String(tx.matched_username)]);
@@ -203,9 +205,12 @@ async function verifyTrx(req,res){
   let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
   if(!profileMetadata||typeof profileMetadata!=="object"||Array.isArray(profileMetadata))profileMetadata={};
   const hotspotProfiles=await mikrotikService.getHotspotProfiles();
+  const requestedProfile=String(body.profileName||body.profile_name||"").trim();
   const matchingProfiles=hotspotProfiles.filter(item=>{
-   const metadata=profileMetadata[String(item.name||"")]||{};
-   return Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
+   const profileName=String(item.name||"");
+   const metadata=profileMetadata[profileName]||{};
+   const priceMatches=Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
+   return priceMatches&&(!requestedProfile||profileName===requestedProfile);
   });
   if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
   const hotspotProfile=matchingProfiles[0];

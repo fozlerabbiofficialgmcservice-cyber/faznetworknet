@@ -105,7 +105,13 @@ app.get("/",async (req,res)=>{
     }catch(hotspotErr){
       console.warn("[Home Route] Saved hotspot metadata unavailable:",hotspotErr.message);
     }
-    return res.render("index",{title:res.locals.brandSettings?.company_name||"FAZ NETWORK",officeAddress,helpline,packages,hotspotPackages,error:null,success:null});
+    let paymentAccounts={bkash:"",nagad:"",rocket:"",upay:""};
+    try{
+      const accountRows=await db.query("SELECT key,value FROM app_settings WHERE key=ANY($1::varchar[])",[["mfs_bkash_number","mfs_nagad_number","mfs_rocket_number","mfs_upay_number"]]);
+      const accountValues=Object.fromEntries((accountRows.rows||[]).map(row=>[row.key,String(row.value||"").trim()]));
+      paymentAccounts={bkash:accountValues.mfs_bkash_number||"",nagad:accountValues.mfs_nagad_number||"",rocket:accountValues.mfs_rocket_number||"",upay:accountValues.mfs_upay_number||""};
+    }catch(paymentSettingsError){console.warn("[Home Route] MFS payment accounts unavailable:",paymentSettingsError.message);}
+    return res.render("index",{title:res.locals.brandSettings?.company_name||"FAZ NETWORK",officeAddress,helpline,packages,hotspotPackages,paymentAccounts,error:null,success:null});
   }catch(err){
     console.error("[CRITICAL] Error rendering public homepage:",err);
     return res.status(500).send("Service is initializing. Please refresh in a moment.");
