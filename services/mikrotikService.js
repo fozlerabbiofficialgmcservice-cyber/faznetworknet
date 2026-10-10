@@ -273,9 +273,11 @@ class MikroTikService {
           const canonicalComment = /^\d{4}-\d{2}-\d{2}$/.test(expiryDate)
             ? "EXP: " + expiryDate
             : this._str(customer.comment).trim();
+          const callerId = this._str(customer.callerId || customer.caller_id || customer.macAddress || customer.mac_address).trim();
           const params = this._writeParams({
             password,
             profile,
+            "caller-id": callerId || undefined,
             comment: canonicalComment,
             disabled: customer.disabled ? "yes" : "no"
           });
@@ -289,6 +291,7 @@ class MikroTikService {
               password,
               service: "pppoe",
               profile,
+              "caller-id": callerId || undefined,
               comment: canonicalComment,
               disabled: customer.disabled ? "yes" : "no"
             }));

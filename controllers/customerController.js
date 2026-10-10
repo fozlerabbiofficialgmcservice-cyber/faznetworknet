@@ -309,7 +309,7 @@ async function syncPanelCustomersToMikroTik(req,res){
     // This is an explicit admin push from the current Billing Panel records.
     // Tombstoned usernames are excluded defensively, even if a damaged database
     // somehow contains both a current customer row and a deletion tombstone.
-    const result=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
+    const result=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
       FROM customers c
       LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE c.username IS NOT NULL AND BTRIM(c.username)<>''
@@ -331,6 +331,7 @@ async function syncPanelCustomersToMikroTik(req,res){
       const finalStatus=expired?"expired":(disabled?"suspended":dateStatus(expiry));
       return {
         id:customer.id,username,password:customer.password||"",profile,comment,disabled,
+        callerId:clean(customer.onu_mac,100),
         phone:formatBdPhoneNumber(customer.phone)==="—"?"":formatBdPhoneNumber(customer.phone),
         expirationDate:expiry,finalStatus
       };
