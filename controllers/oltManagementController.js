@@ -33,9 +33,9 @@ exports.saveConfig = async (req,res) => {
     await db.withTransaction(async client => {
       await client.query(
         `INSERT INTO olt_connections(id,name,management_ip,protocol,access_method,port,username,encrypted_password,local_management_ip,local_port,vpn_forwarded_ip,vpn_forwarded_port,endpoint_mode,connection_status,last_test_at,last_http_status,last_error,updated_at)
-         VALUES(1,$1,$2::inet,$3,$4,$5,$6,$7,$8::inet,$9,NULLIF($10,0),NULLIF($11,0),$12,'not_tested',NULL,NULL,NULL,NOW())
+         VALUES(1,$1,$2::inet,$3,$4,$5,$6,$7,$8::inet,$9,$10,$11,$12,'not_tested',NULL,NULL,NULL,NOW())
          ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,management_ip=EXCLUDED.management_ip,protocol=EXCLUDED.protocol,access_method=EXCLUDED.access_method,port=EXCLUDED.port,username=EXCLUDED.username,encrypted_password=EXCLUDED.encrypted_password,local_management_ip=EXCLUDED.local_management_ip,local_port=EXCLUDED.local_port,vpn_forwarded_ip=EXCLUDED.vpn_forwarded_ip,vpn_forwarded_port=EXCLUDED.vpn_forwarded_port,endpoint_mode=EXCLUDED.endpoint_mode,connection_status='not_tested',last_test_at=NULL,last_http_status=NULL,last_error=NULL,updated_at=NOW()`,
-        [c.name,c.managementIp,c.protocol,c.accessMethod,c.port,c.username || null,passwordCipher,c.localManagementIp,c.localPort,c.vpnForwardedIp || null,c.vpnForwardedIp ? c.vpnForwardedPort : 0,c.endpointMode]
+        [c.name,c.managementIp,c.protocol,c.accessMethod,c.port,c.username || null,passwordCipher,c.localManagementIp,c.localPort,c.vpnForwardedIp || null,c.vpnForwardedPort,c.endpointMode]
       );
       await client.query(
         'INSERT INTO admin_audit_logs(actor_user_id,actor_username,actor_role,action,details,ip_address) VALUES($1,$2,$3,$4,$5::jsonb,$6)',
