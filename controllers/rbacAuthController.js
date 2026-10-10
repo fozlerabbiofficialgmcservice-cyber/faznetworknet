@@ -71,10 +71,20 @@ function establishSession(req, res, user, nextTarget) {
     req.session.userId = user.id || null;
     req.session.legacySuperAdmin = user.legacy === true;
     req.session.loginAt = Date.now();
-    req.session.save(saveErr => {
+    req.session.save(async saveErr => {
       if (saveErr) {
         console.error('[RBAC] Session save failed:', saveErr.message);
         return res.status(500).render('login', { next: safeNext(nextTarget), error: 'Could not save your session. Please retry.' });
+      }
+      if (user.completeFirstLogin) {
+        try {
+          await db.query('UPDATE admin_users SET is_first_login=FALSE, otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [user.id]);
+        } catch (error) {
+          console.error('[RBAC OTP] Could not finalize first login:', error.message);
+          return req.session.destroy(() => res.status(503).render('verify-otp', { error: 'Could not finalize verification. Please sign in and request a new code.' }));
+        }
+      } else if (user.id) {
+        db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [user.id]).catch(() => {});
       }
       return res.redirect(safeNext(nextTarget));
     });
@@ -156,17 +166,21 @@ async function verifyOtp(req, res) {
   try {
     const result = await db.query('SELECT id, username, email, role, is_first_login, otp_code_hash, otp_expires_at, otp_attempts, status FROM admin_users WHERE id=$1 LIMIT 1', [userId]);
     const user = result.rows?.[0];
+    if (user && Number(user.otp_attempts || 0) >= MAX_OTP_ATTEMPTS) {
+      await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$1', [userId]);
+      return req.session.destroy(() => res.redirect('/login'));
+    }
     const valid = user && user.status === 'active' && user.is_first_login === true &&
-      user.otp_expires_at && new Date(user.otp_expires_at).getTime() > Date.now() &&
+      user.otp_code_hash && user.otp_expires_at && new Date(user.otp_expires_at).getTime() > Date.now() &&
       safeEqualHex(user.otp_code_hash, hashOtp(userId, code));
     if (!valid) {
       req.session.pendingOtpAttempts = Number(req.session.pendingOtpAttempts || 0) + 1;
+      await db.query('UPDATE admin_users SET otp_attempts=otp_attempts+1, otp_code_hash=CASE WHEN otp_attempts+1 >= $2 THEN NULL ELSE otp_code_hash END, otp_expires_at=CASE WHEN otp_attempts+1 >= $2 THEN NULL ELSE otp_expires_at END WHERE id=$1', [userId, MAX_OTP_ATTEMPTS]).catch(() => {});
       await req.session.save(() => {});
       return res.status(400).render('verify-otp', { error: 'Invalid or expired code. Check the email and try again.' });
     }
-    await db.query('UPDATE admin_users SET is_first_login=FALSE, otp_code_hash=NULL, otp_expires_at=NULL, last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [user.id]);
     const nextTarget = safeNext(req.session.pendingOtpNext);
-    return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget);
+    return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role), completeFirstLogin: true }, nextTarget);
   } catch (error) {
     console.error('[RBAC OTP] Verification failed:', error.message);
     return res.status(503).render('verify-otp', { error: 'Verification service is unavailable. Please retry.' });
