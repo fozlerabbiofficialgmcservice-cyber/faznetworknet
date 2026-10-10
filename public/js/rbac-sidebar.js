@@ -94,4 +94,73 @@
     }catch(error){result.className='small text-danger';result.textContent=error.message;}
     finally{button.disabled=false;}
   });
+  window.loadSupportTickets=async function(){
+    if(typeof window.switchView==='function')window.switchView('support-tickets');
+    const tbody=document.getElementById('rbacTicketsBody');
+    if(!tbody)return;
+    const createCard=document.getElementById('rbacTicketCreateCard');
+    if(createCard)createCard.hidden=role==='staff';
+    tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted py-4">Loading tickets…</td></tr>';
+    try{
+      const response=await fetch('/api/admin/security/tickets',{credentials:'same-origin',headers:{Accept:'application/json'}});
+      const data=await response.json();
+      if(!response.ok||!data.success)throw new Error(data.message||'Unable to load tickets.');
+      let staff=[];
+      if(role!=='staff'){
+        const staffResponse=await fetch('/api/admin/security/staff',{credentials:'same-origin',headers:{Accept:'application/json'}});
+        const staffData=await staffResponse.json();
+        if(staffResponse.ok&&staffData.success)staff=staffData.staff||[];
+        const assignee=document.getElementById('ticketAssignee');
+        if(assignee)assignee.innerHTML='<option value="">Unassigned</option>'+staff.map(s=>'<option value="'+Number(s.id)+'">'+esc(s.username)+'</option>').join('');
+      }
+      const statusOptions=['open','in_progress','resolved','closed'];
+      tbody.innerHTML=(data.tickets||[]).map(ticket=>{
+        const created=ticket.created_at?new Date(ticket.created_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
+        const actions=role==='staff'?'—':'<div class="d-flex flex-wrap gap-1"><select class="form-select form-select-sm" data-ticket-status="'+Number(ticket.id)+'">'+statusOptions.map(s=>'<option value="'+s+'" '+(s===ticket.status?'selected':'')+'>'+s.replace('_',' ')+'</option>').join('')+'</select><select class="form-select form-select-sm" data-ticket-assignee="'+Number(ticket.id)+'"><option value="">Unassigned</option>'+staff.map(s=>'<option value="'+Number(s.id)+'" '+(Number(s.id)===Number(ticket.assigned_to_user_id)?'selected':'')+'>'+esc(s.username)+'</option>').join('')+'</select><button class="btn btn-sm btn-outline-success" data-ticket-save="'+Number(ticket.id)+'">Save</button></div>';
+        return '<tr><td><strong>#'+Number(ticket.id)+' '+esc(ticket.title)+'</strong><div class="small text-muted">'+esc(ticket.description)+'</div></td><td>'+esc(ticket.customer_username||'—')+'</td><td><span class="badge text-bg-'+(ticket.priority==='urgent'?'danger':ticket.priority==='high'?'warning':'secondary')+'">'+esc(ticket.priority)+'</span></td><td>'+esc(ticket.status)+'</td><td>'+esc(ticket.assigned_to_username||'Unassigned')+'</td><td>'+esc(created)+'</td><td>'+actions+'</td></tr>';
+      }).join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No tickets found.</td></tr>';
+      tbody.querySelectorAll('[data-ticket-save]').forEach(button=>button.addEventListener('click',async()=>{
+        button.disabled=true;
+        try{
+          const id=button.dataset.ticketSave;
+          const status=tbody.querySelector('[data-ticket-status="'+id+'"]').value;
+          const assigned=tbody.querySelector('[data-ticket-assignee="'+id+'"]').value;
+          const response=await fetch('/api/admin/security/tickets/'+id,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({status,assigned_to_user_id:assigned})});
+          const data=await response.json();
+          if(!response.ok||!data.success)throw new Error(data.message||'Unable to update ticket.');
+          await window.loadSupportTickets();
+        }catch(error){window.alert(error.message);button.disabled=false;}
+      }));
+    }catch(error){tbody.innerHTML='<tr><td colspan="7" class="text-danger text-center py-4">'+esc(error.message)+'</td></tr>';}
+  };
+  window.loadAuditLogs=async function(){
+    if(role!=='super_admin'){window.alert('Only Super Admin can view audit logs.');return;}
+    if(typeof window.switchView==='function')window.switchView('audit-logs');
+    const tbody=document.getElementById('rbacAuditBody');
+    if(!tbody)return;
+    tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted py-4">Loading audit logs…</td></tr>';
+    try{
+      const response=await fetch('/api/admin/security/audit-logs?limit=100',{credentials:'same-origin',headers:{Accept:'application/json'}});
+      const data=await response.json();
+      if(!response.ok||!data.success)throw new Error(data.message||'Unable to load audit logs.');
+      tbody.innerHTML=(data.logs||[]).map(log=>'<tr><td>'+esc(log.created_at?new Date(log.created_at).toLocaleString('en-GB',{timeZone:'Asia/Dhaka'}):'—')+'</td><td>'+esc(log.actor_username)+'</td><td>'+esc(log.actor_role)+'</td><td>'+esc(log.action)+'</td><td>'+esc(log.target_user_id||'—')+'</td><td><code class="text-wrap">'+esc(JSON.stringify(log.details||{}))+'</code></td><td>'+esc(log.ip_address||'—')+'</td></tr>').join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No audit events recorded yet.</td></tr>';
+    }catch(error){tbody.innerHTML='<tr><td colspan="7" class="text-danger text-center py-4">'+esc(error.message)+'</td></tr>';}
+  };
+  const ticketForm=document.getElementById('rbacTicketForm');
+  if(ticketForm)ticketForm.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const result=document.getElementById('rbacTicketResult'),button=document.getElementById('rbacTicketSubmit');
+    result.className='small text-muted';result.textContent='Creating ticket…';button.disabled=true;
+    try{
+      const payload=Object.fromEntries(new FormData(ticketForm).entries());
+      if(!payload.assigned_to_user_id)payload.assigned_to_user_id=null;
+      const response=await fetch('/api/admin/security/tickets',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
+      const data=await response.json();
+      if(!response.ok||!data.success)throw new Error(data.message||'Unable to create ticket.');
+      result.className='small text-success';result.textContent='Ticket #'+data.ticket.id+' created.';ticketForm.reset();
+      await window.loadSupportTickets();
+    }catch(error){result.className='small text-danger';result.textContent=error.message;}
+    finally{button.disabled=false;}
+  });
+
 })();
