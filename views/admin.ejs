@@ -856,7 +856,7 @@
                             <div class="card-custom-header"><i class="bi bi-sliders text-success fs-5"></i><div><div class="fw-semibold">Billing &amp; Access Settings</div><small class="text-muted fw-normal">Optional settings available in Customer 360</small></div></div>
                             <div class="card-body p-4"><div class="row g-3">
                                 <div class="col-md-4"><label for="customerBillingCycle" class="form-label">Billing Cycle</label><select id="customerBillingCycle" class="form-select"><option value="monthly">Monthly</option><option value="15_days">15 Days</option><option value="30_days">30 Days</option><option value="custom_days">Custom Days</option></select></div>
-                                <div class="col-md-4" id="customerBillingDaysWrap"><label for="customerBillingDays" class="form-label">Custom Duration (Days)</label><input type="number" id="customerBillingDays" class="form-control" min="1" max="3650" step="1" placeholder="Optional"></div>
+                                <div class="col-md-4 d-none" id="customerBillingDaysWrap"><label for="customerBillingDays" class="form-label">Custom Duration (Days)</label><input type="number" id="customerBillingDays" class="form-control" min="1" max="3650" step="1" placeholder="Optional"></div>
                                 <div class="col-md-4"><label for="customerBillingStatus" class="form-label">Billing Status</label><select id="customerBillingStatus" class="form-select"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></div>
                                 <div class="col-md-6"><div class="form-check form-switch border rounded-3 bg-white p-3 ps-5"><input id="customerAutoExpire" class="form-check-input" type="checkbox" checked><label class="form-check-label fw-semibold" for="customerAutoExpire">Automatically enforce expiry</label><div class="small text-muted">When enabled, expired customers are disabled / moved to the configured expiry profile.</div></div></div>
                                 <div class="col-md-6"><div class="form-check form-switch border rounded-3 bg-white p-3 ps-5"><input id="customerAccountEnabled" class="form-check-input" type="checkbox" checked><label class="form-check-label fw-semibold" for="customerAccountEnabled">PPPoE Account Enabled</label><div class="small text-muted">Turn off to create/update this account as disabled.</div></div></div>
@@ -3602,6 +3602,7 @@ async function deletePlan(id,name){
                     billingDurationDays: String(valueOf('customerBillingDays')).trim(),
                     billingStatus: String(valueOf('customerBillingStatus')||'unpaid'),
                     billingExpiryOverride: !Boolean(document.getElementById('customerAutoExpire')?.checked),
+                    billing_expiry_override: !Boolean(document.getElementById('customerAutoExpire')?.checked),
                     disabled: !Boolean(document.getElementById('customerAccountEnabled')?.checked),
                     remarks: String(valueOf('customerRemarks')).trim()
                 };
