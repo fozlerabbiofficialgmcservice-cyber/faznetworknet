@@ -405,3 +405,96 @@ CREATE INDEX IF NOT EXISTS idx_network_devices_management_ip ON network_devices(
 ALTER TABLE network_devices ADD COLUMN IF NOT EXISTS management_port INTEGER CHECK (management_port IS NULL OR management_port BETWEEN 1 AND 65535);
 ALTER TABLE network_devices ADD COLUMN IF NOT EXISTS management_username VARCHAR(160);
 ALTER TABLE network_devices ADD COLUMN IF NOT EXISTS encrypted_management_password TEXT;
+
+
+-- Universal network mapping foundation: append-only observations and explicit relationships.
+-- Additive only: existing customer, billing, and device records are not rewritten.
+CREATE TABLE IF NOT EXISTS network_discovery_sources (
+  id BIGSERIAL PRIMARY KEY,
+  device_id BIGINT NOT NULL REFERENCES network_devices(id) ON DELETE CASCADE,
+  source_key VARCHAR(120) NOT NULL,
+  protocol VARCHAR(40) NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+  last_attempt_at TIMESTAMPTZ,
+  last_success_at TIMESTAMPTZ,
+  last_status VARCHAR(24) NOT NULL DEFAULT 'not_configured'
+    CHECK (last_status IN ('not_configured','pending','connected','partial','failed','disabled')),
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(device_id, source_key)
+);
+CREATE INDEX IF NOT EXISTS idx_network_discovery_sources_enabled
+  ON network_discovery_sources(enabled, protocol);
+
+CREATE TABLE IF NOT EXISTS network_discovery_runs (
+  id BIGSERIAL PRIMARY KEY,
+  source_id BIGINT REFERENCES network_discovery_sources(id) ON DELETE SET NULL,
+  device_id BIGINT REFERENCES network_devices(id) ON DELETE SET NULL,
+  run_type VARCHAR(40) NOT NULL DEFAULT 'scheduled',
+  status VARCHAR(24) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','running','succeeded','partial','failed','cancelled')),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ,
+  discovered_count INTEGER NOT NULL DEFAULT 0 CHECK (discovered_count >= 0),
+  matched_count INTEGER NOT NULL DEFAULT 0 CHECK (matched_count >= 0),
+  unmatched_count INTEGER NOT NULL DEFAULT 0 CHECK (unmatched_count >= 0),
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_network_discovery_runs_device_started
+  ON network_discovery_runs(device_id, started_at DESC);
+
+-- Observations preserve their source and evidence; ambiguous identities remain unmatched.
+CREATE TABLE IF NOT EXISTS network_observations (
+  id BIGSERIAL PRIMARY KEY,
+  discovery_run_id BIGINT REFERENCES network_discovery_runs(id) ON DELETE SET NULL,
+  source_device_id BIGINT REFERENCES network_devices(id) ON DELETE SET NULL,
+  customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
+  observation_type VARCHAR(48) NOT NULL,
+  identity_type VARCHAR(48),
+  identity_value VARCHAR(255),
+  observed_value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  match_status VARCHAR(24) NOT NULL DEFAULT 'unmatched'
+    CHECK (match_status IN ('matched','unmatched','ambiguous','unverified')),
+  match_confidence NUMERIC(5,4) CHECK (match_confidence IS NULL OR (match_confidence >= 0 AND match_confidence <= 1)),
+  evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+  observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_network_observations_customer_recent
+  ON network_observations(customer_id, observed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_network_observations_identity_recent
+  ON network_observations(identity_type, lower(identity_value), observed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_network_observations_unmatched_recent
+  ON network_observations(match_status, observed_at DESC);
+
+-- Explicit topology edges allow ONU->PON->OLT and router/session links without conflating MAC types.
+CREATE TABLE IF NOT EXISTS network_topology_links (
+  id BIGSERIAL PRIMARY KEY,
+  from_device_id BIGINT NOT NULL REFERENCES network_devices(id) ON DELETE CASCADE,
+  to_device_id BIGINT NOT NULL REFERENCES network_devices(id) ON DELETE CASCADE,
+  relationship VARCHAR(48) NOT NULL,
+  source_observation_id BIGINT REFERENCES network_observations(id) ON DELETE SET NULL,
+  match_status VARCHAR(24) NOT NULL DEFAULT 'unverified'
+    CHECK (match_status IN ('verified','unverified','stale','disputed')),
+  evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(from_device_id, to_device_id, relationship)
+);
+CREATE INDEX IF NOT EXISTS idx_network_topology_links_from ON network_topology_links(from_device_id);
+CREATE INDEX IF NOT EXISTS idx_network_topology_links_to ON network_topology_links(to_device_id);
+
+
+
+-- Automated ONU optical telemetry cache. Values are written only by a verified OLT collector.
+-- NULL means the OLT has not supplied a valid reading; no manual input is used.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_dbm NUMERIC(6,2)
+  CHECK (onu_rx_power_dbm IS NULL OR (onu_rx_power_dbm >= -50 AND onu_rx_power_dbm <= 10));
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_observed_at TIMESTAMPTZ;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS onu_rx_power_source_device_id BIGINT
+  REFERENCES network_devices(id) ON DELETE SET NULL;
