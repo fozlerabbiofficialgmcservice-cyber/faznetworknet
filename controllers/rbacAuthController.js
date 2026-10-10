@@ -432,6 +432,35 @@ async function createUser(req, res) {
   }
 }
 
+async function resendInvitation(req,res) {
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({success:false,message:'Invalid account ID.'});
+  try {
+    const result=await db.query("SELECT id,username,email,role,status,is_first_login FROM admin_users WHERE id=$1 LIMIT 1",[id]);
+    const user=result.rows[0];
+    if(!user)return res.status(404).json({success:false,message:'Account not found.'});
+    if(user.is_first_login!==true)return res.status(409).json({success:false,message:'This account has already completed verification.'});
+    if(req.auth?.role==='admin'&&user.role!=='staff')return res.status(403).json({success:false,message:'Admins may invite Staff accounts only.'});
+    if(req.auth?.role!=='admin'&&req.auth?.role!=='super_admin')return res.status(403).json({success:false,message:'Not authorized.'});
+    await db.query("UPDATE admin_invitations SET status='cancelled',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE target_user_id=$1 AND status='pending'",[id]);
+    const rawToken=crypto.randomBytes(32).toString('base64url');
+    const tokenHash=crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt=new Date(Date.now()+24*60*60*1000);
+    const invite=await db.query("INSERT INTO admin_invitations (username,email,role,target_user_id,token_hash,status,created_by,expires_at) VALUES ($1,$2,$3,$4,$5,'pending',$6,$7) RETURNING id,username,email,role,status,created_at,expires_at",[user.username,user.email,user.role,id,tokenHash,String(req.session.adminUser||'owner'),expiresAt]);
+    try { await sendInvitationEmail(invite.rows[0],rawToken); }
+    catch(mailError) {
+      await db.query("UPDATE admin_invitations SET status='failed',token_hash=NULL,updated_at=NOW() WHERE id=$1",[invite.rows[0].id]).catch(()=>{});
+      console.error('[RBAC invitation] Resend failed:',mailError.message);
+      return res.status(503).json({success:false,message:'Invitation email was NOT sent. Configure SMTP_HOST, SMTP_USER, SMTP_PASS and SMTP_FROM in Render.'});
+    }
+    await writeAudit(req,'admin_invitation_resent',id,{invitationId:invite.rows[0].id,email:user.email,role:user.role});
+    return res.json({success:true,message:'Invitation link sent to '+user.email+'.'});
+  } catch(error) {
+    console.error('[RBAC invitation] Resend failed:',error.message);
+    return res.status(500).json({success:false,message:'Unable to resend invitation.'});
+  }
+}
+
 async function listInvitations(req, res) {
   try {
     const result = req.auth?.role === 'super_admin'
@@ -521,13 +550,18 @@ async function acceptInvitation(req, res) {
       await db.query('UPDATE admin_invitations SET otp_attempts=otp_attempts+1,updated_at=NOW() WHERE id=$1',[invite.id]);
       return res.status(400).render('accept-invitation',{invitation:invite,token,error:'Invalid OTP. Please check the code and retry.'});
     }
-    const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
-    if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Contact the administrator.'});
     const passwordHash=await bcrypt.hash(password,12);
-    const created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
+    let created;
+    if(invite.target_user_id) {
+      created=await db.query("UPDATE admin_users SET password_hash=$1,role=$2,is_first_login=FALSE,otp_code_hash=NULL,otp_expires_at=NULL,otp_attempts=0,status='active',updated_at=NOW() WHERE id=$3 AND is_first_login=TRUE AND lower(email)=lower($4) RETURNING id,username,email,role,status,created_at",[passwordHash,invite.role,invite.target_user_id,invite.email]);
+      if(!created.rows.length)return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This account is no longer pending verification. Contact the administrator.'});
+    } else {
+      const exists=await db.query("SELECT 1 FROM admin_users WHERE lower(username)=lower($1) OR lower(email)=lower($2) LIMIT 1",[invite.username,invite.email]);
+      if(exists.rows.length) return res.status(409).render('accept-invitation',{invitation:invite,token,error:'This username or email has already been registered. Contact the administrator.'});
+      created=await db.query("INSERT INTO admin_users (username,email,password_hash,role,is_first_login,otp_code_hash,otp_expires_at,otp_attempts,status,created_by) VALUES ($1,$2,$3,$4,FALSE,NULL,NULL,0,'active',$5) RETURNING id,username,email,role,status,created_at",[invite.username,invite.email,passwordHash,invite.role,invite.created_by]);
+    }
     const consumed=await db.query("UPDATE admin_invitations SET status='accepted',token_hash=NULL,otp_code_hash=NULL,otp_expires_at=NULL,updated_at=NOW() WHERE id=$1 AND status='pending' RETURNING id",[invite.id]);
     if(!consumed.rows.length) {
-      await db.query('DELETE FROM admin_users WHERE id=$1',[created.rows[0].id]).catch(()=>{});
       return res.status(409).render('accept-invitation',{invitation:null,token:'',error:'This invitation has already been used or cancelled.'});
     }
     await writeAudit(req,'admin_invitation_accepted',created.rows[0].id,{invitationId:invite.id,username:invite.username,role:invite.role});
@@ -600,4 +634,4 @@ async function deleteUser(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, listInvitations, cancelInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, listInvitations, cancelInvitation, resendInvitation, showInvitation, sendInvitationOtp, acceptInvitation, updateUserStatus, deleteUser };
