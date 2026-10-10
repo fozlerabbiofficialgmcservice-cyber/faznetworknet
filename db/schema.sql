@@ -399,3 +399,9 @@ CREATE TABLE IF NOT EXISTS network_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_network_devices_type_name ON network_devices(device_type, lower(name));
 CREATE INDEX IF NOT EXISTS idx_network_devices_management_ip ON network_devices(management_ip);
+
+
+-- Optional OLT management endpoint credentials; passwords are encrypted by the application.
+ALTER TABLE network_devices ADD COLUMN IF NOT EXISTS management_port INTEGER CHECK (management_port IS NULL OR management_port BETWEEN 1 AND 65535);
+ALTER TABLE network_devices ADD COLUMN IF NOT EXISTS management_username VARCHAR(160);
+ALTER TABLE network_devices ADD COLUMN IF NOT EXISTS encrypted_management_password TEXT;
