@@ -15,7 +15,7 @@ async function audit(req, action, details) {
   );
 }
 async function currentConfig() {
-  const result = await db.query('SELECT id,name,management_ip::text AS "managementIp",local_management_ip::text AS "localManagementIp",local_port AS "localPort",vpn_forwarded_ip::text AS "vpnForwardedIp",vpn_forwarded_port AS "vpnForwardedPort",endpoint_mode AS "endpointMode",protocol,access_method AS "accessMethod",port,username,encrypted_password IS NOT NULL AS "hasPassword",CASE WHEN connection_status='connected' THEN 'not_tested' ELSE connection_status END AS "connectionStatus",last_test_at AS "lastTestAt",last_http_status AS "lastHttpStatus",last_error AS "lastError",updated_at AS "updatedAt" FROM olt_connections WHERE id=1');
+  const result = await db.query(`SELECT id,name,management_ip::text AS "managementIp",local_management_ip::text AS "localManagementIp",local_port AS "localPort",vpn_forwarded_ip::text AS "vpnForwardedIp",vpn_forwarded_port AS "vpnForwardedPort",endpoint_mode AS "endpointMode",protocol,access_method AS "accessMethod",port,username,encrypted_password IS NOT NULL AS "hasPassword",CASE WHEN connection_status='connected' THEN 'not_tested' ELSE connection_status END AS "connectionStatus",last_test_at AS "lastTestAt",last_http_status AS "lastHttpStatus",last_error AS "lastError",updated_at AS "updatedAt" FROM olt_connections WHERE id=1`);
   return result.rows[0] || null;
 }
 exports.getConfig = async (req,res) => {
