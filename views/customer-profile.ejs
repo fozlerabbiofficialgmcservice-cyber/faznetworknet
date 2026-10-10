@@ -23,7 +23,7 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 </section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body"><div class="row g-4">
 <div class="col-lg-6"><h5>Personal & Compliance</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">Full Name</div><div id="fullName">—</div></div><div class="col-md-6"><div class="label">Phone</div><div id="phone2">—</div></div><div class="col-md-6"><div class="label">Alternative Phone</div><div id="alt">—</div></div><div class="col-md-6"><div class="label">NID Number</div><div id="nid">—</div></div><div class="col-12"><div class="label">Installation Address</div><div id="address">—</div></div><div class="col-md-6"><div class="label">Area / Zone</div><div id="area">—</div></div><div class="col-md-6"><div class="label">Connection Date</div><div id="connection">—</div></div></div></div>
-<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div id="onuRxPowerValue" class="metric mono">Waiting for OLT…</div><div id="onuRxPowerSource" class="small text-muted mt-1">OLT integration deferred · no live reading yet</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
+<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div id="onuRxPowerValue" class="metric mono">Waiting for OLT…</div><div id="onuRxPowerSource" class="small text-muted mt-1">Waiting for local OLT collector…</div><div id="onuTelemetryStatus" class="small mt-1 text-muted">ONU status: —</div><div id="onuTxPowerValue" class="small mono mt-1">TX power: —</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
 </div></div></section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body">
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Universal Network Mapping</h5><div class="small text-muted">Cached read-only observations · reload does not trigger a new router scan</div></div><button id="refreshNetworkMap" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-repeat me-1"></i>Reload Observations</button></div>
@@ -60,6 +60,22 @@ async function loadNetworkMap(){
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
+  // Real OLT readings are served separately from the local push collector; never substitute router MAC for ONU MAC.
+  try {
+   const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
+   const t=td.telemetry;
+   if(t){
+    if(t.onuMac)$('onu').textContent=t.onuMac;
+    $('onuRxPowerValue').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'—';
+    $('onuRxPowerValue').className='metric mono '+(t.signalLevel==='weak'?'text-danger':t.signalLevel==='warning'?'text-warning':t.signalLevel==='good'?'text-success':'');
+    $('onuRxPowerSource').textContent=(t.stale?'STALE · ':'')+'OLT '+t.oltId+' · PON '+(t.ponPort||'—')+' · ONU '+t.onuId+' · observed '+new Date(t.observedAt).toLocaleString();
+    $('onuTelemetryStatus').textContent='ONU status: '+String(t.status||'unknown').toUpperCase()+(t.stale?' · telemetry stale':'');
+    $('onuTelemetryStatus').className='small mt-1 '+(t.stale?'text-warning':t.status==='online'?'text-success':'text-danger');
+    $('onuTxPowerValue').textContent='TX power: '+(t.txPowerDbm===null||t.txPowerDbm===undefined?'—':Number(t.txPowerDbm).toFixed(2)+' dBm');
+   } else {
+    $('onuTelemetryStatus').textContent='ONU status: awaiting verified OLT telemetry';
+   }
+  } catch(telemetryError) { $('onuTelemetryStatus').textContent='OLT telemetry unavailable · retrying'; }
   status.textContent=d.discoveryStatus==='observations_available'?'Observations available':'Awaiting first discovery';
   status.className='fw-semibold '+(d.discoveryStatus==='observations_available'?'text-success':'text-muted');
   last.textContent=d.lastObservedAt?new Date(d.lastObservedAt).toLocaleString():'No observations yet';
