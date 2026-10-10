@@ -64,7 +64,10 @@ def collect():
             if v is None: return None
             try: return round(float(v)*float(scale),2)
             except (TypeError,ValueError): return None
-        status_map={"online":"online","offline":"offline","los":"los"}\n        for env_key,normalized in (("ONU_STATUS_ONLINE_VALUE","online"),("ONU_STATUS_OFFLINE_VALUE","offline"),("ONU_STATUS_LOS_VALUE","los")):\n            configured=env(env_key)\n            if configured: status_map[configured.lower()]=normalized
+        status_map={"online":"online","offline":"offline","los":"los"}
+        for env_key,normalized in (("ONU_STATUS_ONLINE_VALUE","online"),("ONU_STATUS_OFFLINE_VALUE","offline"),("ONU_STATUS_LOS_VALUE","los")):
+            configured=env(env_key)
+            if configured: status_map[configured.lower()]=normalized
         rows.append({"onuId":key,"onuMac":mac.replace("-",":").lower(),"ponPort":pon,
             "status":status_map.get(status,"unknown"),
             "rxPowerDbm":power(rx,env("RX_POWER_SCALE","1")),
