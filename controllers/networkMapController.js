@@ -10,7 +10,7 @@ exports.getCustomerMap = async (req, res) => {
     if (!key) return res.status(400).json({ success: false, message: "Customer ID or username is required." });
 
     const customerResult = await db.query(
-      "SELECT id, username, onu_mac, fiber_box, onu_rx_power_dbm FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 2",
+      "SELECT c.id, c.username, c.onu_mac, c.fiber_box, c.onu_rx_power_dbm, c.onu_rx_power_observed_at, d.name AS rx_power_source FROM customers c LEFT JOIN network_devices d ON d.id=c.onu_rx_power_source_device_id WHERE c.id::text=$1 OR LOWER(c.username)=LOWER($1) LIMIT 2",
       [key]
     );
     if (customerResult.rows.length === 0) return res.status(404).json({ success: false, message: "Customer not found." });
@@ -34,7 +34,8 @@ exports.getCustomerMap = async (req, res) => {
     return res.json({
       success: true,
       customer: { id: customer.id, username: customer.username },
-      provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null, onuRxPowerDbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm) },
+      provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null },
+      rxPower: { dbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm), observedAt: customer.onu_rx_power_observed_at || null, sourceDevice: customer.rx_power_source || null, status: customer.onu_rx_power_observed_at ? "measured" : "awaiting_olt_reading" },
       routerMac: latest?.observationType === "pppoe_session" ? latest.observedValue?.routerMac || null : null,
       observations: observations.rows,
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
@@ -68,40 +69,3 @@ exports.getLatestSummary = async (req, res) => {
   }
 };
 
-
-exports.updateCustomerRxPower = async (req, res) => {
-  try {
-    const key = clean(req.params.id, 100);
-    if (!key) return res.status(400).json({ success: false, message: "Customer ID or username is required." });
-    const raw = req.body?.rxPowerDbm;
-    let value = null;
-    if (raw !== null && raw !== undefined && String(raw).trim() !== "") {
-      value = Number(raw);
-      if (!Number.isFinite(value) || value < -50 || value > 10) {
-        return res.status(400).json({ success: false, message: "RX power must be a numeric dBm value from -50 to +10, or blank to clear it." });
-      }
-      value = Math.round(value * 100) / 100;
-    }
-    const found = await db.query(
-      "SELECT id FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 2",
-      [key]
-    );
-    if (!found.rowCount) return res.status(404).json({ success: false, message: "Customer not found." });
-    if (found.rowCount !== 1) return res.status(409).json({ success: false, message: "Customer identity is ambiguous." });
-    const updated = await db.query(
-      "UPDATE customers SET onu_rx_power_dbm=$1,updated_at=NOW() WHERE id=$2 RETURNING id,username,onu_rx_power_dbm",
-      [value, found.rows[0].id]
-    );
-    return res.json({
-      success: true,
-      readOnlyNetworkConfig: false,
-      message: value === null ? "Configured RX power cleared." : "Configured RX power saved.",
-      customer: { id: updated.rows[0].id, username: updated.rows[0].username, rxPowerDbm: updated.rows[0].onu_rx_power_dbm === null ? null : Number(updated.rows[0].onu_rx_power_dbm) },
-      source: "manual_configuration",
-      note: "This value is manually configured; it is not an OLT-measured reading."
-    });
-  } catch (error) {
-    console.error("[Network map RX power update]", error?.message || error);
-    return res.status(503).json({ success: false, message: "RX power configuration could not be saved." });
-  }
-};
