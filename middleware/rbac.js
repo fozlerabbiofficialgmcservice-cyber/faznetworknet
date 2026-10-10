@@ -10,6 +10,7 @@ function normalizeRole(role) {
 function currentRole(req) {
   // The legacy shared credential intentionally remains a super-admin session.
   if (req.session?.legacySuperAdmin === true) return 'super_admin';
+  if (req.session?.isAdmin === true && !req.session?.role && !req.session?.userId) return 'super_admin';
   return normalizeRole(req.session?.role);
 }
 
