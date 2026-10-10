@@ -81,10 +81,11 @@ exports.syncTelemetry = [authenticateAgent, async (req,res) => {
       await client.query('BEGIN');
       for(const r of normalized) {
         await client.query(`
-          INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
-          VALUES ($1,$2,$3::macaddr,$4,$5,$6,$7,$8,$9,$10::jsonb,NOW())
+          INSERT INTO olt_telemetry (olt_id,onu_id,onu_mac,pppoe_username,pon_port,status,rx_power_dbm,tx_power_dbm,observed_at,source_agent,raw,received_at)
+          VALUES ($1,$2,$3::macaddr,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NOW())
           ON CONFLICT (olt_id,onu_id) DO UPDATE SET
             onu_mac=COALESCE(EXCLUDED.onu_mac,olt_telemetry.onu_mac),
+            pppoe_username=COALESCE(EXCLUDED.pppoe_username,olt_telemetry.pppoe_username),
             pon_port=COALESCE(EXCLUDED.pon_port,olt_telemetry.pon_port),
             status=EXCLUDED.status,rx_power_dbm=EXCLUDED.rx_power_dbm,tx_power_dbm=EXCLUDED.tx_power_dbm,
             observed_at=EXCLUDED.observed_at,source_agent=EXCLUDED.source_agent,raw=EXCLUDED.raw,received_at=NOW()
