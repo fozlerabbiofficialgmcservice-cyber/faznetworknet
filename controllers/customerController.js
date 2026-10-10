@@ -399,7 +399,6 @@ async function syncSingleCustomerToMikroTik(req,res){
     const found=await db.query(`SELECT c.id,c.username,c.password,c.profile,c.full_name,c.phone,c.onu_mac,c.expiration_date,c.remarks,c.status,c.billing_expiry_override,u.disabled AS router_disabled
       FROM customers c LEFT JOIN pppoe_users u ON LOWER(u.username)=LOWER(c.username)
       WHERE (c.id::text=$1 OR LOWER(c.username)=LOWER($1))
-        AND NOT EXISTS (SELECT 1 FROM customer_deletion_tombstones t WHERE LOWER(t.username)=LOWER(c.username))
       LIMIT 1`,[key]);
     const row=found.rows[0];
     if(!row)return res.status(404).json({success:false,message:"Customer not found or is marked deleted."});
