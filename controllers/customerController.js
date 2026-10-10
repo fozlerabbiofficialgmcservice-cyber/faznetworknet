@@ -149,17 +149,10 @@ function cleanAdminNote(value) {
 }
 
 function buildExpirationComment(fullName, phone, expirationDate, remarks) {
-  const customerName = clean(fullName, 200).replace(/\|/g, " ").trim();
-  const normalizedPhone = formatBdPhoneNumber(phone);
+  // MikroTik Winbox comment is reserved for the expiry date only.
+  // Keep ISO format so RouterOS comments remain unambiguous and machine-parseable.
   const formattedExpiration = formatRouterOsExpirationDate(expirationDate);
-  const parts = [];
-  if (customerName) parts.push("Customer: " + customerName);
-  if (normalizedPhone && normalizedPhone !== "—") parts.push("Phone: " + normalizedPhone);
-  if (formattedExpiration) {
-    const [year, month, day] = formattedExpiration.split("-");
-    parts.push("EXP: " + day + "/" + month + "/" + year);
-  }
-  return parts.join(" | ");
+  return formattedExpiration ? "EXP: " + formattedExpiration : "";
 }
 
 function extractExpirationDate(comment) {
