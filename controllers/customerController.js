@@ -246,7 +246,7 @@ async function createCustomer(req, res) {
         customer.onuMac || null, customer.remarks || null, customer.expirationDate,
         customer.alternativePhone || null, customer.oltPonPort || null, customer.distributionBox || null, customer.onuSerial || null, customer.fiberDropCore || null,
         customer.billingCycle, customer.billingCycle==="custom_days"?customer.billingDurationDays:null, customer.billingExpiryOverride, customer.billingStatus,
-        dateStatus(customer.expirationDate)==="expired"?"expired":customer.disabled?"inactive":"active"
+        (dateStatus(customer.expirationDate)==="expired"&&!customer.billingExpiryOverride)?"expired":customer.disabled?"inactive":"active"
       ]
     );
 
