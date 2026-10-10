@@ -241,6 +241,7 @@ async function updateUserStatus(req, res) {
     if (req.session.userId && Number(req.session.userId) === id && status === 'disabled') return res.status(400).json({ success: false, message: 'You cannot disable your own account.' });
     const result = await db.query('UPDATE admin_users SET status=$1, updated_at=NOW(), otp_code_hash=NULL, otp_expires_at=NULL WHERE id=$2 RETURNING id,username,email,role,status', [status, id]);
     if (!result.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
+    await writeAudit(req, 'admin_user_status_changed', id, { status });
     return res.json({ success: true, user: result.rows[0] });
   } catch (error) {
     console.error('[RBAC] Status update failed:', error.message);
