@@ -23,7 +23,7 @@ body{background:#f8fafc;font-family:Segoe UI,Arial,sans-serif;color:#0f172a}.her
 </section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body"><div class="row g-4">
 <div class="col-lg-6"><h5>Personal & Compliance</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">Full Name</div><div id="fullName">—</div></div><div class="col-md-6"><div class="label">Phone</div><div id="phone2">—</div></div><div class="col-md-6"><div class="label">Alternative Phone</div><div id="alt">—</div></div><div class="col-md-6"><div class="label">NID Number</div><div id="nid">—</div></div><div class="col-12"><div class="label">Installation Address</div><div id="address">—</div></div><div class="col-md-6"><div class="label">Area / Zone</div><div id="area">—</div></div><div class="col-md-6"><div class="label">Connection Date</div><div id="connection">—</div></div></div></div>
-<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
+<div class="col-lg-6"><h5>Network & Fiber</h5><div class="row g-3 mt-1"><div class="col-md-6"><div class="label">PPPoE Username</div><div id="user2" class="mono">—</div></div><div class="col-md-6"><div class="label">PPPoE Password</div><div class="input-group input-group-sm"><input id="pass" class="form-control mono" type="password" readonly><button id="showPass" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></button></div></div><div class="col-md-6"><div class="label">ONU MAC</div><div id="onu" class="mono">—</div></div><div class="col-md-6"><div class="label">ONU RX Power (dBm)</div><div class="input-group input-group-sm"><input id="onuRxPowerInput" class="form-control mono" type="number" min="-50" max="10" step="0.01" placeholder="e.g. -23.50" aria-label="ONU RX optical power in dBm"><button id="saveOnuRxPower" class="btn btn-outline-success" type="button">Save</button></div><div id="onuRxPowerSource" class="small text-muted mt-1">Not measured/configured</div></div><div class="col-md-6"><div class="label">Router MAC (MikroTik session)</div><div id="routerMac" class="mono">—</div><div class="small text-muted">Source: PPPoE caller-id; may be unavailable while offline.</div></div><div class="col-md-6"><div class="label">Splitter / Box</div><div id="box">—</div></div><div class="col-md-6"><div class="label">Fiber Core / Port</div><div id="core">—</div></div><div class="col-md-6"><div class="label">OLT PON Port</div><div id="olt">—</div></div><div class="col-md-6"><div class="label">Remote IP / Pool</div><div id="remote" class="mono">—</div></div></div></div>
 </div></div></section>
 <section class="card border-0 rounded-3 mb-3"><div class="card-body">
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3"><div><h5 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Universal Network Mapping</h5><div class="small text-muted">Read-only network observations · unmatched devices remain unassigned</div></div><button id="refreshNetworkMap" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-repeat me-1"></i>Refresh Map</button></div>
@@ -64,6 +64,9 @@ async function loadNetworkMap(){
   status.className='fw-semibold '+(d.discoveryStatus==='observations_available'?'text-success':'text-muted');
   last.textContent=d.lastObservedAt?new Date(d.lastObservedAt).toLocaleString():'No observations yet';
   mac.textContent=d.routerMac||'—';
+  const rxInput=$('onuRxPowerInput');
+  if(document.activeElement!==rxInput)rxInput.value=d.provisioned?.onuRxPowerDbm??'';
+  $('onuRxPowerSource').textContent=d.provisioned?.onuRxPowerDbm!==null&&d.provisioned?.onuRxPowerDbm!==undefined?'Manual configuration · not an OLT live reading':'Not measured/configured · awaiting verified OLT integration';
   const list=Array.isArray(d.observations)?d.observations:[];
   rows.innerHTML=list.length?list.map(o=>'<tr><td>'+esc(o.observationType||'—')+'</td><td class="mono">'+esc(o.identityValue||'—')+'</td><td>'+esc(o.matchStatus||'—')+'</td><td>'+esc(o.sourceDevice||'—')+'</td><td>'+esc(o.observedAt?new Date(o.observedAt).toLocaleString():'—')+'</td></tr>').join(''):'<tr><td colspan="5" class="text-muted text-center py-3">No network observations recorded yet. Run read-only discovery from Device Management.</td></tr>';
  }catch(e){
@@ -75,6 +78,22 @@ async function loadNetworkMap(){
 async function load(){try{state=await api('/api/customers/'+encodeURIComponent(id)+'/profile');render();await loadAuditLogs()}catch(e){toast(e.message,'danger')}}
 let livePollBusy=false;
 $('refreshNetworkMap')?.addEventListener('click',loadNetworkMap);
+$('saveOnuRxPower')?.addEventListener('click',async()=>{
+ const button=$('saveOnuRxPower'),input=$('onuRxPowerInput'),source=$('onuRxPowerSource');
+ button.disabled=true;
+ try{
+  const value=input.value.trim();
+  const result=await api('/api/network-map/customers/'+encodeURIComponent(id)+'/rx-power',{
+   method:'PUT',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({rxPowerDbm:value===''?null:Number(value)})
+  });
+  input.value=result.customer.rxPowerDbm??'';
+  source.textContent=result.customer.rxPowerDbm===null?'Not configured':'Manual configuration · not an OLT live reading';
+  toast(result.message||'RX power configuration saved');
+ }catch(e){toast(e.message||'Unable to save RX power','danger')}
+ finally{button.disabled=false}
+});
 async function loadLiveSession(){
  if(livePollBusy)return;livePollBusy=true;
  try{
