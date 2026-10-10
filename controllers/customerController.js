@@ -391,6 +391,8 @@ async function syncExpiryDatesToMikroTik(req,res){
 }
 async function getCustomerSyncDiagnostics(req,res){
   try{
+    const databaseRuntimeStatus = db.getStatus();
+    const databaseIdentityResult = await db.query("SELECT current_database() AS database_name, current_schema() AS schema_name");
     const [
       customerCountResult,
       pppoeCountResult,
@@ -427,6 +429,13 @@ async function getCustomerSyncDiagnostics(req,res){
     return res.json({
       success:true,
       checkedAt:new Date().toISOString(),
+      database:{
+        configured:databaseRuntimeStatus.configured,
+        source:databaseRuntimeStatus.source,
+        connected:databaseRuntimeStatus.connected,
+        databaseName:databaseIdentityResult.rows[0]?.database_name||null,
+        schemaName:databaseIdentityResult.rows[0]?.schema_name||null
+      },
       counts:{
         panelCustomers:customerCountResult.rows[0]?.count||0,
         pppoeUsersInDatabase:pppoeCountResult.rows[0]?.count||0,
