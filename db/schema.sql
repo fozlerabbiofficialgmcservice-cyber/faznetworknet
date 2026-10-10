@@ -265,7 +265,7 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_cycle TEXT NOT NULL DEFAU
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_duration_days INTEGER;
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS billing_expiry_override BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_billing_cycle_check;
-ALTER TABLE customers ADD CONSTRAINT customers_billing_cycle_check CHECK (billing_cycle IN ('monthly','custom_days'));
+ALTER TABLE customers ADD CONSTRAINT customers_billing_cycle_check CHECK (billing_cycle IN ('monthly','15_days','30_days','custom_days'));
 ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_billing_duration_days_check;
 ALTER TABLE customers ADD CONSTRAINT customers_billing_duration_days_check CHECK (billing_duration_days IS NULL OR billing_duration_days BETWEEN 1 AND 3650);
 

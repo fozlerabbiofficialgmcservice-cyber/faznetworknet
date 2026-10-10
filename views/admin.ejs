@@ -908,6 +908,17 @@
                         </div>
 
                         <div class="card card-custom mb-4">
+                            <div class="card-custom-header"><i class="bi bi-sliders text-success fs-5"></i><div><div class="fw-semibold">Billing &amp; Access Settings</div><small class="text-muted fw-normal">Optional settings available in Customer 360</small></div></div>
+                            <div class="card-body p-4"><div class="row g-3">
+                                <div class="col-md-4"><label for="customerBillingCycle" class="form-label">Billing Cycle</label><select id="customerBillingCycle" class="form-select"><option value="monthly">Monthly</option><option value="15_days">15 Days</option><option value="30_days">30 Days</option><option value="custom_days">Custom Days</option></select></div>
+                                <div class="col-md-4 d-none" id="customerBillingDaysWrap"><label for="customerBillingDays" class="form-label">Custom Duration (Days)</label><input type="number" id="customerBillingDays" class="form-control" min="1" max="3650" step="1" placeholder="Optional"></div>
+                                <div class="col-md-4"><label for="customerBillingStatus" class="form-label">Billing Status</label><select id="customerBillingStatus" class="form-select"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></div>
+                                <div class="col-md-6"><div class="form-check form-switch border rounded-3 bg-white p-3 ps-5"><input id="customerAutoExpire" class="form-check-input" type="checkbox" checked><label class="form-check-label fw-semibold" for="customerAutoExpire">Automatically enforce expiry</label><div class="small text-muted">When enabled, expired customers are disabled / moved to the configured expiry profile.</div></div></div>
+                                <div class="col-md-6"><div class="form-check form-switch border rounded-3 bg-white p-3 ps-5"><input id="customerAccountEnabled" class="form-check-input" type="checkbox" checked><label class="form-check-label fw-semibold" for="customerAccountEnabled">PPPoE Account Enabled</label><div class="small text-muted">Turn off to create/update this account as disabled.</div></div></div>
+                            </div></div>
+                        </div>
+
+                        <div class="card card-custom mb-4">
                             <div class="card-custom-header p-0">
                                 <button class="btn w-100 text-start px-4 py-3 d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#customerComplianceCollapse" aria-expanded="false" aria-controls="customerComplianceCollapse">
                                     <i class="bi bi-file-earmark-text text-success fs-5"></i><span><span class="fw-semibold d-block">Optional Compliance &amp; Network Info</span><small class="text-muted fw-normal">NID, installation and network reference details</small></span><i class="bi bi-chevron-down ms-auto"></i>
@@ -917,9 +928,14 @@
                                 <div class="card-body p-4">
                                     <div class="row g-4">
                                         <div class="col-md-6"><label for="nidNumber" class="form-label">NID / Smart Card Number</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-person-vcard"></i></span><input type="text" class="form-control" id="nidNumber" placeholder="Optional"></div></div>
-                                        <div class="col-md-6"><label for="installationAddress" class="form-label">Installation Address / Area / Zone</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-geo-alt"></i></span><input type="text" class="form-control" id="installationAddress" placeholder="House, road, area or zone"></div></div>
-                                        <div class="col-md-6"><label for="fiberBox" class="form-label">Fiber Box / Splitter / ONU MAC</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-diagram-3"></i></span><input type="text" class="form-control" id="fiberBox" placeholder="Optional network reference"></div></div>
-                                        <div class="col-md-6"><label for="onuMac" class="form-label">ONU MAC Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-hdd-network"></i></span><input type="text" class="form-control" id="onuMac" placeholder="AA:BB:CC:DD:EE:FF"></div></div>
+                                        <div class="col-md-6"><label for="alternativePhone" class="form-label">Alternative / Emergency Phone</label><input type="tel" class="form-control" id="alternativePhone" placeholder="Optional"></div>
+                                        <div class="col-md-6"><label for="installationAddress" class="form-label">Installation Address</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-geo-alt"></i></span><input type="text" class="form-control" id="installationAddress" placeholder="House, road, area or zone"></div></div>
+                                        <div class="col-md-6"><label for="areaZone" class="form-label">Area / Zone</label><input type="text" class="form-control" id="areaZone" placeholder="Optional area or service zone"></div>
+                                        <div class="col-md-4"><label for="oltPonPort" class="form-label">OLT / PON Port</label><input type="text" class="form-control" id="oltPonPort" placeholder="Optional — OLT-1 / PON-3"></div>
+                                        <div class="col-md-4"><label for="fiberBox" class="form-label">Distribution Box / Splitter</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-diagram-3"></i></span><input type="text" class="form-control" id="fiberBox" placeholder="Optional network reference"></div></div>
+                                        <div class="col-md-4"><label for="onuMac" class="form-label">ONU / Router MAC (Caller ID)</label><div class="input-group customer-input-group"><span class="input-group-text"><i class="bi bi-hdd-network"></i></span><input type="text" class="form-control" id="onuMac" placeholder="AA:BB:CC:DD:EE:FF"></div></div>
+                                        <div class="col-md-6"><label for="onuSerial" class="form-label">ONU Serial</label><input type="text" class="form-control" id="onuSerial" placeholder="Optional"></div>
+                                        <div class="col-md-6"><label for="fiberDropCore" class="form-label">Fiber Drop Core</label><input type="text" class="form-control" id="fiberDropCore" placeholder="Optional — Blue / Orange / Green"></div>
                                         <div class="col-12"><label for="customerRemarks" class="form-label">Remarks / Note</label><textarea class="form-control customer-textarea" id="customerRemarks" rows="3" placeholder="Optional customer or installation notes"></textarea></div>
                                     </div>
                                 </div>
@@ -1332,6 +1348,7 @@
       <div class="modal-footer bg-white">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
         <button id="cpRenewBtn" type="button" class="btn btn-success"><i class="bi bi-calendar-plus me-1"></i> Renew +1 Month</button>
+        <button id="cpSyncBtn" type="button" class="btn btn-outline-success"><i class="bi bi-arrow-repeat me-1"></i> Sync Customer to MikroTik</button>
         <button id="cpSaveBtn" type="button" class="btn btn-primary"><i class="bi bi-cloud-arrow-up me-1"></i> Save & Sync to MikroTik</button>
       </div>
     </div>
@@ -3074,8 +3091,15 @@ async function deletePlan(id,name){
             set('connectionDate',formatDateForInput(connectionIso));set('activationDate',formatDateForInput(activationIso));
             set('expirationDate',formatDateForInput(expirationIso));
             set('password',customer.password||'');set('nidNumber',customer.nid||'');
-            set('installationAddress',customer.installationAddress||customer.installation_address||'');
-            set('fiberBox',customer.fiberBox||customer.fiber_box||customer.splitterBox||'');set('onuMac',customer.onuMac||customer.onu_mac||'');
+            set('installationAddress',customer.installationAddress||customer.installation_address||'');set('areaZone',customer.areaZone||customer.area_zone||'');
+            set('fiberBox',customer.distributionBox||customer.distribution_box||customer.fiberBox||customer.fiber_box||customer.splitterBox||'');
+            set('alternativePhone',customer.alternativePhone||customer.alternative_phone||'');set('oltPonPort',customer.oltPonPort||customer.olt_pon_port||'');
+            set('onuMac',customer.onuMac||customer.onu_mac||'');set('onuSerial',customer.onuSerial||customer.onu_serial||'');set('fiberDropCore',customer.fiberDropCore||customer.fiber_drop_core||'');
+            set('customerBillingCycle',customer.billingCycle||customer.billing_cycle||'monthly');set('customerBillingDays',customer.billingDurationDays??customer.billing_duration_days??'');
+            set('customerBillingStatus',customer.billingStatus||customer.billing_status||'unpaid');
+            const autoExpire=document.getElementById('customerAutoExpire');if(autoExpire)autoExpire.checked=!(customer.billingExpiryOverride??customer.billing_expiry_override);
+            const accountEnabled=document.getElementById('customerAccountEnabled');if(accountEnabled)accountEnabled.checked=!(customer.disabled);
+            const daysWrap=document.getElementById('customerBillingDaysWrap');if(daysWrap)daysWrap.classList.toggle('d-none',document.getElementById('customerBillingCycle')?.value!=='custom_days');
             set('customerRemarks',customer.remarks||'');
             const title=document.getElementById('customerEditFormModalTitle');if(title)title.textContent='Edit Customer — '+(customer.fullName||customer.full_name||customer.username||name);
             const form=document.getElementById('addCustomerForm');if(form)form.classList.remove('was-validated');
@@ -3102,7 +3126,8 @@ async function deletePlan(id,name){
             cycleInput?.addEventListener('change',()=>{const wrap=hub()?.querySelector('#cpCustomDaysWrap');if(wrap)wrap.classList.toggle('d-none',cycleInput.value!=='custom_days');if(cycleInput.value==='15_days'&&daysInput)daysInput.value='15';else if(cycleInput.value==='30_days'&&daysInput)daysInput.value='30';if(autoExpire&&cycleInput.value!==cycleInput.dataset.initialValue)autoExpire.checked=false;});
             expiryInput?.addEventListener('change',()=>{if(autoExpire&&expiryInput.value!==expiryInput.dataset.initialValue)autoExpire.checked=false;});
             daysInput?.addEventListener('input',()=>{if(autoExpire&&daysInput.value!==daysInput.dataset.initialValue)autoExpire.checked=false;});
-            hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:m.querySelector('#cpPhone').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,disabled:!m.querySelector('#cpSecretToggle').checked};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value==='monthly'?'monthly':'custom_days';payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
+            hub()?.querySelector('#cpSyncBtn')?.addEventListener('click',async()=>{const m=hub(),id=m?.dataset.customerId||m?.dataset.username;if(!m||!id)return;if(!confirm('Sync '+(m.dataset.username||'this customer')+' credentials, expiry and Caller ID/MAC from the panel to MikroTik?'))return;const b=m.querySelector('#cpSyncBtn');hubLoading(b,true,'Syncing Customer...');try{const d=await jsonFetch('/api/customers/'+encodeURIComponent(id)+'/sync-mikrotik',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});alert(d.message||'Customer synced to MikroTik.');await openCustomerProfile(m.dataset.username||id);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to sync this customer.');}finally{hubLoading(b,false,'Sync Customer to MikroTik');}});
+             hub()?.querySelector('#cpSaveBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!m||!username)return;const b=m.querySelector('#cpSaveBtn');hubLoading(b,true,'Saving & Syncing...');try{const expiry=m.querySelector('#cpExpiration'),cycle=m.querySelector('#cpBillingCycle'),days=m.querySelector('#cpBillingDays'),enforce=m.querySelector('#cpAutoExpire');const billingSettingsChanged=expiry.value!==expiry.dataset.initialValue||cycle.value!==cycle.dataset.initialValue||days.value!==days.dataset.initialValue||String(enforce.checked)!==enforce.dataset.initialValue;const payload={id:m.dataset.customerId||username,username,fullName:m.querySelector('#cpFullName').value.trim(),phone:m.querySelector('#cpPhone').value.trim(),alternativePhone:m.querySelector('#cpAltPhone').value.trim(),installationAddress:m.querySelector('#cpAddress').value.trim(),oltPonPort:m.querySelector('#cpOltPon').value.trim(),distributionBox:m.querySelector('#cpDistribution').value.trim(),onuMac:m.querySelector('#cpOnuMac').value.trim(),onuSerial:m.querySelector('#cpOnuSerial').value.trim(),fiberDropCore:m.querySelector('#cpFiberCore').value.trim(),profile:m.querySelector('#cpPlan').value,packageProfile:m.querySelector('#cpPlan').value,expirationDate:dateInputToIso(expiry.value)||'',password:m.querySelector('#cpPassword').value,remarks:m.querySelector('#cpRemarks').value.trim(),billingStatus:m.querySelector('#cpBillingStatus').value,disabled:!m.querySelector('#cpSecretToggle').checked};if(billingSettingsChanged){payload.billing_expiry_date=dateInputToIso(expiry.value)||'';payload.billing_cycle=cycle.value;payload.billing_duration_days=cycle.value==='15_days'?15:cycle.value==='30_days'?30:cycle.value==='custom_days'?days.value:null;payload.billing_expiry_override=!enforce.checked;}const d=await jsonFetch('/api/customers/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});alert(d.message||'Customer profile synchronized.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to save customer profile.');}finally{hubLoading(b,false,'Save & Sync');}});
             hub()?.querySelector('#cpRenewBtn')?.addEventListener('click',async()=>{const m=hub(),username=m?.dataset.username;if(!username||!confirm('Renew '+username+' for the configured billing cycle?'))return;const b=m.querySelector('#cpRenewBtn');hubLoading(b,true,'Renewing...');try{const d=await jsonFetch('/api/customers/renew',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});alert(d.message||'Customer renewed.');await openCustomerProfile(username);if(typeof refreshCustomerSection==='function')await refreshCustomerSection();}catch(e){alert(e.message||'Unable to renew customer.');}finally{hubLoading(b,false,'Renew +1 Month');}});
         }
 
@@ -3584,6 +3609,7 @@ async function deletePlan(id,name){
         }
 
         document.getElementById('packageSelect')?.addEventListener('change', applyCustomerPackagePrice);
+        document.getElementById('customerBillingCycle')?.addEventListener('change',function(){const w=document.getElementById('customerBillingDaysWrap');if(w)w.classList.toggle('d-none',this.value!=='custom_days');});
         document.getElementById('activationDate')?.addEventListener('change', syncActivationDate);
         document.getElementById('expirationDate')?.addEventListener('change', function(){document.querySelectorAll('.billing-preset').forEach(btn=>btn.classList.remove('active'));updateCustomerValidityStatus();});
         document.querySelectorAll('.billing-preset').forEach(btn=>btn.addEventListener('click',function(){applyBillingPreset(Number(this.dataset.months));}));
@@ -3646,8 +3672,20 @@ async function deletePlan(id,name){
                     package_id: option?.dataset?.packageId || option?.value || '',
                     nid: String(valueOf('nidNumber')).trim(),
                     installationAddress: String(valueOf('installationAddress')).trim(),
+                    areaZone: String(valueOf('areaZone')).trim(),
                     fiberBox: String(valueOf('fiberBox')).trim(),
+                    alternativePhone: String(valueOf('alternativePhone')).trim(),
+                    oltPonPort: String(valueOf('oltPonPort')).trim(),
+                    distributionBox: String(valueOf('fiberBox')).trim(),
                     onuMac: String(valueOf('onuMac')).trim(),
+                    onuSerial: String(valueOf('onuSerial')).trim(),
+                    fiberDropCore: String(valueOf('fiberDropCore')).trim(),
+                    billingCycle: String(valueOf('customerBillingCycle')||'monthly'),
+                    billingDurationDays: String(valueOf('customerBillingDays')).trim(),
+                    billingStatus: String(valueOf('customerBillingStatus')||'unpaid'),
+                    billingExpiryOverride: !Boolean(document.getElementById('customerAutoExpire')?.checked),
+                    billing_expiry_override: !Boolean(document.getElementById('customerAutoExpire')?.checked),
+                    disabled: !Boolean(document.getElementById('customerAccountEnabled')?.checked),
                     remarks: String(valueOf('customerRemarks')).trim()
                 };
 
@@ -3685,11 +3723,9 @@ async function deletePlan(id,name){
                     throw new Error(data.message || data.error || ('Server returned HTTP ' + response.status));
                 }
 
-                const provisioned = data.customer?.provisioningStatus;
-                if (!editId && provisioned !== 'provisioned') {
-                    throw new Error(data.message || 'Customer was saved, but MikroTik provisioning was not confirmed.');
-                }
-
+                // A successful API response means the customer record is saved. If RouterOS is
+                // temporarily unavailable, keep the saved record and show its pending status instead
+                // of treating the save as a failure (which could cause duplicate retries).
                 alert(data.message || (editId
                     ? 'Customer updated successfully in MikroTik.'
                     : 'Customer saved and provisioned successfully in MikroTik.'));
