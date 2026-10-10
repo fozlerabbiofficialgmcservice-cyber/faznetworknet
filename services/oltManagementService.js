@@ -37,7 +37,7 @@ function validatePrivateIPv4(value) {
 function validateConfig(body = {}) {
   const name = String(body.name || '').trim().slice(0,120);
   const host = String(body.managementIp || '').trim();
-  const port = Number(body.port || (String(body.protocol).toLowerCase() === 'https' ? 443 : 80));
+  const port = Number(body.port || (String(body.protocol || 'https').toLowerCase() === 'https' ? 443 : 80));
   const protocol = String(body.protocol || 'http').toLowerCase();
   if (!name) return { error: 'Device name is required.' };
   const hostError = validatePrivateIPv4(host);
