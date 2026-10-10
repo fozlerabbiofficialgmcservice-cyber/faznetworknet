@@ -1,0 +1,11 @@
+'use strict';
+const express=require('express');
+const router=express.Router();
+const {requireRole}=require('../middleware/rbac');
+const controller=require('../controllers/adminSecurityController');
+router.get('/audit-logs',requireRole(['super_admin']),controller.listAuditLogs);
+router.get('/tickets',requireRole(['super_admin','admin','staff']),controller.listTickets);
+router.post('/tickets',requireRole(['super_admin','admin']),controller.createTicket);
+router.patch('/tickets/:id',requireRole(['super_admin','admin']),controller.updateTicket);
+router.get('/staff',requireRole(['super_admin','admin']),controller.listStaff);
+module.exports=router;
