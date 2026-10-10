@@ -364,6 +364,7 @@ CREATE TABLE IF NOT EXISTS admin_invitations (
   username VARCHAR(60) NOT NULL,
   email VARCHAR(254) NOT NULL,
   role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin','admin','staff')),
+  target_user_id BIGINT REFERENCES admin_users(id) ON DELETE CASCADE,
   token_hash CHAR(64) UNIQUE,
   otp_code_hash CHAR(64),
   otp_expires_at TIMESTAMPTZ,
