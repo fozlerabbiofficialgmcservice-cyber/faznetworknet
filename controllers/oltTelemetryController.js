@@ -120,7 +120,7 @@ exports.listTelemetry = async (req,res) => {
     if(row) {
       const age=Date.now()-new Date(row.receivedAt).getTime();
       row.stale=age>15*60*1000;
-      row.signalLevel=row.rxPowerDbm===null?'unknown':Number(row.rxPowerDbm)<-27?'weak':Number(row.rxPowerDbm)<-24?'warning':'good';
+      row.signalLevel=row.rxPowerDbm===null?'unknown':Number(row.rxPowerDbm)<-27?'weak':Number(row.rxPowerDbm)<=-25?'warning':'good';
     }
     return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
   } catch(error) {
@@ -137,7 +137,7 @@ exports.listTelemetry = async (req,res) => {
     if(row) {
       const age=Date.now()-new Date(row.receivedAt).getTime();
       row.stale=age>15*60*1000;
-      row.signalLevel=row.rxPowerDbm===null?'unknown':Number(row.rxPowerDbm)<-27?'weak':Number(row.rxPowerDbm)<-24?'warning':'good';
+      row.signalLevel=row.rxPowerDbm===null?'unknown':Number(row.rxPowerDbm)<-27?'weak':Number(row.rxPowerDbm)<=-25?'warning':'good';
     }
     return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
   } catch(error) {
