@@ -403,7 +403,7 @@
     </style>
 <script src="/js/date-format.js"></script>
 </head>
-<body>
+<body data-user-role="<%= typeof currentRole !== 'undefined' ? currentRole : 'super_admin' %>" data-admin-user="<%= typeof currentAdminUser !== 'undefined' ? currentAdminUser : 'admin' %>">
 
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -487,6 +487,10 @@
                     <li><a href="javascript:void(0)" onclick="window.loadVoucherGeneratorSection(); return false;"><span data-key="gen_print_vouchers">Generate &amp; Print Vouchers</span></a></li>
                     <li><a href="javascript:void(0)" onclick="switchView('hotspot-webhook'); return false;"><i class="bi bi-webhook me-2"></i><span>Hotspot Webhook</span></a></li>
                 </ul>
+            </li>
+
+            <li class="menu-item" data-rbac-roles="super_admin,admin">
+                <a href="javascript:void(0)" onclick="window.loadStaffManagement(); return false;"><i class="bi bi-person-lock"></i><span>Staff Management</span></a>
             </li>
 
             <li class="menu-item">
@@ -632,6 +636,21 @@
                         <tbody id="recentPaymentsBody"><tr><td colspan="5" class="text-center py-3 text-muted">Loading payments...</td></tr></tbody></table>
                     </div>
                 </div>
+            </section>
+
+            <!-- VIEW: ROLE-RESTRICTED STAFF MANAGEMENT -->
+            <section id="view-staff-management" class="admin-view" style="display:none">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h2 class="h4 fw-bold mb-1">Staff Management</h2><p class="text-muted mb-0">Create and manage individual accounts with first-login email verification.</p></div><span class="badge text-bg-success">RBAC enabled</span></div>
+              <div class="card card-custom mb-4"><div class="card-custom-header"><i class="bi bi-person-plus text-success fs-5"></i><span>Create Admin / Staff Account</span></div><div class="card-body p-4">
+                <form id="rbacCreateUserForm" class="row g-3">
+                  <div class="col-md-6"><label class="form-label" for="rbacUsername">Username</label><input id="rbacUsername" name="username" class="form-control" minlength="3" maxlength="60" pattern="[A-Za-z0-9._-]+" autocomplete="off" required></div>
+                  <div class="col-md-6"><label class="form-label" for="rbacEmail">Email</label><input id="rbacEmail" name="email" type="email" class="form-control" maxlength="254" required></div>
+                  <div class="col-md-6"><label class="form-label" for="rbacPassword">Temporary password</label><input id="rbacPassword" name="password" type="password" class="form-control" minlength="12" maxlength="128" autocomplete="new-password" required><div class="form-text">At least 12 characters; OTP is required on first login.</div></div>
+                  <div class="col-md-6"><label class="form-label" for="rbacRole">Role</label><select id="rbacRole" name="role" class="form-select" required><option value="staff">Staff</option><option value="admin">Admin</option><option value="super_admin" data-super-admin-only>Super Admin</option></select></div>
+                  <div class="col-12"><div id="rbacCreateUserResult" class="small" role="status" aria-live="polite"></div><button class="btn btn-success" type="submit" id="rbacCreateUserBtn"><i class="bi bi-person-plus me-1"></i>Create account</button></div>
+                </form>
+              </div></div>
+              <div class="card card-custom"><div class="card-custom-header"><i class="bi bi-people text-success fs-5"></i><span>Accounts</span><button class="btn btn-outline-success btn-sm ms-auto" type="button" onclick="window.loadStaffManagement()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div><div class="card-body p-0 table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Username</th><th>Email</th><th>Role</th><th>First Login</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody id="rbacUsersBody"><tr><td colspan="7" class="text-center text-muted py-4">Loading accounts…</td></tr></tbody></table></div></div>
             </section>
 
             <!-- VIEW: CENTRALIZED GENERAL SETTINGS -->
