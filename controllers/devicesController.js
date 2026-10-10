@@ -26,9 +26,26 @@ exports.create = async (req, res) => {
     const name = clean(body.name, 120);
     if (!TYPES.has(deviceType)) return res.status(400).json({ success: false, message: "Select a supported device type." });
     if (!name) return res.status(400).json({ success: false, message: "Device name is required." });
-    const ip = clean(body.managementIp, 64);
+    const managementInput = clean(body.managementIp, 512);
     const mac = clean(body.macAddress, 32).replace(/-/g, ":");
-    if (ip && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && !ip.includes(":")) return res.status(400).json({ success: false, message: "Enter a valid IPv4 or IPv6 management address." });
+    let ip = managementInput;
+    // PostgreSQL inet stores an address, not a browser URL. Accept an IP-based
+    // HTTP(S) URL in the form and persist only its host address.
+    if (/^https?:\/\//i.test(managementInput)) {
+      try {
+        const parsed = new URL(managementInput);
+        if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+          return res.status(400).json({ success: false, message: "Enter the browser URL without credentials, query parameters, or fragments." });
+        }
+        ip = parsed.hostname.replace(/^\[|\]$/g, "");
+        if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && !ip.includes(":")) {
+          return res.status(400).json({ success: false, message: "Use an IP-based browser URL. Configure its port and login path in OLT Management." });
+        }
+      } catch {
+        return res.status(400).json({ success: false, message: "Enter a valid management IP address or browser URL." });
+      }
+    }
+    if (ip && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && !ip.includes(":")) return res.status(400).json({ success: false, message: "Enter a valid IPv4 or IPv6 management address, or an IP-based browser URL." });
     if (mac && !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) return res.status(400).json({ success: false, message: "Enter a valid MAC address." });
     const parentId = body.parentDeviceId ? Number(body.parentDeviceId) : null;
     const result = await db.query(`
