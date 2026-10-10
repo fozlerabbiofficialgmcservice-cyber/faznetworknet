@@ -124,8 +124,10 @@ class OLTSession:
         elif b"password:" in lower:
             self._send(required("OLT_PASSWORD"))
             self._wait_for([re.compile(rb"(?m)OLT\s*[>#]\s*$")], 15)
+        # Preserve the authenticated prompt before clearing the login transcript.
+        user_mode = bool(re.search(rb"(?m)OLT\\s*>\\s*$", self.buffer))
         self.buffer = b""
-        if re.search(rb"(?m)OLT\s*>\s*$", self.buffer):
+        if user_mode:
             self._send("enable")
             try:
                 self._wait_for([re.compile(rb"(?i)password\s*:"), re.compile(rb"(?m)OLT\s*#\s*$")], 5)
