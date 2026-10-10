@@ -1,5 +1,6 @@
 const db = require("../db");
 const mikrotikService = require("../services/mikrotikService");
+const deviceCredentials = require("../services/deviceCredentials");
 
 const TYPES = new Set(["mikrotik","olt","onu","ont","access_point","cpe","other"]);
 function clean(value, max = 240) { return String(value ?? "").trim().slice(0, max); }
@@ -11,7 +12,7 @@ exports.list = async (req, res) => {
   try {
     const result = await db.query(`
       SELECT id, device_type AS "deviceType", name, vendor, model,
-             host(management_ip) AS "managementIp", mac_address::text AS "macAddress",
+             host(management_ip) AS "managementIp", management_port AS "managementPort", management_username AS "managementUsername", (encrypted_management_password IS NOT NULL) AS "hasManagementPassword", mac_address::text AS "macAddress",
              serial_number AS "serialNumber", location, parent_device_id AS "parentDeviceId",
              notes, last_seen_at AS "lastSeenAt", created_at AS "createdAt", updated_at AS "updatedAt"
       FROM network_devices ORDER BY device_type, lower(name), id
@@ -28,6 +29,13 @@ exports.create = async (req, res) => {
     if (!name) return res.status(400).json({ success: false, message: "Device name is required." });
     const managementInput = clean(body.managementIp, 512);
     const mac = clean(body.macAddress, 32).replace(/-/g, ":");
+    const managementPort = body.managementPort === "" || body.managementPort == null ? null : Number(body.managementPort);
+    const managementUsername = clean(body.managementUsername, 160) || null;
+    const managementPassword = String(body.managementPassword ?? "");
+    if (managementPort !== null && (!Number.isInteger(managementPort) || managementPort < 1 || managementPort > 65535)) return res.status(400).json({ success: false, message: "Management port must be from 1 to 65535." });
+    if (managementPassword.length > 1024) return res.status(400).json({ success: false, message: "Management password is too long." });
+    if (deviceType !== "olt" && (managementUsername || managementPassword || managementPort !== null)) return res.status(400).json({ success: false, message: "Management credentials are currently supported for OLT devices only." });
+    const encryptedManagementPassword = managementPassword ? deviceCredentials.encrypt(managementPassword) : null;
     let ip = managementInput;
     // PostgreSQL inet stores an address, not a browser URL. Accept an IP-based
     // HTTP(S) URL in the form and persist only its host address.
@@ -50,13 +58,13 @@ exports.create = async (req, res) => {
     const parentId = body.parentDeviceId ? Number(body.parentDeviceId) : null;
     const result = await db.query(`
       INSERT INTO network_devices
-        (device_type, name, vendor, model, management_ip, mac_address, serial_number, location, parent_device_id, notes)
-      VALUES ($1,$2,$3,$4,$5::inet,$6::macaddr,$7,$8,$9,$10)
+        (device_type, name, vendor, model, management_ip, management_port, management_username, encrypted_management_password, mac_address, serial_number, location, parent_device_id, notes)
+      VALUES ($1,$2,$3,$4,$5::inet,$6,$7,$8,$9::macaddr,$10,$11,$12,$13)
       RETURNING id, device_type AS "deviceType", name, vendor, model,
-                host(management_ip) AS "managementIp", mac_address::text AS "macAddress",
+                host(management_ip) AS "managementIp", management_port AS "managementPort", management_username AS "managementUsername", (encrypted_management_password IS NOT NULL) AS "hasManagementPassword", mac_address::text AS "macAddress",
                 serial_number AS "serialNumber", location, parent_device_id AS "parentDeviceId",
                 notes, last_seen_at AS "lastSeenAt", created_at AS "createdAt"
-    `, [deviceType,name,clean(body.vendor,120)||null,clean(body.model,120)||null,ip||null,mac||null,clean(body.serialNumber,160)||null,clean(body.location,240)||null,Number.isSafeInteger(parentId)&&parentId>0?parentId:null,clean(body.notes,2000)||null]);
+    `, [deviceType,name,clean(body.vendor,120)||null,clean(body.model,120)||null,ip||null,managementPort,managementUsername,encryptedManagementPassword,mac||null,clean(body.serialNumber,160)||null,clean(body.location,240)||null,Number.isSafeInteger(parentId)&&parentId>0?parentId:null,clean(body.notes,2000)||null]);
     res.status(201).json({ success: true, device: result.rows[0] });
   } catch (error) { sendError(res, error); }
 };
