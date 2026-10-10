@@ -66,12 +66,23 @@ async function runNetworkDiscovery() {
     for (const host of bridgeHosts) {
       const mac = String(host.macAddress || "").trim().slice(0, 32);
       if (!mac) continue;
+      const hostValue = JSON.stringify({ interface: host.interface || null, bridge: host.bridge || null, vlanId: host.vlanId || null, dynamic: Boolean(host.dynamic) });
+      const duplicate = await db.query(
+        `SELECT id FROM network_observations
+         WHERE source_device_id IS NOT DISTINCT FROM $1
+           AND observation_type='bridge_host'
+           AND LOWER(identity_value)=LOWER($2)
+           AND observed_value=$3::jsonb
+           AND observed_at > NOW() - INTERVAL '9 minutes'
+         LIMIT 1`,
+        [deviceId, mac, hostValue]
+      );
+      if (duplicate.rowCount) continue;
       await db.query(
         `INSERT INTO network_observations
           (discovery_run_id,source_device_id,observation_type,identity_type,identity_value,observed_value,match_status,evidence)
          VALUES ($1,$2,'bridge_host','mac_address',$3,$4::jsonb,'unmatched',$5::jsonb)`,
-        [runId, deviceId, mac,
-          JSON.stringify({ interface: host.interface || null, bridge: host.bridge || null, vlanId: host.vlanId || null, dynamic: Boolean(host.dynamic) }),
+        [runId, deviceId, mac, hostValue,
           JSON.stringify({ rule: "no_customer_identity_inferred", source: "mikrotik_bridge_host" })]
       );
       discovered++;
