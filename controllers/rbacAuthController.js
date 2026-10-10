@@ -33,6 +33,50 @@ function createMailer() {
   });
 }
 
+async function sendLoginNotification(user, loginType, req) {
+  const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
+  const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
+  const recipient = String(process.env.ADMIN_LOGIN_NOTIFICATION_EMAIL || 'faznetwork.com@gmail.com').trim();
+  if (!mailerUrl || !mailerToken) {
+    throw new Error('Apps Script mailer is not configured for login notifications.');
+  }
+
+  const endpoint = new URL(mailerUrl);
+  if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'script.google.com' ||
+      !/^\\/macros\\/s\\/[^/]+\\/exec\\/?$/.test(endpoint.pathname)) {
+    throw new Error('OTP_MAILER_URL must be a Google Apps Script Web App /exec URL.');
+  }
+  if (mailerToken.length < 32) throw new Error('OTP_MAILER_TOKEN must be at least 32 characters.');
+
+  const payload = {
+    type: 'login_alert',
+    token: mailerToken,
+    to: recipient,
+    username: String(user.username || 'unknown').slice(0, 60),
+    role: String(user.role || 'staff').slice(0, 30),
+    loginType: loginType === 'first_login' ? 'first_login' : 'login',
+    loginAt: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', hour12: false }),
+    timeZone: 'Asia/Dhaka',
+    ipAddress: String(req?.ip || '').slice(0, 64) || 'Unavailable',
+    userAgent: String(req?.get?.('user-agent') || '').slice(0, 240) || 'Unavailable'
+  };
+
+  const response = await fetch(endpoint.toString(), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(20000),
+    redirect: 'follow'
+  });
+  const responseText = await response.text();
+  let result;
+  try { result = JSON.parse(responseText); }
+  catch { throw new Error('Apps Script login notification returned an invalid response.'); }
+  if (!response.ok || result.success !== true) {
+    throw new Error('Apps Script login notification failed: ' + String(result.error || 'request rejected').slice(0, 120));
+  }
+}
+
 async function sendOtpEmail(user, code) {
   const mailerUrl = String(process.env.OTP_MAILER_URL || '').trim();
   const mailerToken = String(process.env.OTP_MAILER_TOKEN || '');
@@ -111,7 +155,7 @@ async function writeAudit(req, action, targetUserId, details) {
   } catch (error) { console.warn('[RBAC audit] Could not write audit record:', error.message); }
 }
 
-function establishSession(req, res, user, nextTarget) {
+function establishSession(req, res, user, nextTarget, loginType = 'login') {
   req.session.regenerate(err => {
     if (err) {
       console.error('[RBAC] Session regeneration failed:', err.message);
@@ -137,6 +181,11 @@ function establishSession(req, res, user, nextTarget) {
         }
       } else if (user.id) {
         db.query('UPDATE admin_users SET last_login_at=NOW(), updated_at=NOW() WHERE id=$1', [user.id]).catch(() => {});
+      }
+      if (user.id && user.legacy !== true) {
+        sendLoginNotification(user, loginType, req).catch(error => {
+          console.error('[RBAC login alert] Email delivery failed:', error.message);
+        });
       }
       return res.redirect(safeNext(nextTarget));
     });
@@ -188,7 +237,7 @@ async function login(req, res) {
           return res.redirect('/login/verify-otp');
         });
       }
-      return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget);
+      return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget, 'first_login');
     }
   } catch (error) {
     // Fail closed for database-backed users; only the configured legacy shared account may use fallback.
