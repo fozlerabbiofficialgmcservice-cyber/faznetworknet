@@ -46,11 +46,11 @@
         const active=String(user.status)==='active';
         const userId=Number(user.id);
         const isSelf=currentUserId>0&&userId===currentUserId;
-        // Super Admin rows are protected. Super Admins may manage Admin/Staff;
-        // Admins may manage Staff only. Never render controls for the current account.
-        const canManage=!isSelf&&user.role!=='super_admin'&&(role==='super_admin'||(role==='admin'&&user.role==='staff'));
-        const canDelete=canManage&&user.role!=='super_admin';
-        const actionLabel=isSelf?'<span class="badge text-bg-light border">Current account</span>':user.role==='super_admin'?'<span class="badge text-bg-light border">Protected</span>':!canManage?'—':'';
+        // The owner's separate legacy login is not stored in admin_users.
+        // Only that owner session may manage DB-backed Super Admin rows.
+        const canManage=!isSelf&&(role==='super_admin'||(role==='admin'&&user.role==='staff'));
+        const canDelete=canManage;
+        const actionLabel=isSelf?'<span class="badge text-bg-light border">Current account</span>':!canManage?'—':'';
         return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canManage?'<button type="button" class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+userId+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button type="button" class="btn btn-sm btn-danger" data-delete-user-id="'+userId+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+actionLabel+'</div></td></tr>';
       }).join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No accounts found.</td></tr>';
       tbody.querySelectorAll('button[data-delete-user-id]').forEach(button=>button.addEventListener('click',async()=>{
