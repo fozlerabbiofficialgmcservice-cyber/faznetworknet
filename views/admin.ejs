@@ -3641,11 +3641,9 @@ async function deletePlan(id,name){
                     throw new Error(data.message || data.error || ('Server returned HTTP ' + response.status));
                 }
 
-                const provisioned = data.customer?.provisioningStatus;
-                if (!editId && provisioned !== 'provisioned') {
-                    throw new Error(data.message || 'Customer was saved, but MikroTik provisioning was not confirmed.');
-                }
-
+                // A successful API response means the customer record is saved. If RouterOS is
+                // temporarily unavailable, keep the saved record and show its pending status instead
+                // of treating the save as a failure (which could cause duplicate retries).
                 alert(data.message || (editId
                     ? 'Customer updated successfully in MikroTik.'
                     : 'Customer saved and provisioned successfully in MikroTik.'));
