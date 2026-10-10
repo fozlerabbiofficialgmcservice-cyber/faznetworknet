@@ -3,11 +3,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { validateConfig, validatePrivateIPv4, encrypt, decrypt } = require('../services/oltManagementService');
 
-test('accepts a private IPv4 OLT web endpoint with explicit protocol and port', () => {
-  const parsed = validateConfig({name:'Main OLT',managementIp:'192.168.8.100',protocol:'http',port:'80',username:'operator',password:'example'});
+test('defaults a private IPv4 OLT endpoint to safe Auto Detect', () => {
+  const parsed = validateConfig({name:'Main OLT',managementIp:'192.168.8.100',port:'80',username:'operator',password:'example'});
   assert.equal(parsed.error, undefined);
   assert.equal(parsed.value.managementIp, '192.168.8.100');
+  assert.equal(parsed.value.accessMethod, 'detect');
   assert.equal(parsed.value.port, 80);
+});
+test('accepts explicit HTTP and HTTPS access methods', () => {
+  for (const accessMethod of ['http','https']) {
+    const parsed = validateConfig({name:'Main OLT',managementIp:'192.168.8.100',accessMethod,port:'8443'});
+    assert.equal(parsed.error, undefined);
+    assert.equal(parsed.value.accessMethod, accessMethod);
+    assert.equal(parsed.value.protocol, accessMethod);
+  }
 });
 test('rejects public, malformed and missing management addresses', () => {
   for (const ip of ['8.8.8.8','127.0.0.1','169.254.169.254','bad-ip','']) {
@@ -15,7 +24,7 @@ test('rejects public, malformed and missing management addresses', () => {
   }
 });
 test('rejects unsupported protocols and invalid ports', () => {
-  assert.ok(validateConfig({name:'OLT',managementIp:'192.168.1.10',protocol:'ftp',port:21}).error);
+  assert.ok(validateConfig({name:'OLT',managementIp:'192.168.1.10',accessMethod:'ftp',port:21}).error);
   assert.ok(validateConfig({name:'OLT',managementIp:'192.168.1.10',protocol:'http',port:70000}).error);
 });
 test('encrypts and decrypts credentials with a configured 32-byte key', () => {
