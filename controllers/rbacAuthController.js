@@ -220,7 +220,8 @@ async function createUser(req, res) {
       "INSERT INTO admin_users (username,email,password_hash,role,is_first_login,status,created_by) VALUES ($1,$2,$3,$4,TRUE,'active',$5) RETURNING id,username,email,role,is_first_login,status,created_at",
       [username, email, passwordHash, role, req.session.adminUser || 'admin']
     );
-    await writeAudit(req, 'admin_user_created', result.rows[0].id, { username, email, role });\n    return res.status(201).json({ success: true, user: result.rows[0], message: 'Account created. The user must verify the emailed OTP on first login.' });
+    await writeAudit(req, 'admin_user_created', result.rows[0].id, { username, email, role });
+    return res.status(201).json({ success: true, user: result.rows[0], message: 'Account created. The user must verify the emailed OTP on first login.' });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
     console.error('[RBAC] User creation failed:', error.message);
