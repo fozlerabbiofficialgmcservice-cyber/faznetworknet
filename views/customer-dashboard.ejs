@@ -59,8 +59,14 @@ button,input{font:inherit}button{transition:transform .2s ease,box-shadow .2s ea
  const pill=(text,kind)=>'<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-extrabold '+(kind==="good"?"bg-emerald-100 text-emerald-800":kind==="bad"?"bg-rose-100 text-rose-700":"bg-amber-100 text-amber-800")+'"><span class="h-1.5 w-1.5 rounded-full '+(kind==="good"?"bg-emerald-500":kind==="bad"?"bg-rose-500":"bg-amber-500")+'"></span>'+esc(text)+'</span>';
  const initials=name=>String(name||"F").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()||"F";
  async function load(){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),12000);
+  $("loading").classList.remove("hidden");
+  $("errorBox").classList.add("hidden");
+  $("dashboard").classList.add("hidden");
   try{
-   const r=await fetch("/api/customer/profile",{headers:{Accept:"application/json"}}),d=await r.json();
+   const r=await fetch("/api/customer/profile",{headers:{Accept:"application/json"},credentials:"same-origin",signal:controller.signal});
+   let d={};try{d=await r.json();}catch(_){throw new Error("The server returned an invalid response. Please retry.");}
    if(r.status===401){location.href="/?customerLogin=1";return;}
    if(!r.ok||!d.success)throw new Error(d.message||"Unable to load your account.");
    const c=d.customer||{},hotspot=c.type==="hotspot",name=c.name||c.username||"Subscriber";
@@ -84,7 +90,13 @@ button,input{font:inherit}button{transition:transform .2s ease,box-shadow .2s ea
    $("renewForm")?.addEventListener("submit",async e=>{e.preventDefault();await submitPayment("/api/customer/renew",{trxId:$("renewTrx").value.trim()},"renewResult","renewBtn","Verify & Renew Line")});
    $("hotspotRechargeForm")?.addEventListener("submit",async e=>{e.preventDefault();await submitPayment("/api/verify-trx",{username:$("hotspotPhone").value.trim(),trxId:$("hotspotTrx").value.trim()},"hotspotRechargeResult","hotspotRechargeBtn","Verify & Recharge")});
    document.querySelectorAll("[data-copy]").forEach(btn=>btn.addEventListener("click",async()=>{const value=btn.dataset.copy||"";if(!value)return;try{await navigator.clipboard.writeText(value);const span=btn.querySelector("span");if(span){const old=span.textContent;span.textContent="Copied!";setTimeout(()=>span.textContent=old,1400);}else{const old=btn.innerHTML;btn.innerHTML=icon("check","h-3.5 w-3.5")+" Copied";setTimeout(()=>btn.innerHTML=old,1400);}}catch(_){const input=document.createElement("textarea");input.value=value;input.style.position="fixed";input.style.opacity="0";document.body.appendChild(input);input.select();try{document.execCommand("copy");}finally{input.remove();}}}));
-  }catch(e){$("loading").classList.add("hidden");$("errorBox").textContent=e.message;$("errorBox").classList.remove("hidden");}
+  }catch(e){
+   $("loading").classList.add("hidden");
+   $("errorBox").textContent=e&&e.name==="AbortError"?"Dashboard request timed out after 12 seconds. Please retry.":(e.message||"Unable to load your account. Please retry.");
+   $("errorBox").classList.remove("hidden");
+   let retry=$("dashboardRetry");
+   if(!retry){retry=document.createElement("button");retry.id="dashboardRetry";retry.type="button";retry.className="mt-4 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white";retry.textContent="Retry loading dashboard";$("errorBox").appendChild(document.createElement("br"));$("errorBox").appendChild(retry);retry.addEventListener("click",load);}
+  }finally{clearTimeout(timeout);}
  }
  async function submitPayment(url,payload,resultId,buttonId,label){
   const box=$(resultId),btn=$(buttonId);box.className="mt-3 rounded-xl bg-slate-100 p-4 text-sm font-semibold";box.textContent="Verifying payment…";btn.disabled=true;btn.innerHTML='<span class="spinner" aria-hidden="true"></span><span>Verifying payment…</span>';
