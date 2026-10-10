@@ -304,3 +304,55 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC);
 CREATE INDEX IF NOT EXISTS idx_expenses_category_date ON expenses(category,date DESC);
+
+
+-- Isolated staff/admin identities for role-based access; does not modify customer or billing tables.
+CREATE TABLE IF NOT EXISTS admin_users (
+  id BIGSERIAL PRIMARY KEY,
+  username VARCHAR(60) NOT NULL,
+  email VARCHAR(254) NOT NULL,
+  password_hash TEXT NOT NULL,
+  role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin','admin','staff')),
+  is_first_login BOOLEAN NOT NULL DEFAULT TRUE,
+  otp_code_hash CHAR(64),
+  otp_expires_at TIMESTAMPTZ,
+  otp_attempts INTEGER NOT NULL DEFAULT 0 CHECK (otp_attempts BETWEEN 0 AND 5),
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','disabled')),
+  created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_users_username_ci ON admin_users (lower(username));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_users_email_ci ON admin_users (lower(email));
+CREATE INDEX IF NOT EXISTS idx_admin_users_role_status ON admin_users(role,status);
+
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  actor_user_id BIGINT REFERENCES admin_users(id) ON DELETE SET NULL,
+  actor_username VARCHAR(100) NOT NULL,
+  actor_role VARCHAR(20) NOT NULL,
+  action VARCHAR(100) NOT NULL,
+  target_user_id BIGINT REFERENCES admin_users(id) ON DELETE SET NULL,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ip_address VARCHAR(64),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created ON admin_audit_logs(created_at DESC);
+
+
+
+-- Support ticket assignments are separate from customer and billing data.
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id BIGSERIAL PRIMARY KEY,
+  title VARCHAR(180) NOT NULL,
+  description TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved','closed')),
+  priority VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (priority IN ('low','normal','high','urgent')),
+  customer_username VARCHAR(100),
+  assigned_to_user_id BIGINT REFERENCES admin_users(id) ON DELETE SET NULL,
+  created_by VARCHAR(100) NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned_status ON support_tickets(assigned_to_user_id,status,created_at DESC);
