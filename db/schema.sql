@@ -446,3 +446,21 @@ CREATE TABLE IF NOT EXISTS vpn_profiles (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Single-installation OLT web-management settings. Password is encrypted by the app before storage.
+CREATE TABLE IF NOT EXISTS olt_connections (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name VARCHAR(120) NOT NULL DEFAULT 'Main OLT',
+  management_ip INET NOT NULL,
+  protocol VARCHAR(8) NOT NULL CHECK (protocol IN ('http','https')),
+  port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+  username VARCHAR(160),
+  encrypted_password TEXT,
+  connection_status VARCHAR(32) NOT NULL DEFAULT 'not_tested'
+    CHECK (connection_status IN ('not_tested','reachable_unverified','unreachable','connected')),
+  last_test_at TIMESTAMPTZ,
+  last_http_status INTEGER,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
