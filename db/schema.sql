@@ -399,3 +399,50 @@ CREATE TABLE IF NOT EXISTS network_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_network_devices_type_name ON network_devices(device_type, lower(name));
 CREATE INDEX IF NOT EXISTS idx_network_devices_management_ip ON network_devices(management_ip);
+
+
+-- Network access configuration is data-driven; saving records does not mutate RouterOS.
+CREATE TABLE IF NOT EXISTS public_ip_configs (
+  id BIGSERIAL PRIMARY KEY,
+  label VARCHAR(120) NOT NULL DEFAULT 'Primary public IP',
+  public_ip INET,
+  assignment_method VARCHAR(32) NOT NULL DEFAULT 'static'
+    CHECK (assignment_method IN ('static','dynamic','upstream_forwarded','tunnel')),
+  wan_interface VARCHAR(120),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (public_ip IS NOT NULL OR assignment_method = 'tunnel')
+);
+CREATE INDEX IF NOT EXISTS idx_public_ip_configs_enabled ON public_ip_configs(enabled, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS port_forward_rules (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  protocol VARCHAR(8) NOT NULL CHECK (protocol IN ('tcp','udp','both')),
+  external_port INTEGER NOT NULL CHECK (external_port BETWEEN 1 AND 65535),
+  destination_ip INET NOT NULL,
+  internal_port INTEGER NOT NULL CHECK (internal_port BETWEEN 1 AND 65535),
+  allowed_source_ip INET,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  status VARCHAR(32) NOT NULL DEFAULT 'waiting_for_public_ip'
+    CHECK (status IN ('waiting_for_public_ip','pending_validation','ready','applied','error')),
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(protocol, external_port)
+);
+CREATE INDEX IF NOT EXISTS idx_port_forward_rules_status ON port_forward_rules(status, enabled);
+
+CREATE TABLE IF NOT EXISTS vpn_profiles (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL UNIQUE,
+  provider VARCHAR(24) NOT NULL CHECK (provider IN ('wireguard')),
+  role VARCHAR(32) NOT NULL DEFAULT 'management_access' CHECK (role IN ('management_access')),
+  status VARCHAR(32) NOT NULL DEFAULT 'pending_endpoint'
+    CHECK (status IN ('pending_endpoint','configured','testing','connected','error')),
+  endpoint_host VARCHAR(253),
+  endpoint_port INTEGER CHECK (endpoint_port IS NULL OR endpoint_port BETWEEN 1 AND 65535),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
