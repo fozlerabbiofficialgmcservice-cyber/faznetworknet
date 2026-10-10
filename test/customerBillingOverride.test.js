@@ -61,7 +61,7 @@ test("updateCustomer rejects invalid calendar dates and invalid custom durations
     const invalidDate=responseRecorder();
     await customerController.updateCustomer({params:{id:"42"},body:{billing_expiry_date:"2026-02-31"}},invalidDate);
     assert.equal(invalidDate.statusCode,400);
-    assert.match(invalidDate.body.message,/valid YYYY-MM-DD/i);
+    assert.match(invalidDate.body.message,/valid DD\\/MM\\/YYYY.*legacy YYYY-MM-DD/i);
     const invalidDuration=responseRecorder();
     await customerController.updateCustomer({params:{id:"42"},body:{billing_cycle:"custom_days",billing_duration_days:"0"}},invalidDuration);
     assert.equal(invalidDuration.statusCode,400);
