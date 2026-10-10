@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAZ NETWORK — VPN & Public IP</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root{--faz:#0a3d2e;--accent:#10b981}body{background:#f8fafc;color:#172b24}.top{background:var(--faz);color:#fff;padding:1rem 1.25rem}.btn-success{background:var(--faz);border-color:var(--faz)}.btn-success:hover{background:#0d4d3a}.card{border:0;box-shadow:0 2px 12px #0a3d2e12}.muted{color:#64748b}
+</style>
+</head>
+<body>
+<header class="top d-flex flex-wrap justify-content-between align-items-center gap-2"><div><strong>FAZ NETWORK</strong><div class="small">VPN & Public IP Manager</div></div><a class="btn btn-outline-light btn-sm" href="/admin">Back to Admin Panel</a></header>
+<main class="container-fluid p-3 p-lg-4">
+<div id="notice" class="alert alert-info">Loading readiness status…</div>
+<div class="row g-3">
+<div class="col-12 col-xl-5"><section class="card p-3 h-100"><h5>Public IP Configuration</h5><p class="muted small">You can leave this empty for now. Saving settings does not change RouterOS.</p>
+<form id="ipForm" class="row g-3">
+<div class="col-12"><label class="form-label">Label</label><input class="form-control" name="label" value="Primary public IP" maxlength="120"></div>
+<div class="col-12"><label class="form-label">Public IPv4</label><input class="form-control" name="publicIp" inputmode="decimal" placeholder="Add later when your ISP provides it"></div>
+<div class="col-12"><label class="form-label">Assignment method</label><select class="form-select" name="assignmentMethod"><option value="static">Static IP on MikroTik WAN</option><option value="dynamic">Dynamic public IP</option><option value="upstream_forwarded">Public IP on upstream router / ONT</option><option value="tunnel">Outbound tunnel / no public IP</option></select></div>
+<div class="col-12"><label class="form-label">MikroTik WAN interface (optional)</label><input class="form-control" name="wanInterface" placeholder="e.g. ether1" maxlength="120"></div>
+<div class="col-12"><button class="btn btn-success">Save IP Settings</button></div></form></section></div>
+<div class="col-12 col-xl-7"><section class="card p-3 h-100"><h5>Port Forwarding (saved disabled)</h5><form id="forwardForm" class="row g-3">
+<div class="col-12 col-md-6"><label class="form-label">Rule name</label><input class="form-control" name="name" required maxlength="120"></div>
+<div class="col-6 col-md-3"><label class="form-label">Protocol</label><select class="form-select" name="protocol"><option value="udp">UDP</option><option value="tcp">TCP</option><option value="both">Both</option></select></div>
+<div class="col-6 col-md-3"><label class="form-label">External port</label><input class="form-control" name="externalPort" type="number" min="1" max="65535" required></div>
+<div class="col-12 col-md-6"><label class="form-label">Destination IPv4</label><input class="form-control" name="destinationIp" placeholder="192.168.88.2" required></div>
+<div class="col-6 col-md-3"><label class="form-label">Internal port</label><input class="form-control" name="internalPort" type="number" min="1" max="65535" required></div>
+<div class="col-6 col-md-3"><label class="form-label">Allowed source IPv4 (recommended)</label><input class="form-control" name="allowedSourceIp" placeholder="Optional"></div>
+<div class="col-12"><button class="btn btn-success">Save Disabled Rule</button></div></form>
+<div class="table-responsive mt-3"><table class="table table-sm align-middle"><thead><tr><th>Name</th><th>Protocol</th><th>External</th><th>Destination</th><th>Status</th><th></th></tr></thead><tbody id="rules"><tr><td colspan="6">Loading…</td></tr></tbody></table></div></section></div>
+<div class="col-12"><section class="card p-3"><h5>WireGuard — first test profile</h5><p class="muted">WireGuard is free software, but a reachable endpoint is required. Since no always-on POP server or public IP is available now, this saves a profile plan only; it does not create a live tunnel.</p>
+<form id="vpnForm" class="row g-3"><div class="col-12 col-md-4"><label class="form-label">Profile name</label><input class="form-control" name="name" required maxlength="120" placeholder="FAZ management VPN"></div><div class="col-12 col-md-4"><label class="form-label">Endpoint host (later)</label><input class="form-control" name="endpointHost" maxlength="253" placeholder="Public IP or VPN endpoint"></div><div class="col-12 col-md-2"><label class="form-label">Endpoint port (later)</label><input class="form-control" name="endpointPort" type="number" min="1" max="65535" placeholder="51820"></div><div class="col-12 col-md-2 d-flex align-items-end"><button class="btn btn-success w-100">Save Profile</button></div></form>
+<div class="table-responsive mt-3"><table class="table table-sm align-middle"><thead><tr><th>Name</th><th>Provider</th><th>Endpoint</th><th>Status</th><th></th></tr></thead><tbody id="vpnProfiles"><tr><td colspan="5">Loading…</td></tr></tbody></table></div></section></div>
+</div></main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(url,options={}){const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});let data={};try{data=await r.json()}catch{}if(!r.ok||data.success===false)throw new Error(data.message||('HTTP '+r.status));return data}
+function notice(message,type='info'){const n=$('#notice');n.className='alert alert-'+type;n.textContent=message}
+async function refresh(){try{const d=await api('/api/network-access/overview');const r=d.readiness||{};notice((r.message||'Readiness loaded')+' WireGuard: '+(r.wireguard||'pending_endpoint')+'.','info');const ip=d.publicIp||{};$('#ipForm').elements.label.value=ip.label||'Primary public IP';$('#ipForm').elements.publicIp.value=ip.publicIp||'';$('#ipForm').elements.assignmentMethod.value=ip.assignmentMethod||'static';$('#ipForm').elements.wanInterface.value=ip.wanInterface||'';$('#rules').innerHTML=(d.portForwardRules||[]).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.protocol.toUpperCase())+'</td><td>'+esc(x.externalPort)+'</td><td>'+esc(x.destinationIp)+':'+esc(x.internalPort)+'</td><td><span class="badge text-bg-secondary">'+esc(x.status)+'</span></td><td><button class="btn btn-sm btn-outline-danger" data-rule="'+esc(x.id)+'">Delete</button></td></tr>').join('')||'<tr><td colspan="6" class="muted">No rules saved.</td></tr>';$('#vpnProfiles').innerHTML=(d.vpnProfiles||[]).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.provider)+'</td><td>'+esc(x.endpointHost||'Not configured')+(x.endpointPort?':'+esc(x.endpointPort):'')+'</td><td><span class="badge text-bg-secondary">'+esc(x.status)+'</span></td><td><button class="btn btn-sm btn-outline-danger" data-vpn="'+esc(x.id)+'">Delete</button></td></tr>').join('')||'<tr><td colspan="5" class="muted">No profiles saved.</td></tr>'}catch(e){notice(e.message||'Could not load settings','danger')}}
+$('#ipForm').addEventListener('submit',async e=>{e.preventDefault();try{const data=Object.fromEntries(new FormData(e.currentTarget));const d=await api('/api/network-access/public-ip',{method:'PUT',body:JSON.stringify(data)});notice(d.message||'Saved','success');await refresh()}catch(err){notice(err.message,'danger')}});
+$('#forwardForm').addEventListener('submit',async e=>{e.preventDefault();try{const data=Object.fromEntries(new FormData(e.currentTarget));const d=await api('/api/network-access/port-forwarding',{method:'POST',body:JSON.stringify(data)});notice(d.message||'Rule saved disabled','success');e.currentTarget.reset();await refresh()}catch(err){notice(err.message,'danger')}});
+$('#vpnForm').addEventListener('submit',async e=>{e.preventDefault();try{const data=Object.fromEntries(new FormData(e.currentTarget));const d=await api('/api/network-access/vpn-profiles',{method:'POST',body:JSON.stringify(data)});notice(d.message||'Profile saved','success');e.currentTarget.reset();await refresh()}catch(err){notice(err.message,'danger')}});
+document.addEventListener('click',async e=>{const r=e.target.closest('[data-rule]');const v=e.target.closest('[data-vpn]');if(r&&confirm('Delete saved rule?')){try{await api('/api/network-access/port-forwarding/'+encodeURIComponent(r.dataset.rule),{method:'DELETE'});await refresh()}catch(err){notice(err.message,'danger')}}if(v&&confirm('Delete VPN profile?')){try{await api('/api/network-access/vpn-profiles/'+encodeURIComponent(v.dataset.vpn),{method:'DELETE'});await refresh()}catch(err){notice(err.message,'danger')}}});
+refresh();
+</script></body></html>
