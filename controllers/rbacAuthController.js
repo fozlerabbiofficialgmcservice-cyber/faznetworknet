@@ -53,6 +53,12 @@ function safeNext(value) {
   return target.startsWith('/') && !target.startsWith('//') ? target : '/admin';
 }
 
+async function writeAudit(req, action, targetUserId, details) {
+  try {
+    await db.query('INSERT INTO admin_audit_logs (actor_user_id,actor_username,actor_role,action,target_user_id,details,ip_address) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)', [req.session?.userId || null, String(req.session?.adminUser || 'admin'), String(req.session?.role || (req.session?.legacySuperAdmin ? 'super_admin' : 'super_admin')), action, targetUserId || null, JSON.stringify(details || {}), String(req.ip || '').slice(0,64) || null]);
+  } catch (error) { console.warn('[RBAC audit] Could not write audit record:', error.message); }
+}
+
 function establishSession(req, res, user, nextTarget) {
   req.session.regenerate(err => {
     if (err) {
@@ -95,7 +101,7 @@ async function login(req, res) {
         const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
         const expiresAt = new Date(Date.now() + OTP_TTL_MS);
         const codeHash = hashOtp(user.id, code);
-        await db.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, updated_at=NOW() WHERE id=$3', [codeHash, expiresAt, user.id]);
+        await db.query('UPDATE admin_users SET otp_code_hash=$1, otp_expires_at=$2, otp_attempts=0, updated_at=NOW() WHERE id=$3', [codeHash, expiresAt, user.id]);
         try {
           await sendOtpEmail(user, code);
         } catch (mailError) {
@@ -148,7 +154,7 @@ async function verifyOtp(req, res) {
     return req.session.save(() => res.status(400).render('verify-otp', { error: 'Enter the 6-digit code sent to your email.' }));
   }
   try {
-    const result = await db.query('SELECT id, username, email, role, is_first_login, otp_code_hash, otp_expires_at, status FROM admin_users WHERE id=$1 LIMIT 1', [userId]);
+    const result = await db.query('SELECT id, username, email, role, is_first_login, otp_code_hash, otp_expires_at, otp_attempts, status FROM admin_users WHERE id=$1 LIMIT 1', [userId]);
     const user = result.rows?.[0];
     const valid = user && user.status === 'active' && user.is_first_login === true &&
       user.otp_expires_at && new Date(user.otp_expires_at).getTime() > Date.now() &&
@@ -197,7 +203,7 @@ async function createUser(req, res) {
       "INSERT INTO admin_users (username,email,password_hash,role,is_first_login,status,created_by) VALUES ($1,$2,$3,$4,TRUE,'active',$5) RETURNING id,username,email,role,is_first_login,status,created_at",
       [username, email, passwordHash, role, req.session.adminUser || 'admin']
     );
-    return res.status(201).json({ success: true, user: result.rows[0], message: 'Account created. The user must verify the emailed OTP on first login.' });
+    await writeAudit(req, 'admin_user_created', result.rows[0].id, { username, email, role });\n    return res.status(201).json({ success: true, user: result.rows[0], message: 'Account created. The user must verify the emailed OTP on first login.' });
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ success: false, message: 'Username or email is already registered.' });
     console.error('[RBAC] User creation failed:', error.message);
