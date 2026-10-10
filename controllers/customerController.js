@@ -642,80 +642,6 @@ async function profile(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-async function publicCustomerCheck(req,res){
-  try{
-    const query=clean(req.query.query,120);
-    if(!query)return res.status(400).json({success:false,message:"Username, phone number, or customer ID is required."});
-
-    let dbUser=null;
-    try{
-      const q=await db.query(
-        "SELECT c.*,p.plan_name AS linked_plan_name,p.profile_name AS linked_profile_name FROM customers c LEFT JOIN packages p ON LOWER(p.profile_name)=LOWER(c.profile) OR LOWER(p.plan_name)=LOWER(c.package_name) WHERE LOWER(c.username)=LOWER($1) OR c.phone=$1 OR c.id::text=$1 LIMIT 1",
-        [query]
-      );
-      dbUser=q.rows[0]||null;
-    }catch(error){console.warn("[Public Customer DB warning]:",error.message);}
-
-    let mtSecret=null;
-    const lookupUsername=dbUser?.username||query;
-    try{
-      mtSecret=await mikrotikService.getPppoeSecret(lookupUsername);
-    }catch(error){console.warn("[Public Customer MikroTik warning]:",error.message);}
-
-    if(!dbUser&&!mtSecret)return res.status(404).json({success:false,message:"Customer account was not found."});
-
-    const comment=String(mtSecret?.comment||"");
-    const nameMatch=comment.match(/Customer:\s*([^|]+)/i);
-    const phoneMatch=comment.match(/Phone:\s*([^|]+)/i);
-    const expMatch=comment.match(/EXP:\s*([^|]+)/i);
-    const expiration=normalizeDate(dbUser?.expiration_date)||(expMatch?normalizeDate(expMatch[1].trim()):"");
-    const today=bangladeshToday();
-    let remainingDays=null;
-    if(expiration){
-      remainingDays=Math.max(0,Math.ceil((Date.parse(expiration+"T00:00:00Z")-Date.parse(today+"T00:00:00Z"))/86400000));
-    }
-
-    let online=false,liveIp="";
-    try{
-      const sessions=await mikrotikService.getActiveSessions();
-      const target=String(mtSecret?.name||dbUser?.username||query).toLowerCase();
-      const session=(Array.isArray(sessions)?sessions:[]).find(x=>String(x.username||"").toLowerCase()===target);
-      online=Boolean(session);liveIp=session?.address||"";
-    }catch(error){console.warn("[Public Customer session warning]:",error.message);}
-
-    const paidUntil=normalizeDate(dbUser?.paid_until);
-    const accountState=String(dbUser?.status||"").trim().toLowerCase();
-    const suspended=Boolean(mtSecret?.disabled)||["expired","suspended","disabled","left","terminated","due"].includes(accountState);
-    const paidCurrentCycle=String(dbUser?.billing_status||"").toLowerCase()==="paid" && Boolean(paidUntil && paidUntil>=today) && !suspended && dateStatus(expiration)==="active";
-    const billing=paidCurrentCycle?"Paid":"Unpaid";
-    const profile=clean(mtSecret?.profile||dbUser?.profile||dbUser?.linked_profile_name||dbUser?.package_name||"-",100);
-    const packageName=clean(dbUser?.linked_plan_name||dbUser?.package_name||profile,100);
-    const supportPhone=clean(process.env.SUPPORT_PHONE||process.env.CONTACT_PHONE||"",40);
-
-    return res.json({
-      success:true,
-      customer:{
-        username:clean(mtSecret?.name||dbUser?.username||query,100),
-        customerId:dbUser?.id||null,
-        name:clean(dbUser?.full_name||(nameMatch?nameMatch[1].trim():"")||dbUser?.username||mtSecret?.name||query,200),
-        phone:clean(dbUser?.phone||(phoneMatch?phoneMatch[1].trim():""),40),
-        package:packageName,
-        profile,
-        expirationDate:expiration||null,
-        remainingDays,
-        connectionStatus:online?"Online":"Offline",
-        liveIp:liveIp||null,
-        billingStatus:billing,
-        paidUntil:paidUntil||null,
-        supportPhone:supportPhone||null,
-        rechargeUrl:process.env.RECHARGE_URL||"/",
-        disabled:Boolean(mtSecret?.disabled),
-        service:clean(mtSecret?.service||"pppoe",30)
-      }
-    });
-  }catch(error){console.error("[Public Customer Check Error]:",error);return res.status(503).json({success:false,message:"Customer account lookup is temporarily unavailable."});}
-}
-
 async function publicCustomerLogin(req,res){
   try{
     const identifier=clean(req.body?.identifier,120);
@@ -1328,4 +1254,4 @@ async function changeCustomerPackage(req,res){
   }catch(error){return errorResponse(res,error);}
 }
 
-module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerCheck, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
+module.exports = { evaluateCustomerBillingStatus, listCustomers, getCustomerSyncDiagnostics, packages, createCustomer, getCustomer, updateCustomer, profile, publicCustomerLogin, markPaid, renew, removeCustomer, getCustomerProfileById, syncSingleCustomerToMikroTik, getCustomerLiveSession, getCustomerUsageRecords, getAuditLogs, kickCustomerById, toggleCustomerStatus, renewCustomerById, changeCustomerPackage, syncExpiryDatesToMikroTik, syncPanelCustomersToMikroTik };
