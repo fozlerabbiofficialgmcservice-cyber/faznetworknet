@@ -42,6 +42,8 @@ app.get("/login",(req,res)=>{
 app.post("/login",rbacAuthController.login);
 app.get("/login/verify-otp",rbacAuthController.showOtp);
 app.post("/login/verify-otp",rbacAuthController.verifyOtp);
+app.get("/login/set-password",rbacAuthController.showSetPassword);
+app.post("/login/set-password",rbacAuthController.setFirstPassword);
 app.post("/logout",(req,res)=>{
   if(!req.session)return res.redirect("/");
   req.session.destroy(err=>{
