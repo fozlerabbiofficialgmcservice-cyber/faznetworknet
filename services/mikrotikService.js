@@ -221,38 +221,83 @@ class MikroTikService {
   async syncPanelCustomerSecrets(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
     return this._withConnection("bulk panel-to-MikroTik PPPoE sync", async (connection) => {
-      // Match both explicit PPPoE and RouterOS service=any secrets. Never
-      // touch PPTP/L2TP/OVPN/SSTP-specific users through the PPPoE panel sync.
-      const rows = await connection.write("/ppp/secret/print");
+      // Read all secrets as well as PPP profiles. This explicit Billing Panel
+      // action updates known PPPoE accounts and provisions missing accounts from
+      // current panel records; unrelated VPN service users are never overwritten.
+      const [rows, profileRows] = await Promise.all([
+        connection.write("/ppp/secret/print"),
+        connection.write("/ppp/profile/print")
+      ]);
+      const allSecrets = new Map((Array.isArray(rows) ? rows : [])
+        .map(item => [this._str(item.name).trim().toLowerCase(), item]));
       const secrets = new Map((Array.isArray(rows) ? rows : [])
         .filter(item => {
           const service = this._str(item.service).trim().toLowerCase() || "any";
           return ["pppoe", "any"].includes(service);
         })
         .map(item => [this._str(item.name).trim().toLowerCase(), item]));
-      const results = []; let updated = 0, skipped = 0, failed = 0;
+      const profiles = new Set((Array.isArray(profileRows) ? profileRows : [])
+        .map(item => this._str(item.name).trim().toLowerCase())
+        .filter(Boolean));
+      const results = []; let updated = 0, created = 0, skipped = 0, failed = 0;
       for (const customer of customers) {
         const username = this._str(customer && customer.username).trim();
+        const usernameKey = username.toLowerCase();
         if (!username) { skipped++; results.push({username,status:"skipped",reason:"Missing username."}); continue; }
-        const secret = secrets.get(username.toLowerCase());
-        if (!secret || !secret[".id"]) { skipped++; results.push({username,status:"skipped",reason:"PPPoE secret not found on MikroTik."}); continue; }
+        const secret = secrets.get(usernameKey);
+        const conflictingSecret = allSecrets.get(usernameKey);
+        const password = this._str(customer.password || this._str(secret?.password)).trim();
+        const profile = this._str(customer.profile || this._str(secret?.profile)).trim();
+        if (!secret && conflictingSecret) {
+          failed++;
+          results.push({username,status:"failed",reason:"A MikroTik secret with this username exists for a non-PPPoE service; it was not changed."});
+          continue;
+        }
+        if (!password) {
+          failed++;
+          results.push({username,status:"failed",reason:secret ? "Panel password is empty and RouterOS password could not be read." : "Cannot create the missing PPPoE secret because the Billing Panel password is empty."});
+          continue;
+        }
+        if (!profile) {
+          failed++;
+          results.push({username,status:"failed",reason:"A PPP profile is required; no RouterOS change was made."});
+          continue;
+        }
+        if (!profiles.has(profile.toLowerCase())) {
+          failed++;
+          results.push({username,status:"failed",reason:'MikroTik PPP profile "' + profile + '" does not exist; no RouterOS change was made.'});
+          continue;
+        }
         try {
           const params = this._writeParams({
-            password: customer.password || this._str(secret.password),
-            profile: customer.profile || this._str(secret.profile),
+            password,
+            profile,
             comment: customer.comment,
             disabled: customer.disabled ? "yes" : "no"
           });
-          await connection.write(["/ppp/secret/set", "=.id=" + secret[".id"], ...params]);
-          updated++;
-          results.push({username,status:"updated",profile:customer.profile,disabled:Boolean(customer.disabled)});
+          if (secret && secret[".id"]) {
+            await connection.write(["/ppp/secret/set", "=.id=" + secret[".id"], ...params]);
+            updated++;
+            results.push({username,status:"updated",profile,disabled:Boolean(customer.disabled)});
+          } else {
+            await connection.write("/ppp/secret/add", this._writeParams({
+              name: username,
+              password,
+              service: "pppoe",
+              profile,
+              comment: customer.comment,
+              disabled: customer.disabled ? "yes" : "no"
+            }));
+            created++;
+            results.push({username,status:"created",profile,disabled:Boolean(customer.disabled)});
+          }
         } catch (error) {
           failed++;
           results.push({username,status:"failed",reason:error && error.message ? error.message : "RouterOS update failed."});
         }
       }
-      return {total:customers.length,updated,skipped,failed,results};
-    }, undefined, 30000);
+      return {total:customers.length,updated,created,skipped,failed,results};
+    }, undefined, 90000);
   }
   async syncPppoeExpiryComments(customers) {
     if (!Array.isArray(customers)) throw new Error("Customer list must be an array.");
