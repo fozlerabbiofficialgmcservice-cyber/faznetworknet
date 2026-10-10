@@ -235,10 +235,84 @@ async function verifyOtp(req, res) {
       return res.status(400).render('verify-otp', { error: 'Invalid or expired code. Check the email and try again.' });
     }
     const nextTarget = safeNext(req.session.pendingOtpNext);
-    return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role), completeFirstLogin: true }, nextTarget);
+    // Consume the OTP but keep first-login status pending until the user sets
+    // a personal password. Do not grant an admin session at this stage.
+    await db.query('UPDATE admin_users SET otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, updated_at=NOW() WHERE id=$1 AND is_first_login=TRUE', [user.id]);
+    return req.session.regenerate(err => {
+      if (err) {
+        console.error('[RBAC] Password-setup session regeneration failed:', err.message);
+        return res.status(500).render('verify-otp', { error: 'Verification succeeded, but secure setup could not start. Please sign in again.' });
+      }
+      req.session.pendingPasswordUserId = user.id;
+      req.session.pendingPasswordNext = nextTarget;
+      req.session.passwordOtpVerifiedAt = Date.now();
+      return req.session.save(saveErr => {
+        if (saveErr) {
+          console.error('[RBAC] Password-setup session save failed:', saveErr.message);
+          return res.status(500).render('verify-otp', { error: 'Could not start password setup. Please sign in again.' });
+        }
+        return res.redirect('/login/set-password');
+      });
+    });
   } catch (error) {
     console.error('[RBAC OTP] Verification failed:', error.message);
     return res.status(503).render('verify-otp', { error: 'Verification service is unavailable. Please retry.' });
+  }
+}
+
+function showSetPassword(req, res) {
+  const verifiedAt = Number(req.session?.passwordOtpVerifiedAt || 0);
+  if (!req.session?.pendingPasswordUserId || !verifiedAt) return res.redirect('/login');
+  if (Date.now() - verifiedAt > 10 * 60 * 1000) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
+  return res.set('Cache-Control', 'no-store').render('set-first-password', { error: null });
+}
+
+async function setFirstPassword(req, res) {
+  const userId = req.session?.pendingPasswordUserId;
+  const verifiedAt = Number(req.session?.passwordOtpVerifiedAt || 0);
+  if (!userId || !verifiedAt) return res.redirect('/login');
+  if (Date.now() - verifiedAt > 10 * 60 * 1000) {
+    return req.session.destroy(() => res.redirect('/login'));
+  }
+
+  const password = String(req.body?.password || '');
+  const confirmPassword = String(req.body?.confirmPassword || '');
+  if (password.length < 12 || password.length > 128) {
+    return res.status(400).render('set-first-password', { error: 'Use a new password between 12 and 128 characters.' });
+  }
+  if (password !== confirmPassword) {
+    return res.status(400).render('set-first-password', { error: 'The new password and confirmation do not match.' });
+  }
+
+  try {
+    const result = await db.query(
+      "SELECT id, username, email, password_hash, role, is_first_login, status FROM admin_users WHERE id=$1 LIMIT 1",
+      [userId]
+    );
+    const user = result.rows?.[0];
+    if (!user || user.status !== 'active' || user.is_first_login !== true) {
+      return req.session.destroy(() => res.redirect('/login'));
+    }
+    if (await bcrypt.compare(password, user.password_hash)) {
+      return res.status(400).render('set-first-password', { error: 'Choose a password different from the temporary password provided by the administrator.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const updated = await db.query(
+      "UPDATE admin_users SET password_hash=$1, is_first_login=FALSE, otp_code_hash=NULL, otp_expires_at=NULL, otp_attempts=0, last_login_at=NOW(), updated_at=NOW() WHERE id=$2 AND is_first_login=TRUE AND status='active' RETURNING id",
+      [passwordHash, userId]
+    );
+    if (!updated.rows.length) {
+      return res.status(409).render('set-first-password', { error: 'This account has already been updated. Please sign in with your new password.' });
+    }
+    const nextTarget = safeNext(req.session.pendingPasswordNext);
+    await writeAudit(req, 'admin_first_password_changed', userId, { username: user.username });
+    return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget);
+  } catch (error) {
+    console.error('[RBAC] First-login password change failed:', error.message);
+    return res.status(503).render('set-first-password', { error: 'Could not save your new password. Please retry.' });
   }
 }
 
@@ -301,4 +375,4 @@ async function updateUserStatus(req, res) {
   }
 }
 
-module.exports = { login, showOtp, verifyOtp, listUsers, createUser, updateUserStatus };
+module.exports = { login, showOtp, verifyOtp, showSetPassword, setFirstPassword, listUsers, createUser, updateUserStatus };
