@@ -304,25 +304,6 @@ async function profiles(req, res) {
   }
 }
 
-async function sync(req, res) {
-  try {
-    const result = await syncFromRouter();
-    const protectedCount = result.skippedDeleted.length;
-    const failedUsers = result.failedUsers.length;
-    const failedImports = result.failedCustomerImports.length;
-    const message = [
-      `MikroTik sync finished: ${result.users} PPPoE users synced and ${result.profiles} profiles synced.`,
-      `${result.importedCustomers} new Billing customers imported; ${result.existingCustomers} existing panel customers preserved.`,
-      `${protectedCount} explicitly deleted usernames protected from automatic restore.`,
-      `${failedUsers} PPPoE sync failures; ${failedImports} Billing import failures.`,
-      "No customer was deleted by this sync."
-    ].join(" ");
-    return res.json({ success: true, ...result, message });
-  } catch (error) {
-    return errorResponse(res, error);
-  }
-}
-
 async function active(req, res) {
   try {
     const sessions = await mikrotikService.getActiveSessions();
@@ -477,4 +458,4 @@ async function removeUser(req,res){
   return customerController.removeCustomer(req,res);
 }
 
-module.exports = { sync, users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile, restoreUserToPanel, removeUser };
+module.exports = { users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile, restoreUserToPanel, removeUser };

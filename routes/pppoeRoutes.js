@@ -2,7 +2,6 @@ const express=require("express");
 const controller=require("../controllers/pppoeController");
 const customerController=require("../controllers/customerController");
 const router=express.Router();
-router.post("/sync",controller.sync);
 router.post("/restore-user",controller.restoreUserToPanel);
 router.get("/users",controller.users);
 router.post("/users",customerController.createCustomer);
