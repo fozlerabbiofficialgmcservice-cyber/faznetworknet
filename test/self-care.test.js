@@ -8,23 +8,36 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-test("public self-care routes expose customer check and login endpoints", () => {
+test("public routes retain customer login and remove deprecated account check", () => {
   const routes = read("routes/publicRoutes.js");
-  assert.match(routes, /router\.get\(["']\/customer-check["'],\s*controller\.publicCustomerCheck\)/);
+  assert.doesNotMatch(routes, /customer-check|publicCustomerCheck/);
   assert.match(routes, /router\.post\(["']\/customer-login["'],\s*controller\.publicCustomerLogin\)/);
 });
 
-test("public self-care controller exports the handlers used by routes", () => {
+test("public customer controller retains login and removes deprecated account check", () => {
   const controller = read("controllers/customerController.js");
-  assert.match(controller, /publicCustomerCheck/);
+  assert.doesNotMatch(controller, /publicCustomerCheck/);
   assert.match(controller, /publicCustomerLogin/);
 });
 
-test("public homepage contains customer login and account status entry points", () => {
+test("public homepage retains customer login and removes deprecated account status section", () => {
   const view = read("views/index.ejs");
   assert.match(view, /id="customerLoginBtn"/);
-  assert.match(view, /Quick Pay \/ Check Status/);
-  assert.match(view, /id="account"/);
+  assert.doesNotMatch(view, /Quick Pay \/ Check Status/);
+  assert.doesNotMatch(view, /id="account"/);
+});
+
+test("public hotspot package checkout uses configured MFS accounts and TrxID verification", () => {
+  const view = read("views/index.ejs");
+  const server = read("server.js");
+  const controller = read("controllers/paymentController.js");
+  assert.match(view, /data-buy-hotspot/);
+  assert.match(view, /hotspotPurchaseForm/);
+  assert.match(view, /paymentMethod/);
+  assert.match(view, /hotspotBuyerTrxId/);
+  assert.match(server, /paymentAccounts/);
+  assert.match(controller, /requestedProfile/);
+  assert.match(controller, /requestedMethod/);
 });
 
 test("test runner uses Node's built-in test framework", () => {
