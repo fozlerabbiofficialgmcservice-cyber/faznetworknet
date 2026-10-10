@@ -203,9 +203,12 @@ async function verifyTrx(req,res){
   let profileMetadata={};try{profileMetadata=JSON.parse(metadataResult.rows[0]?.value||"{}");}catch(_){}
   if(!profileMetadata||typeof profileMetadata!=="object"||Array.isArray(profileMetadata))profileMetadata={};
   const hotspotProfiles=await mikrotikService.getHotspotProfiles();
+  const requestedProfile=String(body.profileName||body.profile_name||"").trim();
   const matchingProfiles=hotspotProfiles.filter(item=>{
-   const metadata=profileMetadata[String(item.name||"")]||{};
-   return Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
+   const profileName=String(item.name||"");
+   const metadata=profileMetadata[profileName]||{};
+   const priceMatches=Number.isFinite(Number(metadata.price))&&moneyCents(metadata.price)===moneyCents(amount);
+   return priceMatches&&(!requestedProfile||profileName===requestedProfile);
   });
   if(!matchingProfiles.length)return res.status(400).json({success:false,error:"No active Hotspot profile currently has a price of ৳"+amount.toFixed(2)+". Update the price in Profile and retry.",expectedAmount:amount});
   const hotspotProfile=matchingProfiles[0];
