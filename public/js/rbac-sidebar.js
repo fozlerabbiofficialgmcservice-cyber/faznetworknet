@@ -44,9 +44,14 @@
       tbody.innerHTML=(data.users||[]).map(user=>{
         const created=user.created_at?new Date(user.created_at).toLocaleDateString('en-GB',{timeZone:'Asia/Dhaka'}):'—';
         const active=String(user.status)==='active';
-        const canManage=(role==='super_admin'||user.role==='staff')&&Number(user.id)!==currentUserId;
-        const canDelete=canManage&&(role==='super_admin'||user.role==='staff')&&user.role!=='super_admin';
-        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canManage?'<button class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+Number(user.id)+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button class="btn btn-sm btn-danger" data-delete-user-id="'+Number(user.id)+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+(!canManage&&!canDelete?'—':'')+'</div></td></tr>';
+        const userId=Number(user.id);
+        const isSelf=currentUserId>0&&userId===currentUserId;
+        // Super Admin rows are protected. Super Admins may manage Admin/Staff;
+        // Admins may manage Staff only. Never render controls for the current account.
+        const canManage=!isSelf&&user.role!=='super_admin'&&(role==='super_admin'||(role==='admin'&&user.role==='staff'));
+        const canDelete=canManage&&user.role!=='super_admin';
+        const actionLabel=isSelf?'<span class="badge text-bg-light border">Current account</span>':user.role==='super_admin'?'<span class="badge text-bg-light border">Protected</span>':!canManage?'—':'';
+        return '<tr><td class="fw-semibold">'+esc(user.username)+'</td><td>'+esc(user.email)+'</td><td><span class="badge text-bg-'+(user.role==='super_admin'?'dark':user.role==='admin'?'primary':'secondary')+'">'+esc(user.role)+'</span></td><td>'+(user.is_first_login?'Pending verification':'Verified')+'</td><td><span class="badge text-bg-'+(active?'success':'secondary')+'">'+esc(user.status)+'</span></td><td>'+esc(created)+'</td><td><div class="d-flex flex-wrap gap-1">'+(canManage?'<button type="button" class="btn btn-sm '+(active?'btn-outline-danger':'btn-outline-success')+'" data-user-id="'+userId+'" data-next-status="'+(active?'disabled':'active')+'">'+(active?'Disable':'Enable')+'</button>':'')+(canDelete?'<button type="button" class="btn btn-sm btn-danger" data-delete-user-id="'+userId+'" data-delete-username="'+esc(user.username)+'"><i class="bi bi-trash3 me-1"></i>Delete</button>':'')+actionLabel+'</div></td></tr>';
       }).join('')||'<tr><td colspan="7" class="text-center text-muted py-4">No accounts found.</td></tr>';
       tbody.querySelectorAll('button[data-delete-user-id]').forEach(button=>button.addEventListener('click',async()=>{
         const username=button.dataset.deleteUsername||'this account';
