@@ -31,12 +31,30 @@ exports.getCustomerMap = async (req, res) => {
       [customer.id]
     );
     const latest = observations.rows[0] || null;
+    // Router MAC must be selected from PPPoE observations independently of
+    // newer bridge-host or other observation types.
+    const routerObservation = observations.rows.find(
+      (item) => item.observationType === "pppoe_session"
+    ) || null;
+    const rxObservedAt = customer.onu_rx_power_observed_at
+      ? new Date(customer.onu_rx_power_observed_at)
+      : null;
+    const rxAgeMs = rxObservedAt && Number.isFinite(rxObservedAt.getTime())
+      ? Date.now() - rxObservedAt.getTime()
+      : null;
+    const rxStatus = rxAgeMs === null
+      ? "awaiting_olt_reading"
+      : rxAgeMs < 0
+        ? "invalid_timestamp"
+        : rxAgeMs > 30 * 60 * 1000
+          ? "stale"
+          : "measured";
     return res.json({
       success: true,
       customer: { id: customer.id, username: customer.username },
       provisioned: { onuMac: customer.onu_mac || null, fiberBox: customer.fiber_box || null },
-      rxPower: { dbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm), observedAt: customer.onu_rx_power_observed_at || null, sourceDevice: customer.rx_power_source || null, status: customer.onu_rx_power_observed_at ? "measured" : "awaiting_olt_reading" },
-      routerMac: latest?.observationType === "pppoe_session" ? latest.observedValue?.routerMac || null : null,
+      rxPower: { dbm: customer.onu_rx_power_dbm === null || customer.onu_rx_power_dbm === undefined ? null : Number(customer.onu_rx_power_dbm), observedAt: customer.onu_rx_power_observed_at || null, sourceDevice: customer.rx_power_source || null, status: rxStatus },
+      routerMac: routerObservation?.observedValue?.routerMac || null,
       observations: observations.rows,
       discoveryStatus: latest ? "observations_available" : "not_yet_observed",
       lastObservedAt: latest?.observedAt || null,
