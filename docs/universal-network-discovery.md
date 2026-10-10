@@ -47,3 +47,7 @@ The supplied OPM Diag screenshot is evidence of available fields, not a fixed cu
 - Customer 360 should query the latest valid observation for that customer and clearly distinguish measured, stale, unavailable, and ambiguous states. Never display a sample value as live telemetry.
 - Test new/unseen ONUs, multiple PONs and OLTs, normalized MAC formats, duplicate MAC collisions, empty/offline results, stale readings, and larger result sets.
 - Preserve existing customer/billing data and all OLT configuration. No firmware update, reboot, provisioning, or configuration write is permitted.
+
+## Current milestone boundary (2026-10-11)
+
+RX optical power collection is intentionally deferred. Customer 360 keeps the field as an explicit unavailable placeholder and must not imply that a live OLT reading is being collected. The current milestone is limited to read-only MikroTik observations, safe PPPoE username matching, distinct Router MAC presentation, unmatched bridge-host inventory, and mapping history/status. Do not merge or deploy until the non-RX behavior is reviewed and validated against the production schema and role permissions. No customer or billing records should be rewritten for this feature.
