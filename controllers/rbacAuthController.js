@@ -237,7 +237,7 @@ async function login(req, res) {
           return res.redirect('/login/verify-otp');
         });
       }
-      return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget, 'first_login');
+      return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget);
     }
   } catch (error) {
     // Fail closed for database-backed users; only the configured legacy shared account may use fallback.
@@ -357,7 +357,7 @@ async function setFirstPassword(req, res) {
       return res.status(409).render('set-first-password', { error: 'This account has already been updated. Please sign in with your new password.' });
     }
     const nextTarget = safeNext(req.session.pendingPasswordNext);
-    return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget);
+    return establishSession(req, res, { id: user.id, username: user.username, role: normalizeRole(user.role) }, nextTarget, 'first_login');
   } catch (error) {
     console.error('[RBAC] First-login password change failed:', error.message);
     return res.status(503).render('set-first-password', { error: 'Could not save your new password. Please retry.' });
