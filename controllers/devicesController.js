@@ -61,7 +61,7 @@ exports.create = async (req, res) => {
         (device_type, name, vendor, model, management_ip, management_port, management_username, encrypted_management_password, mac_address, serial_number, location, parent_device_id, notes)
       VALUES ($1,$2,$3,$4,$5::inet,$6,$7,$8,$9::macaddr,$10,$11,$12,$13)
       RETURNING id, device_type AS "deviceType", name, vendor, model,
-                host(management_ip) AS "managementIp", mac_address::text AS "macAddress",
+                host(management_ip) AS "managementIp", management_port AS "managementPort", management_username AS "managementUsername", (encrypted_management_password IS NOT NULL) AS "hasManagementPassword", mac_address::text AS "macAddress",
                 serial_number AS "serialNumber", location, parent_device_id AS "parentDeviceId",
                 notes, last_seen_at AS "lastSeenAt", created_at AS "createdAt"
     `, [deviceType,name,clean(body.vendor,120)||null,clean(body.model,120)||null,ip||null,managementPort,managementUsername,encryptedManagementPassword,mac||null,clean(body.serialNumber,160)||null,clean(body.location,240)||null,Number.isSafeInteger(parentId)&&parentId>0?parentId:null,clean(body.notes,2000)||null]);
