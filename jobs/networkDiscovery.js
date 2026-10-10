@@ -7,32 +7,48 @@ async function runNetworkDiscovery() {
   if (running) return { skipped: true, reason: "previous_run_active" };
   running = true;
   let runId = null;
+  let source = null;
   try {
     // Only explicitly enabled RouterOS sources may be scanned in the background.
     const sourceResult = await db.query(
       "SELECT s.id AS source_id, s.device_id FROM network_discovery_sources s JOIN network_devices d ON d.id=s.device_id WHERE s.enabled=TRUE AND s.protocol IN ('routeros_api','mikrotik_api') AND d.device_type='mikrotik' ORDER BY s.id LIMIT 1"
     );
-    if (!sourceResult.rowCount) return { skipped: true, reason: "no_enabled_mikrotik_discovery_source" };
-    const source = sourceResult.rows[0];
-    // Discovery is observation-only: no RouterOS provisioning/configuration calls.
-    const [sessions, bridgeHosts, router] = await Promise.all([
-      mikrotikService.getActiveSessions(),
-      mikrotikService.getBridgeHosts().catch((error) => {
-        console.warn("[NETWORK DISCOVERY] Bridge host table unavailable:", error.message);
-        return [];
-      }),
-      mikrotikService.testConnection()
-    ]);
+    if (!sourceResult.rowCount) {
+      console.info("[NETWORK DISCOVERY] Skipped: no enabled MikroTik discovery source.");
+      return { skipped: true, reason: "no_enabled_mikrotik_discovery_source" };
+    }
+    source = sourceResult.rows[0];
     const deviceId = source.device_id;
+
+    // Create the run before opening sockets so connection failures are visible in history.
     await db.query(
       "UPDATE network_discovery_sources SET last_attempt_at=NOW(),last_status='pending',last_error=NULL,updated_at=NOW() WHERE id=$1",
       [source.source_id]
     );
     const created = await db.query(
       "INSERT INTO network_discovery_runs (source_id,device_id,run_type,status,details) VALUES ($1,$2,'scheduled','running',$3::jsonb) RETURNING id",
-      [source.source_id, deviceId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m" })]
+      [source.source_id, deviceId, JSON.stringify({ collector: "mikrotik-read-only", cadence: "10m" })]
     );
     runId = created.rows[0].id;
+
+    // Discovery is observation-only: no RouterOS provisioning/configuration calls.
+    const [sessions, bridgeResult, router] = await Promise.all([
+      mikrotikService.getActiveSessions(),
+      mikrotikService.getBridgeHosts().then(
+        (hosts) => ({ hosts, available: true }),
+        (error) => {
+          console.warn("[NETWORK DISCOVERY] Bridge host table unavailable:", error.message);
+          return { hosts: [], available: false, error: String(error.message || "Bridge host query failed").slice(0, 500) };
+        }
+      ),
+      mikrotikService.testConnection()
+    ]);
+    const bridgeHosts = bridgeResult.hosts;
+    await db.query(
+      "UPDATE network_discovery_runs SET details=$2::jsonb WHERE id=$1",
+      [runId, JSON.stringify({ router, collector: "mikrotik-read-only", cadence: "10m", bridgeHostsAvailable: bridgeResult.available, bridgeHostsError: bridgeResult.error || null })]
+    );
+
     let matched = 0;
     let unmatched = 0;
     let discovered = 0;
@@ -53,12 +69,6 @@ async function runNetworkDiscovery() {
         uptime: String(session.uptime || "").slice(0, 100) || null,
         service: String(session.service || "pppoe").slice(0, 40)
       };
-      // Reduce duplicate snapshots during rapid restarts while retaining history.
-      const recent = await db.query(
-        "SELECT id FROM network_observations WHERE discovery_run_id=$1 AND observation_type='pppoe_session' AND LOWER(identity_value)=LOWER($2) LIMIT 1",
-        [runId, username]
-      );
-      if (recent.rowCount) continue;
       await db.query(
         `INSERT INTO network_observations
           (discovery_run_id,source_device_id,customer_id,observation_type,identity_type,identity_value,observed_value,match_status,match_confidence,evidence)
@@ -95,17 +105,20 @@ async function runNetworkDiscovery() {
       discovered++;
       unmatched++;
     }
+
+    const status = bridgeResult.available ? "succeeded" : "partial";
+    const sourceStatus = bridgeResult.available ? "connected" : "partial";
     await db.query(
-      "UPDATE network_discovery_runs SET status='succeeded',finished_at=NOW(),discovered_count=$2,matched_count=$3,unmatched_count=$4 WHERE id=$1",
-      [runId, discovered, matched, unmatched]
+      "UPDATE network_discovery_runs SET status=$2,finished_at=NOW(),discovered_count=$3,matched_count=$4,unmatched_count=$5 WHERE id=$1",
+      [runId, status, discovered, matched, unmatched]
     );
     await db.query(
-      "UPDATE network_discovery_sources SET last_success_at=NOW(),last_status='connected',last_error=NULL,updated_at=NOW() WHERE id=$1",
-      [source.source_id]
+      "UPDATE network_discovery_sources SET last_success_at=NOW(),last_status=$2,last_error=$3,updated_at=NOW() WHERE id=$1",
+      [source.source_id, sourceStatus, bridgeResult.error || null]
     );
-    if (deviceId) await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
-    console.log("[NETWORK DISCOVERY] run=" + runId + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
-    return { runId, discovered, matched, unmatched };
+    await db.query("UPDATE network_devices SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [deviceId]);
+    console.log("[NETWORK DISCOVERY] run=" + runId + " status=" + status + " sessions=" + sessions.length + " bridgeMacs=" + bridgeHosts.length + " matched=" + matched + " unmatched=" + unmatched);
+    return { runId, status, discovered, matched, unmatched };
   } catch (error) {
     if (runId) {
       await db.query(
@@ -113,7 +126,7 @@ async function runNetworkDiscovery() {
         [runId, String(error.message || "Discovery failed").slice(0, 1000)]
       ).catch((writeError) => console.warn("[NETWORK DISCOVERY] Could not mark run failed:", writeError.message));
     }
-    if (typeof source !== "undefined" && source?.source_id) {
+    if (source?.source_id) {
       await db.query(
         "UPDATE network_discovery_sources SET last_status='failed',last_error=$2,updated_at=NOW() WHERE id=$1",
         [source.source_id, String(error.message || "Discovery failed").slice(0, 1000)]
