@@ -399,3 +399,82 @@ CREATE TABLE IF NOT EXISTS network_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_network_devices_type_name ON network_devices(device_type, lower(name));
 CREATE INDEX IF NOT EXISTS idx_network_devices_management_ip ON network_devices(management_ip);
+
+
+-- Network access configuration is data-driven; saving records does not mutate RouterOS.
+CREATE TABLE IF NOT EXISTS public_ip_configs (
+  id BIGSERIAL PRIMARY KEY,
+  label VARCHAR(120) NOT NULL DEFAULT 'Primary public IP',
+  public_ip INET,
+  assignment_method VARCHAR(32) NOT NULL DEFAULT 'static'
+    CHECK (assignment_method IN ('static','dynamic','upstream_forwarded','tunnel')),
+  wan_interface VARCHAR(120),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (public_ip IS NOT NULL OR assignment_method = 'tunnel')
+);
+CREATE INDEX IF NOT EXISTS idx_public_ip_configs_enabled ON public_ip_configs(enabled, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS port_forward_rules (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  protocol VARCHAR(8) NOT NULL CHECK (protocol IN ('tcp','udp','both')),
+  external_port INTEGER NOT NULL CHECK (external_port BETWEEN 1 AND 65535),
+  destination_ip INET NOT NULL,
+  internal_port INTEGER NOT NULL CHECK (internal_port BETWEEN 1 AND 65535),
+  allowed_source_ip INET,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  status VARCHAR(32) NOT NULL DEFAULT 'waiting_for_public_ip'
+    CHECK (status IN ('waiting_for_public_ip','pending_validation','ready','applied','error')),
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(protocol, external_port)
+);
+CREATE INDEX IF NOT EXISTS idx_port_forward_rules_status ON port_forward_rules(status, enabled);
+
+CREATE TABLE IF NOT EXISTS vpn_profiles (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL UNIQUE,
+  provider VARCHAR(24) NOT NULL CHECK (provider IN ('wireguard')),
+  role VARCHAR(32) NOT NULL DEFAULT 'management_access' CHECK (role IN ('management_access')),
+  status VARCHAR(32) NOT NULL DEFAULT 'pending_endpoint'
+    CHECK (status IN ('pending_endpoint','configured','testing','connected','error')),
+  endpoint_host VARCHAR(253),
+  endpoint_port INTEGER CHECK (endpoint_port IS NULL OR endpoint_port BETWEEN 1 AND 65535),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Single-installation OLT web-management settings. Password is encrypted by the app before storage.
+CREATE TABLE IF NOT EXISTS olt_connections (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name VARCHAR(120) NOT NULL DEFAULT 'Main OLT',
+  management_ip INET NOT NULL,
+  protocol VARCHAR(8) NOT NULL CHECK (protocol IN ('http','https')),
+  port INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+  username VARCHAR(160),
+  encrypted_password TEXT,
+  connection_status VARCHAR(32) NOT NULL DEFAULT 'not_tested'
+    CHECK (connection_status IN ('not_tested','reachable_unverified','unreachable','connected')),
+  last_test_at TIMESTAMPTZ,
+  last_http_status INTEGER,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- OLT web protocol discovery mode; existing settings default to safe auto-detection.
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS access_method VARCHAR(16) NOT NULL DEFAULT 'detect';
+ALTER TABLE olt_connections DROP CONSTRAINT IF EXISTS olt_connections_access_method_check;
+ALTER TABLE olt_connections ADD CONSTRAINT olt_connections_access_method_check CHECK (access_method IN ('detect','http','https'));
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS local_management_ip INET;
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS local_port INTEGER NOT NULL DEFAULT 80 CHECK (local_port BETWEEN 1 AND 65535);
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS vpn_forwarded_ip INET;
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS vpn_forwarded_port INTEGER NOT NULL DEFAULT 80 CHECK (vpn_forwarded_port BETWEEN 1 AND 65535);
+ALTER TABLE olt_connections ADD COLUMN IF NOT EXISTS endpoint_mode VARCHAR(8) NOT NULL DEFAULT 'local';
+ALTER TABLE olt_connections DROP CONSTRAINT IF EXISTS olt_connections_endpoint_mode_check;
+ALTER TABLE olt_connections ADD CONSTRAINT olt_connections_endpoint_mode_check CHECK (endpoint_mode IN ('local','vpn'));
+UPDATE olt_connections SET local_management_ip=management_ip WHERE local_management_ip IS NULL;
