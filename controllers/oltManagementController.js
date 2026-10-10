@@ -15,7 +15,7 @@ async function audit(req, action, details) {
   );
 }
 async function currentConfig() {
-  const result = await db.query('SELECT id,name,management_ip::text AS "managementIp",protocol,access_method AS "accessMethod",port,username,encrypted_password IS NOT NULL AS "hasPassword",connection_status AS "connectionStatus",last_test_at AS "lastTestAt",last_http_status AS "lastHttpStatus",last_error AS "lastError",updated_at AS "updatedAt" FROM olt_connections WHERE id=1');
+  const result = await db.query('SELECT id,name,management_ip::text AS "managementIp",protocol,access_method AS "accessMethod",port,username,encrypted_password IS NOT NULL AS "hasPassword",CASE WHEN connection_status='connected' THEN 'not_tested' ELSE connection_status END AS "connectionStatus",last_test_at AS "lastTestAt",last_http_status AS "lastHttpStatus",last_error AS "lastError",updated_at AS "updatedAt" FROM olt_connections WHERE id=1');
   return result.rows[0] || null;
 }
 exports.getConfig = async (req,res) => {
