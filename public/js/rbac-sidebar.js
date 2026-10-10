@@ -61,6 +61,23 @@
   };
   document.addEventListener('DOMContentLoaded',applyRoleNavigation,{once:true});
   if(document.readyState!=='loading')applyRoleNavigation();
+  if(role==='staff'){
+    const hideMutationControls=root=>{
+      (root||document).querySelectorAll('button,a,[role="button"]').forEach(control=>{
+        const label=(control.getAttribute('title')||control.getAttribute('aria-label')||control.textContent||'').trim().toLowerCase();
+        if(/\b(edit|delete|remove|renew|kick|provision|sync|restore|change package|mark paid|manual match|push exp)\b/.test(label)) control.hidden=true;
+      });
+      (root||document).querySelectorAll('input[type="submit"],button[type="submit"]').forEach(control=>{
+        const label=(control.textContent||control.value||'').trim().toLowerCase();
+        if(/save|create|update|delete|renew|provision|sync/.test(label)) control.hidden=true;
+      });
+    };
+    hideMutationControls();
+    const dynamicContent=document.getElementById('dynamicPageContent');
+    if(dynamicContent&&typeof MutationObserver!=='undefined'){
+      new MutationObserver(()=>hideMutationControls(dynamicContent)).observe(dynamicContent,{childList:true,subtree:true});
+    }
+  }
   const form=document.getElementById('rbacCreateUserForm');
   if(form)form.addEventListener('submit',async event=>{
     event.preventDefault();
