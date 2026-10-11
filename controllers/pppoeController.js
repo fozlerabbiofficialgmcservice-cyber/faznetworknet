@@ -186,6 +186,92 @@ async function syncFromRouter(options = {}) {
   });
   return summary;
 }
+
+const crypto = require("crypto");
+
+function secureTokenEqual(expected, supplied) {
+  const a = Buffer.from(String(expected || ""));
+  const b = Buffer.from(String(supplied || ""));
+  return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function ingestLiveSessions(req, res) {
+  try {
+    const body = req.body || {};
+    if (!Array.isArray(body.sessions) || body.sessions.length > 5000) {
+      return res.status(400).json({ success: false, message: "sessions must be an array containing 0–5000 entries." });
+    }
+    const declaredCount = Number(body.count);
+    if (!Number.isInteger(declaredCount) || declaredCount !== body.sessions.length) {
+      return res.status(400).json({ success: false, message: "count must equal sessions.length." });
+    }
+
+    const sessions = [];
+    const seen = new Set();
+    for (const item of body.sessions) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return res.status(400).json({ success: false, message: "Each session must be an object." });
+      }
+      const username = clean(item.username, 100);
+      if (!username) return res.status(400).json({ success: false, message: "Every session requires username." });
+      const key = username.toLowerCase();
+      if (seen.has(key)) return res.status(400).json({ success: false, message: "Duplicate username in session snapshot: " + username });
+      seen.add(key);
+      const service = clean(item.service || "pppoe", 40).toLowerCase();
+      if (service !== "pppoe") continue;
+      const bytes = value => {
+        if (value === undefined || value === null || value === "") return 0;
+        const n = Number(value);
+        if (!Number.isSafeInteger(n) || n < 0) throw new Error("Session byte counters must be non-negative safe integers.");
+        return n;
+      };
+      sessions.push({
+        username, address: clean(item.address, 64) || null,
+        uptime: clean(item.uptime, 80) || null, service,
+        bytesIn: bytes(item.bytesIn), bytesOut: bytes(item.bytesOut),
+        callerId: clean(item.callerId || item["caller-id"], 100) || null
+      });
+    }
+
+    const client = await db.getPool().connect();
+    try {
+      await client.query("BEGIN");
+      // Replace the complete snapshot atomically so disconnected users do not remain online.
+      await client.query("DELETE FROM pppoe_live_sessions");
+      for (const session of sessions) {
+        await client.query(
+          `INSERT INTO pppoe_live_sessions
+             (username, address, uptime, service, bytes_in, bytes_out, caller_id, received_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+          [session.username, session.address, session.uptime, session.service, String(session.bytesIn), String(session.bytesOut), session.callerId]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch (_) {}
+      throw error;
+    } finally {
+      client.release();
+    }
+    return res.status(200).json({
+      success: true, code: 200, received: body.sessions.length, stored: sessions.length,
+      receivedAt: new Date().toISOString(), source: "mikrotik-push"
+    });
+  } catch (error) {
+    console.error("[PPPoE session ingest]", error.message);
+    return res.status(400).json({ success: false, message: error.message || "Unable to store PPPoE sessions." });
+  }
+}
+
+const syncSessions = [function authenticatePppoeAgent(req, res, next) {
+  const expected = String(process.env.PPPOE_SESSION_SYNC_TOKEN || process.env.OLT_COLLECTOR_TOKEN || "");
+  const authorization = String(req.get("authorization") || "");
+  const supplied = authorization.match(/^Bearer\\s+(.+)$/i)?.[1] || "";
+  if (!expected) return res.status(503).json({ success: false, message: "PPPoE session sync token is not configured." });
+  if (!secureTokenEqual(expected, supplied)) return res.status(401).json({ success: false, message: "Unauthorized PPPoE session collector." });
+  return next();
+}, ingestLiveSessions];
+
 async function users(req, res) {
   try {
     const filter = clean(req.query.filter || "all", 40).toLowerCase();
@@ -239,16 +325,17 @@ async function users(req, res) {
       ORDER BY COALESCE(c.created_at, '1970-01-01'::timestamp) ASC, c.username ASC, c.id ASC
     `, params);
 
-    let sessions = [];
-    try {
-      sessions = await mikrotikService.getActiveSessions();
-    } catch (routerError) {
-      if (filter === "online" || filter === "offline") throw routerError;
-      console.warn("[PPPoE FILTER] MikroTik live session lookup unavailable:", routerError.message);
-    }
-
+    // Read the most recently pushed RouterOS session snapshot from PostgreSQL.
+    // This avoids opening a MikroTik socket for each Customer 360/dashboard request.
+    const liveResult = await db.query(
+      `SELECT username, address, uptime, service, bytes_in AS "bytesIn",
+              bytes_out AS "bytesOut", caller_id AS "callerId", received_at AS "receivedAt"
+       FROM pppoe_live_sessions
+       WHERE received_at >= NOW() - INTERVAL '3 minutes'
+       ORDER BY username ASC`
+    );
     const sessionMap = new Map();
-    for (const session of sessions) {
+    for (const session of liveResult.rows) {
       const username = String(session.username || "").trim().toLowerCase();
       if (username && !sessionMap.has(username)) sessionMap.set(username, session);
     }
@@ -307,8 +394,14 @@ async function profiles(req, res) {
 
 async function active(req, res) {
   try {
-    const sessions = await mikrotikService.getActiveSessions();
-    res.json({ success: true, sessions });
+    const result = await db.query(
+      `SELECT username, address, uptime, service, bytes_in AS "bytesIn",
+              bytes_out AS "bytesOut", caller_id AS "callerId", received_at AS "receivedAt"
+       FROM pppoe_live_sessions
+       WHERE received_at >= NOW() - INTERVAL '3 minutes'
+       ORDER BY username ASC`
+    );
+    return res.json({ success: true, count: result.rows.length, sessions: result.rows, source: "mikrotik-push", stale: result.rows.length === 0 });
   } catch (error) {
     return errorResponse(res, error);
   }
@@ -459,4 +552,4 @@ async function removeUser(req,res){
   return customerController.removeCustomer(req,res);
 }
 
-module.exports = { users, profiles, active, createUser, updateUser, toggleUser, kickUser, createProfile, restoreUserToPanel, removeUser };
+module.exports = { users, profiles, active, syncSessions, createUser, updateUser, toggleUser, kickUser, createProfile, restoreUserToPanel, removeUser };
