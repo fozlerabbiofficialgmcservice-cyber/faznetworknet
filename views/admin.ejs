@@ -2871,11 +2871,10 @@ async function deletePlan(id,name){
                 const username=String((profileLink||paidBtn||viewBtn)?.dataset?.username||'').trim();
                 if(!username)return;
                 if(profileLink){
+                    // Customer 360 is a dedicated page, not the missing editCustomerModal.
+                    // Follow the standard server route so the browser requests /admin/customers/:username.
                     event.preventDefault();
-                    // Resolve the selected customer by PPPoE username, not a potentially
-                    // mismatched numeric router/database ID. Keep the user in Customer 360.
-                    if(typeof window.openCustomerProfile==='function')window.openCustomerProfile(username);
-                    else alert('Customer 360 is not ready. Please refresh the page.');
+                    window.location.assign(profileLink.href);
                     return;
                 }
                 if(paidBtn){
