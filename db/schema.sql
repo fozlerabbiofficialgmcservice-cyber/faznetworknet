@@ -37,6 +37,21 @@ END;
 $faz_schema$;
 ALTER TABLE pppoe_profiles ALTER COLUMN change_tcp_mss SET DEFAULT 'default';
 
+
+-- Latest push-based PPPoE active-session snapshot from MikroTik.
+-- This is operational telemetry only; it does not alter canonical customer or billing records.
+CREATE TABLE IF NOT EXISTS pppoe_live_sessions (
+  username VARCHAR(100) PRIMARY KEY,
+  address VARCHAR(64),
+  uptime VARCHAR(80),
+  service VARCHAR(40) NOT NULL DEFAULT 'pppoe',
+  bytes_in BIGINT NOT NULL DEFAULT 0 CHECK (bytes_in >= 0),
+  bytes_out BIGINT NOT NULL DEFAULT 0 CHECK (bytes_out >= 0),
+  caller_id VARCHAR(100),
+  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pppoe_live_sessions_received_at ON pppoe_live_sessions(received_at DESC);
+
 CREATE TABLE IF NOT EXISTS pppoe_users (
   id BIGSERIAL PRIMARY KEY,
   username TEXT NOT NULL UNIQUE,
