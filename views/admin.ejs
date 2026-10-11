@@ -3037,14 +3037,44 @@ async function deletePlan(id,name){
         }
         async function openCustomerProfile(username,prefetchedData){
             const name=String(username||'').trim();
-            if(!name)return;
             const modalEl=document.getElementById('editCustomerModal');
-            if(!modalEl)return;
-            const modal=window.bootstrap?.Modal?.getOrCreateInstance(modalEl);
+            if(!modalEl){console.error('[Customer 360] Modal element #editCustomerModal was not found.');return;}
+            let modal=null;
+            const forceModalVisible=()=>{
+                try{
+                    if(window.bootstrap?.Modal){
+                        modal=modal||window.bootstrap.Modal.getOrCreateInstance(modalEl);
+                        modal.show();
+                        return;
+                    }
+                }catch(showError){console.error('[Customer 360] Bootstrap modal show failed; using DOM fallback.',showError);}
+                modalEl.style.display='block';
+                modalEl.classList.add('show');
+                modalEl.removeAttribute('aria-hidden');
+                modalEl.setAttribute('aria-modal','true');
+                modalEl.setAttribute('role','dialog');
+                document.body.classList.add('modal-open');
+                if(!document.getElementById('customer360FallbackBackdrop')){
+                    const backdrop=document.createElement('div');
+                    backdrop.id='customer360FallbackBackdrop';
+                    backdrop.className='modal-backdrop fade show';
+                    backdrop.addEventListener('click',()=>{
+                        modalEl.classList.remove('show');
+                        modalEl.style.display='none';
+                        modalEl.setAttribute('aria-hidden','true');
+                        document.body.classList.remove('modal-open');
+                        backdrop.remove();
+                    });
+                    document.body.appendChild(backdrop);
+                }
+            };
             const loading=modalEl.querySelector('#customerProfileLoading');
             if(loading)loading.classList.remove('d-none');
-            modal?.show();
+            const earlyTitle=modalEl.querySelector('#modalCustomerTitle');
+            if(earlyTitle)earlyTitle.textContent='Customer 360 · '+(name||'Customer');
+            forceModalVisible();
             try{
+                if(!name)throw new Error('Customer username is missing.');
                 const data=prefetchedData||await jsonFetch('/api/customers/profile?username='+encodeURIComponent(name));
                 if(!data||data.success===false||!data.customer||typeof data.customer!=='object')throw new Error(data?.message||'Customer profile response is empty or invalid.');
                 const customer=data.customer||{},live=data.live&&typeof data.live==='object'?data.live:{online:false,bytesIn:0,bytesOut:0},plans=Array.isArray(data.plans)?data.plans:[],payments=Array.isArray(data.payments)?data.payments:[];
@@ -3119,7 +3149,7 @@ async function deletePlan(id,name){
                     errorBox.textContent='Customer details could not be loaded right now. The Customer 360 panel is open; please retry. '+String(error?.message||'Temporary API/database error').slice(0,180);
                 }
                 if(loading)loading.classList.add('d-none');
-                modal?.show();
+                forceModalVisible();
             }
         }
 
