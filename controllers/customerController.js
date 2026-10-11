@@ -1087,22 +1087,22 @@ async function resolveCustomer360(idValue){
   // comes from PostgreSQL push snapshots and is ignored once older than 3 minutes.
   const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult,telemetryResult]=await Promise.allSettled([
     db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
-    db.query(\`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
+    db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
                     caller_id AS "callerId",received_at AS "receivedAt"
              FROM pppoe_live_sessions
              WHERE LOWER(username)=LOWER($1)
-             ORDER BY received_at DESC LIMIT 1\`,[username]),
+             ORDER BY received_at DESC LIMIT 1`,[username]),
     db.query("SELECT id,plan_name AS name,profile_name AS profileName,pool_name AS poolName,price,duration_months AS durationMonths,rate_limit AS rateLimit,remote_address AS remoteAddress FROM packages ORDER BY price ASC,plan_name ASC"),
     db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(
-      \`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
+      `SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
               pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",
               tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",
               received_at AS "receivedAt",source_agent AS "sourceAgent"
        FROM olt_telemetry
        WHERE LOWER(COALESCE(pppoe_username,''))=LOWER($1)
-       ORDER BY observed_at DESC LIMIT 1\`,
+       ORDER BY observed_at DESC LIMIT 1`,
       [username]
     )
   ]);
@@ -1148,10 +1148,10 @@ async function getCustomerLiveSession(req,res){
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
     const [sessionResult,storedResult]=await Promise.allSettled([
-      db.query(\`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
+      db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
                       caller_id AS "callerId",received_at AS "receivedAt"
                FROM pppoe_live_sessions WHERE LOWER(username)=LOWER($1)
-               ORDER BY received_at DESC LIMIT 1\`,[customer.username]),
+               ORDER BY received_at DESC LIMIT 1`,[customer.username]),
       db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username])
     ]);
     const storedMac=storedResult.status==="fulfilled"?clean(storedResult.value.rows?.[0]?.caller_id,100):"";
