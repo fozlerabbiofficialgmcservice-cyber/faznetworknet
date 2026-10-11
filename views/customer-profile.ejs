@@ -76,10 +76,11 @@ async function loadNetworkMap(){
   $('topoPool').textContent=pkg.poolName||'Not assigned';
   $('topoIp').textContent='IP '+(live.ip||'—');
   $('topoRouterMac').textContent='Router MAC '+(live.mac||customer.routerMac||'—');
-  $('topoPon').textContent=customer.oltPonPort||'EPON —';
-  $('topoOnu').textContent='ONU —';
-  $('topoOnuMac').textContent='ONU MAC —';
-  $('topoRx').textContent='RX — dBm';
+  // Keep the last known ONU/PON/RX values visible while the next poll runs.
+  if(!$('topoPon').dataset.loaded) $('topoPon').textContent=customer.oltPonPort||'EPON —';
+  if(!$('topoOnu').dataset.loaded) $('topoOnu').textContent='ONU —';
+  if(!$('topoOnuMac').dataset.loaded) $('topoOnuMac').textContent='ONU MAC '+(customer.onuMac||'—');
+  if(!$('topoRx').dataset.loaded) $('topoRx').textContent='RX — dBm';
   $('topoHealth').innerHTML='<span class="topology-health">Awaiting verified reading</span>';
   $('topologyOverall').textContent='Partial mapping';
   $('topologyOverall').className='topology-health';
