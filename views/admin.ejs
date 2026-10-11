@@ -3098,10 +3098,27 @@ async function deletePlan(id,name){
                 modalEl.dataset.loaded='1';
                 if(loading)loading.classList.add('d-none');
             }catch(error){
+                console.error('[Customer Hub] Profile load failed:',error);
+                // Keep the hub open even if the profile API or optional data is unavailable.
+                // The user can still see a clear error instead of a silently closing modal.
+                modalEl.dataset.username=name;
+                modalEl.dataset.loaded='0';
+                const title=modalEl.querySelector('#modalCustomerTitle');
+                if(title)title.textContent='Customer 360 · '+name;
+                const pill=modalEl.querySelector('#modalCustomerLivePill');
+                if(pill){pill.className='badge bg-secondary rounded-pill px-3 py-2';pill.textContent='○ Status unavailable';}
+                const liveBadge=modalEl.querySelector('#cpLiveStatus');
+                if(liveBadge){liveBadge.className='badge bg-secondary';liveBadge.textContent='Offline / unavailable';}
+                ['cpAssignedIp','cpCallerId','cpUptime','cpLiveIp'].forEach(id=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent='—';});
+                ['cpRx','cpTx'].forEach(id=>{const el=modalEl.querySelector('#'+id);if(el)el.textContent='0 B';});
+                const body=modalEl.querySelector('.modal-body');
+                if(body){
+                    let errorBox=body.querySelector('#customerProfileLoadError');
+                    if(!errorBox){errorBox=document.createElement('div');errorBox.id='customerProfileLoadError';errorBox.className='alert alert-warning mx-3 mt-3';body.prepend(errorBox);}
+                    errorBox.textContent='Customer details could not be loaded right now. The Customer 360 panel is open; please retry. '+String(error?.message||'Temporary API/database error').slice(0,180);
+                }
                 if(loading)loading.classList.add('d-none');
-                console.error('[Customer Hub]',error);
-                alert(error.message||'Could not load customer profile.');
-                modal?.hide();
+                modal?.show();
             }
         }
 
