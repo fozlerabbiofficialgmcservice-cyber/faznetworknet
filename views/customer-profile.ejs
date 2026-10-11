@@ -69,6 +69,7 @@ $('pkg').textContent=p.name||c.packageName||'—';$('rate').textContent='Bandwid
 const rows=state.payments||[];$('ledger').innerHTML=rows.length?rows.map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+date(x.date)+'</td><td>'+esc(x.packageName||p.name||'—')+'</td><td>৳'+Number(x.amount||0).toFixed(2)+'</td><td>'+esc(x.method||'—')+'</td><td class="mono">'+esc(x.trxId||'—')+'</td><td><span class="badge '+(String(x.status||'').toUpperCase()==='PAID'?'bg-success':'bg-secondary')+'">'+esc(x.status||'—')+'</span></td></tr>').join(''):'<tr><td colspan="7" class="text-center text-muted py-4">No transactions. Record the first payment above.</td></tr>'}
 async function loadNetworkMap(){
  const status=$('networkMapStatus'),last=$('networkMapLastSeen'),mac=$('networkMapRouterMac'),rows=$('networkMapRows');
+ let hasFreshCollectorTelemetry=false;
  try{
   const d=await api('/api/network-map/customers/'+encodeURIComponent(id));
   const customer=state?.customer||{}, live=state?.live||{}, pkg=state?.package||{};
@@ -89,6 +90,7 @@ async function loadNetworkMap(){
    const td=await api('/api/olt/telemetry?username='+encodeURIComponent(state.customer?.username||''));
    const t=td.telemetry;
    if(t){
+    hasFreshCollectorTelemetry=!t.stale;
     $('topoPon').textContent=t.ponPort||customer.oltPonPort||'EPON —';
     $('topoOnu').textContent=t.onuId||'ONU —';
     $('topoOnuMac').textContent='ONU MAC '+(t.onuMac||customer.onuMac||'Not verified');
@@ -103,7 +105,7 @@ async function loadNetworkMap(){
     if(t.onuMac)$('onu').textContent=t.onuMac;
     $('onuRxPowerValue').textContent=t.rxPowerDbm!==null&&t.rxPowerDbm!==undefined?Number(t.rxPowerDbm).toFixed(2)+' dBm':'—';
     $('onuRxPowerValue').className='metric mono '+(t.signalLevel==='weak'?'text-danger':t.signalLevel==='warning'?'text-warning':t.signalLevel==='good'?'text-success':'');
-    $('onuRxPowerSource').textContent=(t.stale?'STALE · ':'')+'OLT '+t.oltId+' · PON '+(t.ponPort||'—')+' · ONU '+t.onuId+' · observed '+new Date(t.observedAt).toLocaleString();
+    $('onuRxPowerSource').textContent=(t.stale?'STALE · ':'')+'OLT '+(t.oltId||'—')+' · PON '+(t.ponPort||'—')+' · ONU '+(t.onuId||'—')+' · observed '+(t.observedAt?new Date(t.observedAt).toLocaleString():'—');
     $('onuTelemetryStatus').textContent='ONU status: '+String(t.status||'unknown').toUpperCase()+(t.stale?' · telemetry stale':'');
     $('onuTelemetryStatus').className='small mt-1 '+(t.stale?'text-warning':t.status==='online'?'text-success':'text-danger');
     $('onuTxPowerValue').textContent='TX power: '+(t.txPowerDbm===null||t.txPowerDbm===undefined?'—':Number(t.txPowerDbm).toFixed(2)+' dBm');
@@ -115,9 +117,13 @@ async function loadNetworkMap(){
   status.className='fw-semibold '+(d.discoveryStatus==='observations_available'?'text-success':'text-muted');
   last.textContent=d.lastObservedAt?new Date(d.lastObservedAt).toLocaleString():'No observations yet';
   mac.textContent=d.routerMac||'—';
-  const rx=d.rxPower||{};
-  $('onuRxPowerValue').textContent=rx.dbm!==null&&rx.dbm!==undefined?Number(rx.dbm).toFixed(2)+' dBm':'—';
-  $('onuRxPowerSource').textContent=rx.observedAt?'Automatic OLT reading · '+(rx.sourceDevice||'OLT')+' · '+new Date(rx.observedAt).toLocaleString():'OLT integration deferred · live readings are not enabled';
+  // Legacy customer-column readings must not overwrite fresher collector telemetry.
+  if(!hasFreshCollectorTelemetry){
+   const rx=d.rxPower||{};
+   const validRx=rx.dbm!==null&&rx.dbm!==undefined&&Number.isFinite(Number(rx.dbm));
+   $('onuRxPowerValue').textContent=validRx?Number(rx.dbm).toFixed(2)+' dBm':'—';
+   $('onuRxPowerSource').textContent=rx.observedAt?'Saved customer OLT reading · '+(rx.sourceDevice||'OLT')+' · '+new Date(rx.observedAt).toLocaleString():'Awaiting verified OLT reading';
+  }
   const list=Array.isArray(d.observations)?d.observations:[];
   rows.innerHTML=list.length?list.map(o=>'<tr><td>'+esc(o.observationType||'—')+'</td><td class="mono">'+esc(o.identityValue||'—')+'</td><td>'+esc(o.matchStatus||'—')+'</td><td>'+esc(o.sourceDevice||'—')+'</td><td>'+esc(o.observedAt?new Date(o.observedAt).toLocaleString():'—')+'</td></tr>').join(''):'<tr><td colspan="5" class="text-muted text-center py-3">No network observations recorded yet. Run read-only discovery from Device Management.</td></tr>';
  }catch(e){
