@@ -1083,77 +1083,87 @@ async function resolveCustomer360(idValue){
   const customer=customerResult.rows[0]||null;
   if(!customer)return null;
   const username=clean(customer.username,100);
-  // Customer 360 is panel-first. Live PPPoE and OLT data are optional push snapshots;
-  // no per-page MikroTik socket is opened, and missing telemetry never blocks rendering.
-  const [routerResult,sessionResult,packageResult,paymentResult,callerIdResult,telemetryResult]=await Promise.allSettled([
-    mikrotikService.getPppoeSecret(username),
-    db.query(`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
+  // Customer 360 must never open a MikroTik API socket. All optional live data
+  // comes from PostgreSQL push snapshots and is ignored once older than 3 minutes.
+  const [routerRecordResult,sessionResult,packageResult,paymentResult,callerIdResult,telemetryResult]=await Promise.allSettled([
+    db.query("SELECT * FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
+    db.query(\`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
                     caller_id AS "callerId",received_at AS "receivedAt"
              FROM pppoe_live_sessions
-             WHERE LOWER(username)=LOWER($1) AND received_at >= NOW() - INTERVAL '3 minutes'
-             LIMIT 1`,[username]),
+             WHERE LOWER(username)=LOWER($1)
+             ORDER BY received_at DESC LIMIT 1\`,[username]),
     db.query("SELECT id,plan_name AS name,profile_name AS profileName,pool_name AS poolName,price,duration_months AS durationMonths,rate_limit AS rateLimit,remote_address AS remoteAddress FROM packages ORDER BY price ASC,plan_name ASC"),
     db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(
-      `SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
+      \`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
               pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",
               tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",
               received_at AS "receivedAt",source_agent AS "sourceAgent"
        FROM olt_telemetry
        WHERE LOWER(COALESCE(pppoe_username,''))=LOWER($1)
-       ORDER BY observed_at DESC LIMIT 1`,
+       ORDER BY observed_at DESC LIMIT 1\`,
       [username]
     )
   ]);
-  const secret=routerResult.status==="fulfilled"?routerResult.value:null;
-  const sessionRow=sessionResult.status==="fulfilled"?sessionResult.value.rows?.[0]||null:null;
-  const session=sessionRow && Date.now()-new Date(sessionRow.receivedAt).getTime()<=3*60*1000?sessionRow:null;
+  const secret=routerRecordResult.status==="fulfilled"?routerRecordResult.value.rows?.[0]||null:null;
+  const candidateSession=sessionResult.status==="fulfilled"?sessionResult.value.rows?.[0]||null:null;
+  const receivedAtMs=candidateSession?.receivedAt?new Date(candidateSession.receivedAt).getTime():NaN;
+  const session=candidateSession&&Number.isFinite(receivedAtMs)&&Date.now()-receivedAtMs>=0&&Date.now()-receivedAtMs<=3*60*1000?candidateSession:null;
   const plans=packageResult.status==="fulfilled"?packageResult.value.rows:[];
   const payments=paymentResult.status==="fulfilled"?paymentResult.value.rows:[];
   const storedMac=callerIdResult.status==="fulfilled"?clean(callerIdResult.value.rows[0]?.caller_id,100):"";
   const telemetryRow=telemetryResult.status==="fulfilled"?telemetryResult.value.rows?.[0]||null:null;
   const telemetry=telemetryRow?{
     ...telemetryRow,
-    stale:Date.now()-new Date(telemetryRow.receivedAt).getTime()>15*60*1000,
+    stale:!telemetryRow.receivedAt||!Number.isFinite(new Date(telemetryRow.receivedAt).getTime())||Date.now()-new Date(telemetryRow.receivedAt).getTime()>15*60*1000,
     signalLevel:telemetryRow.rxPowerDbm===null||telemetryRow.rxPowerDbm===undefined||!Number.isFinite(Number(telemetryRow.rxPowerDbm))
       ?"unknown":Number(telemetryRow.rxPowerDbm)<-27?"weak":Number(telemetryRow.rxPowerDbm)<=-25?"warning":"good"
   }:null;
   const packageDef=plans.find(x=>String(x.profileName||"").toLowerCase()===String(customer.profile||"").toLowerCase())||plans.find(x=>String(x.name||"").toLowerCase()===String(customer.package_name||"").toLowerCase());
   const expiration=normalizeDate(customer.expiration_date)||normalizeDate(secret?.comment?.match(/EXP:\s*(\d{4}-\d{2}-\d{2})/i)?.[1]);
-  const today=bangladeshToday();
   const billing=evaluateCustomerBillingStatus({expiration_date:expiration});
   const remainingDays=billing.daysLeft;
   const disabled=Boolean(secret?.disabled)||String(customer.status||"").toLowerCase()==="inactive"||String(customer.status||"").toLowerCase()==="suspended";
-   const formattedPhone=formatBdPhoneNumber(customer.phone);
+  const formattedPhone=formatBdPhoneNumber(customer.phone);
   const status=disabled?(String(customer.status||"").toLowerCase()==="suspended"?"suspended":"inactive"):(expiration&&dateStatus(expiration)==="expired"?"expired":"active");
+  const bytesIn=session?String(session.bytesIn??0):"0";
+  const bytesOut=session?String(session.bytesOut??0):"0";
+  const liveStatus=session?"online":"offline";
   return {
-    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remoteAddress||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
-    live:{isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),uptime:clean(session?.uptime||"",100),bytesIn:session?.bytesIn||"0",bytesOut:session?.bytesOut||"0",lastDisconnectReason:clean(customer.last_disconnect_reason,255)},
+    customer:{id:customer.id,name:clean(customer.full_name,200),fullName:clean(customer.full_name,200),phone:formattedPhone,rawPhone:clean(customer.phone,40),alternativePhone:clean(customer.alternative_phone,40),nid:clean(customer.nid,100),installationAddress:clean(customer.installation_address,1000),areaZone:clean(customer.area_zone,150),connectionDate:customer.connection_date,username,packageName:clean(customer.package_name||secret?.profile,120),profile:clean(customer.profile||secret?.profile,120),expirationDate:expiration||null,status,disabled,splitterBox:clean(customer.distribution_box||customer.fiber_box,150),onuMac:clean(customer.onu_mac,100),fiberCore:clean(customer.fiber_drop_core,80),fiberDropCore:clean(customer.fiber_drop_core,80),oltPonPort:clean(customer.olt_pon_port,120),onuSerial:clean(customer.onu_serial,150),remarks:clean(customer.remarks,1000),password:clean(secret?.password||customer.password,255),remoteAddress:clean(secret?.remote_address||customer.remote_address,100),poolName:clean(packageDef?.poolName,100),billingCycle:clean(customer.billing_cycle||"monthly",30),billingDurationDays:customer.billing_duration_days==null?null:Number(customer.billing_duration_days),billingExpiryOverride:Boolean(customer.billing_expiry_override),billingStatus:clean(customer.billing_status||"unpaid",30),lastDisconnectReason:clean(customer.last_disconnect_reason,255),remainingDays,billing_status:billing.status,billing_badge_class:billing.badgeClass,badgeClass:billing.badgeClass,billing_label:billing.label,days_left:billing.daysLeft},
+    live:{status:liveStatus,isLive:Boolean(session),online:Boolean(session),ip:clean(session?.address||"",100),mac:clean(session?.callerId||storedMac,100),uptime:clean(session?.uptime||"",100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},lastDisconnectReason:clean(customer.last_disconnect_reason,255),receivedAt:session?.receivedAt||null},
+    telemetry,
     package:packageDef?{...packageDef,price:Number(packageDef.price||0),durationMonths:Number(packageDef.durationMonths||1),rateLimit:clean(packageDef.rateLimit,100)}:{name:clean(customer.package_name,120),profileName:clean(customer.profile,120),price:Number(customer.monthly_bill||0),durationMonths:1,rateLimit:"",poolName:""},
     plans:plans.map(x=>({...x,price:Number(x.price||0),durationMonths:Number(x.durationMonths||1),rateLimit:clean(x.rateLimit,100)})),
     payments:payments.map(x=>({trxId:clean(x.trx_id,100),amount:Number(x.amount||0),method:clean(x.method,30),date:x.created_at,status:clean(x.status,30),packageName:clean(customer.package_name||customer.profile,120)}))
   };
 }
-async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){return errorResponse(res,error);}}
+async function getCustomerProfileById(req,res){try{const payload=await resolveCustomer360(req.params.id);if(!payload)return res.status(404).json({success:false,message:"Customer not found."});return res.json({success:true,...payload});}catch(error){console.warn("[Customer 360] Snapshot/profile lookup failed:",error.message);return errorResponse(res,error);}}
 async function getCustomerLiveSession(req,res){
+  const offlineLive=(mac="")=>({status:"offline",isLive:false,online:false,ip:"",mac:clean(mac,100),uptime:"",bytesIn:"0",bytesOut:"0",traffic:{bytesIn:0,bytesOut:0},stale:true});
   try{
     const key=clean(req.params.id,100);
     const result=await db.query("SELECT id,username FROM customers WHERE id::text=$1 OR LOWER(username)=LOWER($1) LIMIT 1",[key]);
     const customer=result.rows[0];
     if(!customer)return res.status(404).json({success:false,message:"Customer not found."});
-    const live=await mikrotikService.getPppoeLiveTraffic(customer.username);
-    const storedResult=await db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username]);
-    const storedMac=clean(storedResult.rows[0]?.caller_id,100);
-    if(live.online&&live.mac){
-      await db.query("UPDATE pppoe_users SET caller_id=$1,synced_at=NOW(),updated_at=NOW() WHERE LOWER(username)=LOWER($2)",[live.mac,customer.username]);
-    }else{
-      live.mac=storedMac;
-    }
-    return res.json({success:true,live});
+    const [sessionResult,storedResult]=await Promise.allSettled([
+      db.query(\`SELECT username,address,uptime,service,bytes_in AS "bytesIn",bytes_out AS "bytesOut",
+                      caller_id AS "callerId",received_at AS "receivedAt"
+               FROM pppoe_live_sessions WHERE LOWER(username)=LOWER($1)
+               ORDER BY received_at DESC LIMIT 1\`,[customer.username]),
+      db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[customer.username])
+    ]);
+    const storedMac=storedResult.status==="fulfilled"?clean(storedResult.value.rows?.[0]?.caller_id,100):"";
+    const row=sessionResult.status==="fulfilled"?sessionResult.value.rows?.[0]||null:null;
+    const receivedAtMs=row?.receivedAt?new Date(row.receivedAt).getTime():NaN;
+    const fresh=Boolean(row)&&Number.isFinite(receivedAtMs)&&Date.now()-receivedAtMs>=0&&Date.now()-receivedAtMs<=3*60*1000;
+    if(!fresh)return res.json({success:true,live:offlineLive(storedMac)});
+    const bytesIn=String(row.bytesIn??0),bytesOut=String(row.bytesOut??0);
+    return res.json({success:true,live:{status:"online",isLive:true,online:true,ip:clean(row.address,100),mac:clean(row.callerId||storedMac,100),uptime:clean(row.uptime,100),bytesIn,bytesOut,traffic:{bytesIn:Number(bytesIn)||0,bytesOut:Number(bytesOut)||0},service:clean(row.service,50),receivedAt:row.receivedAt,stale:false}});
   }catch(error){
-    console.warn("[Customer live session] Traffic lookup failed:",error.message);
-    return res.status(503).json({success:false,message:"Live MikroTik traffic is temporarily unavailable."});
+    console.warn("[Customer live session] Snapshot lookup unavailable; returning offline:",error.message);
+    return res.json({success:true,live:offlineLive()});
   }
 }
 
