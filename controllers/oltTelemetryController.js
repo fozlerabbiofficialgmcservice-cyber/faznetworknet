@@ -129,20 +129,3 @@ exports.listTelemetry = async (req,res) => {
     return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
   }
 };
- THEN c.onu_mac::macaddr ELSE NULL END WHERE LOWER(c.username)=LOWER($1) ORDER BY t.observed_at DESC LIMIT 1`,[username]);
-    } else {
-      result=await db.query(`SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry ORDER BY received_at DESC LIMIT 500`);
-    }
-    const row=result.rows[0]||null;
-    if(row) {
-      const age=Date.now()-new Date(row.receivedAt).getTime();
-      row.stale=age>15*60*1000;
-      row.signalLevel=row.rxPowerDbm===null?'unknown':Number(row.rxPowerDbm)<-27?'weak':Number(row.rxPowerDbm)<=-25?'warning':'good';
-    }
-    return res.json({success:true,telemetry:row,readings:username||mac?undefined:result.rows});
-  } catch(error) {
-    if(error.code==='42703'||error.code==='42P01') return res.json({success:true,telemetry:null,readings:[]});
-    console.error('[OLT telemetry read]',error.message);
-    return res.status(503).json({success:false,message:'OLT telemetry temporarily unavailable.'});
-  }
-};
