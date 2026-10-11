@@ -266,7 +266,7 @@ async function ingestLiveSessions(req, res) {
 const syncSessions = [function authenticatePppoeAgent(req, res, next) {
   const expected = String(process.env.PPPOE_SESSION_SYNC_TOKEN || process.env.OLT_COLLECTOR_TOKEN || "");
   const authorization = String(req.get("authorization") || "");
-  const supplied = authorization.match(/^Bearer\\s+(.+)$/i)?.[1] || "";
+  const supplied = authorization.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!expected) return res.status(503).json({ success: false, message: "PPPoE session sync token is not configured." });
   if (!secureTokenEqual(expected, supplied)) return res.status(401).json({ success: false, message: "Unauthorized PPPoE session collector." });
   return next();
