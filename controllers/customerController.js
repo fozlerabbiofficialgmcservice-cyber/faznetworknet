@@ -1096,7 +1096,13 @@ async function resolveCustomer360(idValue){
     db.query("SELECT trx_id,amount,channel AS method,created_at,status FROM transactions WHERE LOWER(COALESCE(matched_username,''))=LOWER($1) OR COALESCE(sender_phone,'')=$2 ORDER BY created_at DESC LIMIT 50",[username,clean(customer.phone,40)]),
     db.query("SELECT caller_id FROM pppoe_users WHERE LOWER(username)=LOWER($1) LIMIT 1",[username]),
     db.query(
-      'SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",received_at AS "receivedAt",source_agent AS "sourceAgent" FROM olt_telemetry WHERE LOWER(COALESCE(pppoe_username,\'\'))=LOWER($1) ORDER BY observed_at DESC LIMIT 1',
+      `SELECT olt_id AS "oltId",onu_id AS "onuId",onu_mac::text AS "onuMac",
+              pon_port AS "ponPort",status,rx_power_dbm AS "rxPowerDbm",
+              tx_power_dbm AS "txPowerDbm",observed_at AS "observedAt",
+              received_at AS "receivedAt",source_agent AS "sourceAgent"
+       FROM olt_telemetry
+       WHERE LOWER(COALESCE(pppoe_username,''))=LOWER($1)
+       ORDER BY observed_at DESC LIMIT 1`,
       [username]
     )
   ]);
