@@ -406,7 +406,18 @@ async function syncSingleCustomerToMikroTik(req,res){
     if(!username||!password)return res.status(400).json({success:false,message:"Panel PPPoE username and password are required before syncing."});
     const expired=Boolean(expiry&&dateStatus(expiry)==="expired"),preservePastDue=Boolean(row.billing_expiry_override);
     const customerState=String(row.status||"").toLowerCase();
-    const profile=preservePastDue?clean(row.profile,120):effectiveProfile(clean(row.profile,120),expiry);
+    let profile=preservePastDue?clean(row.profile,120):effectiveProfile(clean(row.profile,120),expiry);
+    // Resolve the expiry profile against RouterOS before syncing. Some existing
+    // installations use EXPIRED-PROFILE rather than EXPIRED; never create or
+    // modify a RouterOS profile as a side effect of this customer sync.
+    if(expired&&!preservePastDue&&String(profile).toLowerCase()==="expired"){
+      const availableProfiles=await mikrotikService.fetchExistingProfiles();
+      const names=new Set((Array.isArray(availableProfiles)?availableProfiles:[]).map(item=>String(item.name||"").trim().toLowerCase()).filter(Boolean));
+      if(!names.has("expired")){
+        if(names.has("expired-profile"))profile="EXPIRED-PROFILE";
+        else return res.status(409).json({success:false,message:'This customer is expired, but neither MikroTik PPP profile "EXPIRED" nor "EXPIRED-PROFILE" exists. No RouterOS change was made. Configure the intended expiry profile first.'});
+      }
+    }
     const disabled=preservePastDue
       ? (row.router_disabled===null||row.router_disabled===undefined
           ? ["inactive","suspended"].includes(customerState)
