@@ -606,8 +606,22 @@ async function profile(req,res){
     const username=clean(req.query.username,100);
     if(!username)return res.status(400).json({success:false,message:"Username is required."});
     let dbUser=null,pppoeRow=null,mtSecret=null,session=null;
-    try{const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);dbUser=q.rows[0]||null;}catch(error){console.warn("[DB Lookup warning]:",error.message);}
-    try{const q=await db.query("SELECT * FROM pppoe_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);pppoeRow=q.rows[0]||null;}catch(error){console.warn("[PPPoE DB Lookup warning]:",error.message);}
+    try{
+      const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);
+      dbUser=q.rows[0]||null;
+    }catch(error){
+      console.warn("[Customer 360] Sorted customer lookup failed; retrying basic lookup:",error.message);
+      try{const q=await db.query("SELECT * FROM customers WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",[username]);dbUser=q.rows[0]||null;}
+      catch(fallbackError){console.error("[Customer 360] Customer lookup failed:",fallbackError.message);}
+    }
+    try{
+      const q=await db.query("SELECT * FROM pppoe_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) ORDER BY updated_at DESC NULLS LAST, id DESC LIMIT 1",[username]);
+      pppoeRow=q.rows[0]||null;
+    }catch(error){
+      console.warn("[Customer 360] Sorted PPPoE lookup failed; retrying basic lookup:",error.message);
+      try{const q=await db.query("SELECT * FROM pppoe_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1)) LIMIT 1",[username]);pppoeRow=q.rows[0]||null;}
+      catch(fallbackError){console.error("[Customer 360] PPPoE lookup failed:",fallbackError.message);}
+    }
     // Admin Customer 360 must not depend on RouterOS socket availability. Use the
     // synchronized PPPoE row and the push snapshot stored by the collector.
     mtSecret=pppoeRow?{name:pppoeRow.username,profile:pppoeRow.profile,password:pppoeRow.password,disabled:pppoeRow.disabled,remoteAddress:pppoeRow.remote_address,callerId:pppoeRow.caller_id,service:pppoeRow.service,comment:pppoeRow.comment}:null;
